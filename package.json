@@ -1,0 +1,32 @@
+{
+  "name": "surya-store",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SURYA store: public website and separate admin panel",
+  "main": "src/start.js",
+  "scripts": {
+    "start": "node src/start.js",
+    "start:public": "node src/public/server.js",
+    "start:admin": "node src/admin/server.js",
+    "seed:demo": "node scripts/seed-demo.js",
+    "test": "node test/run.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@fontsource/hind": "^5.3.0",
+    "@fontsource/inter-tight": "^5.3.0",
+    "@google/model-viewer": "^4.4.0",
+    "bcryptjs": "^3.0.3",
+    "better-sqlite3": "^12.11.1",
+    "cookie-parser": "^1.4.7",
+    "express": "^5.3.0",
+    "express-rate-limit": "^8.7.1",
+    "helmet": "^8.3.0",
+    "multer": "^2.4.0",
+    "nodemailer": "^7.0.13",
+    "qrcode": "^1.5.4",
+    "sharp": "^0.34.5"
+  }
+}
