@@ -1,11 +1,13 @@
 import { BOOT, h, $, $$, clear, icon, t, tr, lang, setLang, bus, api, money, cart, wish, me, ls, toast, drawer, modal, nav, debounce, sid } from './core.js';
 
 /* ---------- logo ---------- */
+let LOGO_N = 0;
 export function logo(dark) {
   const T = BOOT.theme || {}, src = dark && T.logo_dark ? T.logo_dark : T.logo;
   if (src) return h('a', { class: 'logo', href: '/', 'aria-label': BOOT.brand.name }, h('img', { src, alt: BOOT.brand.name, height: 30 }), T.show_logo_text ? h('span', null, BOOT.brand.name) : null);
-  const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 32 32'); s.setAttribute('aria-hidden', 'true');
-  s.innerHTML = '<circle cx="16" cy="16" r="6" fill="currentColor"/><g stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M16 2v4M16 26v4M2 16h4M26 16h4M6.1 6.1l2.8 2.8M23.1 23.1l2.8 2.8M25.9 6.1l-2.8 2.8M8.9 23.1l-2.8 2.8"/></g>';
+  const gid = 'lg' + (++LOGO_N); // one id per logo instance (header + footer must not clash)
+  const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 64 64'); s.setAttribute('aria-hidden', 'true'); s.setAttribute('class', 'sunmark');
+  s.innerHTML = `<defs><linearGradient id="lg${gid}L" gradientUnits="userSpaceOnUse" x1="10" y1="4" x2="54" y2="60"><stop offset="0" stop-color="#FFF1BF"/><stop offset=".35" stop-color="#FFC84A"/><stop offset=".7" stop-color="#E59A1B"/><stop offset="1" stop-color="#A8670A"/></linearGradient><radialGradient id="lg${gid}D" gradientUnits="userSpaceOnUse" cx="27" cy="26" r="19"><stop offset="0" stop-color="#FFF6CC"/><stop offset=".45" stop-color="#FFCB4F"/><stop offset="1" stop-color="#D98E12"/></radialGradient></defs><g><line class="ray" style="--i:0" x1="32.00" y1="12.50" x2="32.00" y2="2.00" pathLength="1" stroke="url(#lg${gid}L)" stroke-width="3.4" stroke-linecap="round"/><line class="ray" style="--i:1" x1="41.75" y1="15.11" x2="44.75" y2="9.92" pathLength="1" stroke="url(#lg${gid}L)" stroke-width="2.6" stroke-linecap="round"/><line class="ray" style="--i:2" x1="48.89" y1="22.25" x2="57.98" y2="17.00" pathLength="1" stroke="url(#lg${gid}L)" stroke-width="3.4" stroke-linecap="round"/><line class="ray" style="--i:3" x1="51.50" y1="32.00" x2="57.50" y2="32.00" pathLength="1" stroke="url(#lg${gid}L)" stroke-width="2.6" stroke-linecap="round"/><line class="ray" style="--i:4" x1="48.89" y1="41.75" x2="57.98" y2="47.00" pathLength="1" stroke="url(#lg${gid}L)" stroke-width="3.4" stroke-linecap="round"/><line class="ray" style="--i:5" x1="41.75" y1="48.89" x2="44.75" y2="54.08" pathLength="1" stroke="url(#lg${gid}L)" stroke-width="2.6" stroke-linecap="round"/><line class="ray" style="--i:6" x1="32.00" y1="51.50" x2="32.00" y2="62.00" pathLength="1" stroke="url(#lg${gid}L)" stroke-width="3.4" stroke-linecap="round"/><line class="ray" style="--i:7" x1="22.25" y1="48.89" x2="19.25" y2="54.08" pathLength="1" stroke="url(#lg${gid}L)" stroke-width="2.6" stroke-linecap="round"/><line class="ray" style="--i:8" x1="15.11" y1="41.75" x2="6.02" y2="47.00" pathLength="1" stroke="url(#lg${gid}L)" stroke-width="3.4" stroke-linecap="round"/><line class="ray" style="--i:9" x1="12.50" y1="32.00" x2="6.50" y2="32.00" pathLength="1" stroke="url(#lg${gid}L)" stroke-width="2.6" stroke-linecap="round"/><line class="ray" style="--i:10" x1="15.11" y1="22.25" x2="6.02" y2="17.00" pathLength="1" stroke="url(#lg${gid}L)" stroke-width="3.4" stroke-linecap="round"/><line class="ray" style="--i:11" x1="22.25" y1="15.11" x2="19.25" y2="9.92" pathLength="1" stroke="url(#lg${gid}L)" stroke-width="2.6" stroke-linecap="round"/></g><circle class="disc" cx="32" cy="32" r="12.5" fill="url(#lg${gid}D)"/><ellipse class="gloss" cx="27.5" cy="27" rx="6.5" ry="4" transform="rotate(-35 27.5 27)" fill="#fff" opacity=".42"/>`;
   return h('a', { class: 'logo', href: '/', 'aria-label': BOOT.brand.name }, s, h('span', null, BOOT.brand.name));
 }
 
@@ -42,17 +44,63 @@ export function buildChrome(root) {
   bus.on('cart', refreshCount); refreshCount();
   const nv = h('nav', { class: 'nav', 'aria-label': 'Main' }, (BOOT.menu.header || []).map(menuLink));
   const langBtn = h('button', { class: 'ibtn lang', 'aria-label': 'Language', onclick: () => { setLang(lang() === 'hi' ? 'en' : 'hi'); location.reload(); } }, t('lang'));
-  const burger = h('button', { class: 'ibtn burger', 'aria-label': 'Menu', onclick: () => { const d = drawer(BOOT.brand.name, h('nav', { class: 'stack' }, (BOOT.menu.header || []).map(it => h('a', { href: it.url, style: { display: 'block', padding: '10px 0', fontSize: '1.15rem', textDecoration: 'none' }, onclick: () => d.close() }, tr(it, 'label'))), h('hr', { style: { border: 0, borderTop: '1px solid var(--line)' } }), h('a', { href: '/track', style: { display: 'block', padding: '10px 0', textDecoration: 'none' }, onclick: () => d.close() }, t('track')), h('a', { href: '/account', style: { display: 'block', padding: '10px 0', textDecoration: 'none' }, onclick: () => d.close() }, t('account'))), null, { side: 'left' }); } }, icon('menu'));
+  const burger = h('button', { class: 'ibtn burger', 'aria-label': 'Menu', onclick: () => { const d = drawer(BOOT.brand.name, h('nav', { class: 'stack' }, (BOOT.menu.header || []).map(it => h('a', { href: it.url, style: { display: 'block', padding: '10px 0', fontSize: '1.15rem', textDecoration: 'none' }, onclick: () => d.close() }, tr(it, 'label'))), h('hr', { style: { border: 0, borderTop: '1px solid var(--line)' } }), h('a', { href: '/orders#track', style: { display: 'block', padding: '10px 0', textDecoration: 'none' }, onclick: () => d.close() }, t('track')), h('a', { href: me.customer ? '/profile' : '/login', style: { display: 'block', padding: '10px 0', textDecoration: 'none' }, onclick: () => d.close() }, t('account'))), null, { side: 'left' }); } }, icon('menu'));
   const hdr = h('header', { class: 'hdr glass' }, h('div', { class: 'wrap hdr-in' }, burger, logo(), nv, h('div', { class: 'grow' }),
     h('button', { class: 'ibtn', 'aria-label': t('search'), onclick: openSearch }, icon('search')),
     BOOT.store.language_toggle ? langBtn : null,
-    h('a', { class: 'ibtn', href: '/account', 'aria-label': t('account') }, icon('user')),
-    BOOT.store.wishlist ? h('a', { class: 'ibtn', href: '/account#wishlist', 'aria-label': t('wishlist') }, icon('heart')) : null,
+    acctMenu(),
+    BOOT.store.wishlist ? h('a', { class: 'ibtn', href: '/wishlist', 'aria-label': t('wishlist') }, icon('heart')) : null,
     h('button', { class: 'ibtn', 'aria-label': t('cart'), onclick: openCart }, icon('bag'), count)));
   const prog = h('div', { class: 'pbar', 'aria-hidden': 'true' });
   addEventListener('scroll', () => { hdr.classList.toggle('scrolled', scrollY > 8); const m = document.documentElement.scrollHeight - innerHeight; if (BOOT.ui.scroll_progress) prog.style.width = m > 0 ? (scrollY / m * 100) + '%' : '0'; }, { passive: true });
   bus.on('route', p => { $$('.nav a', hdr).forEach(a => a.classList.toggle('on', a.dataset.url.split('?')[0] === p && p !== '/')); });
   root.prepend(...[annc, hdr, prog].filter(Boolean));
+
+  // mobile glass bottom bar (hidden on wide screens by CSS)
+  const bcount = h('span', { class: 'cnt hide' });
+  const refreshB = () => { const n = cart.count(); bcount.textContent = n; bcount.classList.toggle('hide', !n); }; bus.on('cart', refreshB); refreshB();
+  const ordersUrl = () => '/orders';
+  const items = [
+    { k: 'home', url: '/', label: t('home'), ic: 'home' },
+    { k: 'shop', url: '/shop', label: t('shop'), ic: 'grid' },
+    { k: 'orders', url: ordersUrl(), label: lang() === 'hi' ? 'Orders' : 'Orders', ic: 'box' },
+    { k: 'cart', url: '#cart', label: t('cart'), ic: 'bag', badge: bcount },
+    { k: 'account', url: me.customer ? '/profile' : '/login', label: t('account'), ic: 'user' },
+  ];
+  const bubble = h('span', { class: 'bb-bubble', 'aria-hidden': 'true' });
+  const links = items.map(it => it.k === 'cart'
+    ? h('button', { class: 'bb-i', 'data-k': it.k, onclick: openCart }, icon(it.ic), it.badge, h('span', null, it.label))
+    : h('a', { class: 'bb-i', 'data-k': it.k, href: it.url }, icon(it.ic), h('span', null, it.label)));
+  const bar = h('nav', { class: 'bbar', 'aria-label': 'Quick menu' }, bubble, ...links);
+  let cur = -1;
+  const moveBubble = i => {
+    const to = `translateX(${i * 100}%)`;
+    if (cur < 0 || cur === i || matchMedia('(prefers-reduced-motion: reduce)').matches || !bubble.animate) { bubble.style.transform = to; cur = i; return; }
+    const d = Math.abs(i - cur), mid = `translateX(${(i + cur) / 2 * 100}%)`, from = `translateX(${cur * 100}%)`;
+    // liquid: stretch while travelling, squash on arrival, small overshoot, settle
+    bubble.animate([
+      { transform: `${from} scale(1,1)`, offset: 0 },
+      { transform: `${mid} scale(${1 + Math.min(.9, .38 * d)},.86)`, offset: .45, easing: 'cubic-bezier(.2,.7,.3,1)' },
+      { transform: `${to} scale(.9,1.1)`, offset: .75 },
+      { transform: `${to} scale(1.04,.97)`, offset: .9 },
+      { transform: `${to} scale(1,1)`, offset: 1 },
+    ], { duration: 560 + d * 40, easing: 'cubic-bezier(.3,.9,.4,1)' });
+    bubble.style.transform = to; cur = i;
+  };
+  const mark = p => {
+    let k = '';
+    if (p === '/') k = 'home';
+    else if (/^\/(shop|product|category|c)(\/|$)/.test(p)) k = 'shop';
+    else if (/^\/(track|order|orders|wishlist)(\/|$)/.test(p)) k = 'orders';
+    else if (/^\/(account|login|profile)$/.test(p)) k = 'account';
+    links.forEach(a => a.classList.toggle('on', a.dataset.k === k));
+    const i = items.findIndex(x => x.k === k);
+    bar.classList.toggle('none', i < 0);
+    if (i >= 0) moveBubble(i);
+    const o = links[2]; if (o && o.tagName === 'A') o.setAttribute('href', ordersUrl());
+  };
+  bus.on('route', mark); mark(location.pathname);
+  root.append(bar);
 
   // footer
   const B = BOOT.brand, pol = BOOT.policies.filter(p => p.in_footer);
@@ -66,12 +114,39 @@ export function buildChrome(root) {
   root.append(ftr);
   // floating buttons
   const top = h('button', { class: 'btn alt hide', 'aria-label': 'Back to top', onclick: () => scrollTo({ top: 0, behavior: 'smooth' }) }, icon('up'));
-  const wa = (B.whatsapp || B.phone) && BOOT.ui.whatsapp_button ? h('a', { class: 'btn', href: `https://wa.me/91${String(B.whatsapp || B.phone).replace(/\D/g, '').slice(-10)}`, target: '_blank', rel: 'noopener', 'aria-label': 'WhatsApp', style: { background: '#25a244', color: '#fff' } }, icon('wa')) : null;
+  const waIcon = () => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 64 64'); s.setAttribute('aria-hidden', 'true'); s.innerHTML = '<defs><linearGradient id="waG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6BF58A"/><stop offset=".55" stop-color="#25C45A"/><stop offset="1" stop-color="#0E8F3C"/></linearGradient><radialGradient id="waS" cx=".3" cy=".18" r=".8"><stop offset="0" stop-color="#fff" stop-opacity=".75"/><stop offset=".5" stop-color="#fff" stop-opacity=".05"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient></defs><circle cx="32" cy="32" r="30" fill="url(#waG)"/><path d="M32 12c-11 0-20 8.5-20 19 0 4 1.3 7.7 3.5 10.8L13 51l9.6-2.4c2.7 1.4 5.700 2.200 9.400 2.200 11 0 20-8.500 20-19S43 12 32 12z" fill="#fff"/><path d="M25 22.500c-1 0-2 .9-2.300 2-.8 3.200 1.200 8 5.200 12 4 4 8.900 5.900 12 5.200 1.100-.3 2-1.300 2-2.300l-.1-1.900-4.500-2-1.900 2c-2.700-.9-5.500-3.700-6.400-6.500l1.900-1.900-2-4.500-1.900-.1z" fill="#1DAE4E"/><circle cx="32" cy="32" r="30" fill="url(#waS)"/>'; return s; };
+  const wa = (B.whatsapp || B.phone) && BOOT.ui.whatsapp_button ? h('a', { class: 'wa3d', href: `https://wa.me/91${String(B.whatsapp || B.phone).replace(/\D/g, '').slice(-10)}`, target: '_blank', rel: 'noopener', 'aria-label': 'Chat on WhatsApp', title: 'Chat with us' }, waIcon()) : null;
   root.append(h('div', { class: 'fab' }, BOOT.ui.back_to_top ? top : null, wa));
   addEventListener('scroll', () => top.classList.toggle('hide', scrollY < 700), { passive: true });
   addEventListener('offline', () => { const o = h('div', { class: 'offline', id: 'offl' }, t('offline')); document.body.append(o); });
   addEventListener('online', () => $('#offl') && $('#offl').remove());
 }
+function acctMenu() {
+  const c = me.customer;
+  if (!c) return h('a', { class: 'ibtn', href: '/login', 'aria-label': t('account') }, icon('user'));
+  const first = c.first_name || (c.name || '').split(' ')[0] || c.email.split('@')[0];
+  let isOpen = false;
+  const item = (href, label, ic) => h('a', { class: 'am-i', href, onclick: () => close() }, h('span', { class: 'am-ic' }, icon(ic)), label);
+  const hl = h('span', { class: 'am-hl', 'aria-hidden': 'true' });
+  const list = h('div', { class: 'am-list' }, hl,
+    item('/profile', 'My profile', 'user'), item('/orders', 'My orders', 'box'), item('/orders#track', 'Track order', 'search'), BOOT.store.wishlist ? item('/wishlist', 'Wishlist', 'heart') : null, item('/profile#addresses', 'Addresses', 'home'));
+  const out = h('button', { class: 'am-i out', onclick: async () => { try { await api('/auth/logout', { method: 'POST' }); } catch (e) { /* ignore */ } location.href = '/'; } }, 'Log out');
+  const menu = h('div', { class: 'am', role: 'menu' }, h('div', { class: 'am-head' }, h('span', { class: 'am-av' }, (first[0] || '?').toUpperCase()), h('div', null, h('b', null, first), h('span', null, c.email))), list, out);
+  // sliding glass highlight that follows the pointer / keyboard focus
+  const moveHl = el => { hl.style.opacity = '1'; hl.style.height = el.offsetHeight + 'px'; hl.style.transform = `translateY(${el.offsetTop}px)`; };
+  list.addEventListener('mouseover', e => { const a = e.target.closest('.am-i'); if (a) moveHl(a); }); list.addEventListener('mouseleave', () => { hl.style.opacity = '0'; });
+  list.addEventListener('focusin', e => { const a = e.target.closest('.am-i'); if (a) moveHl(a); });
+  const btn = h('button', { class: 'ibtn', 'aria-label': t('account'), 'aria-haspopup': 'menu', 'aria-expanded': 'false', onclick: e => { e.stopPropagation(); isOpen ? close() : open(); } }, icon('user'));
+  // The menu lives on <body> (not inside the glass header) so its blur can see the page behind it.
+  const place = () => { const r = btn.getBoundingClientRect(); menu.style.top = (r.bottom + 10) + 'px'; menu.style.right = Math.max(10, window.innerWidth - r.right - 4) + 'px'; };
+  function open() { isOpen = true; place(); if (!menu.isConnected) document.body.append(menu); menu.classList.remove('closing'); void menu.offsetWidth; menu.classList.add('show'); btn.setAttribute('aria-expanded', 'true'); }
+  function close() { if (!isOpen) return; isOpen = false; menu.classList.remove('show'); menu.classList.add('closing'); btn.setAttribute('aria-expanded', 'false'); setTimeout(() => { if (!isOpen) menu.remove(); }, 220); }
+  document.addEventListener('click', e => { if (isOpen && !menu.contains(e.target)) close(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
+  window.addEventListener('resize', () => { if (isOpen) place(); }); window.addEventListener('scroll', () => { if (isOpen) place(); }, { passive: true });
+  return btn;
+}
+
 function newsletterBox() {
   if (!BOOT.popups.newsletter || BOOT.popups.newsletter.enabled === false) return null;
   const inp = h('input', { class: 'inp', type: 'email', placeholder: 'Email', 'aria-label': 'Email', required: true, autocomplete: 'email' });

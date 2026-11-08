@@ -42,7 +42,7 @@ priv.get('/dashboard', asyncH((req, res) => {
   const since = new Date(Date.now() - days * 86400000).toISOString();
   const good = "status IN ('confirmed','packed','shipped','delivered')";
   const q = (sql, ...a) => db.prepare(sql).get(...a);
-  const today = q(`SELECT COUNT(*) n, COALESCE(SUM(total),0) v FROM orders WHERE placed_at>=? AND status!='cancelled'`, startOfToday.toISOString());
+  const today = q(`SELECT COUNT(*) n, COALESCE(SUM(total),0) v FROM orders WHERE placed_at>=? AND status NOT IN ('cancelled','payment_pending')`, startOfToday.toISOString());
   const period = q(`SELECT COUNT(*) n, COALESCE(SUM(total),0) v FROM orders WHERE placed_at>=? AND ${good}`, since);
   const profit = q(`SELECT COALESCE(SUM((i.price-i.cost)*i.qty),0) p FROM order_items i JOIN orders o ON o.id=i.order_id WHERE o.placed_at>=? AND o.${good}`, since).p;
   const todo = {

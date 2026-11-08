@@ -22,7 +22,9 @@ const DEFAULTS = {
     recently_viewed: true, wishlist: true, reviews: true, show_sold_out: true, pwa: true,
   },
   payments: {
-    upi_enabled: true, upi_id: '', upi_name: 'SURYA', upi_timer_min: 15, upi_grace_min: 60, upi_screenshot: true,
+    upi_enabled: true, upi_id: '', upi_name: 'SURYA', upi_timer_min: 15, upi_grace_min: 15, upi_screenshot: true, upi_unique_paise: true,
+    cod_advance_on: false, cod_advance_min_total: 499, cod_advance_mode: 'fixed', cod_advance_value: 99, cod_advance_for: 'all',
+    cod_advance_note: 'Your advance is adjusted in the bill and you pay the rest on delivery. If we cancel the order or cannot deliver it, the advance is refunded.',
     cod_enabled: true, cod_fee: 0, cod_min: 0, cod_max: 5000, cod_block_pincodes: [], cod_phone_confirm: true,
     razorpay_enabled: false, razorpay_key_id: '', guest_cod: true,
   },

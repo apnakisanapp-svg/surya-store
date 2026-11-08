@@ -173,6 +173,15 @@ db.exec(SCHEMA);
 // FTS5 for storefront search (rebuilt per product on save)
 db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS products_fts USING fts5(name, name_hi, tagline, description, tags, category, tokenize='unicode61 remove_diacritics 2', prefix='2 3 4');`);
 
+try { db.exec('ALTER TABLE orders ADD COLUMN upi_adjust REAL DEFAULT 0'); } catch { /* already there */ }
+try { db.exec("ALTER TABLE products ADD COLUMN pay_rule TEXT DEFAULT ''"); } catch { /* already there */ }
+try { db.exec('ALTER TABLE customers ADD COLUMN first_name TEXT'); } catch { /* already there */ }
+try { db.exec('ALTER TABLE customers ADD COLUMN last_name TEXT'); } catch { /* already there */ }
+for (const c of ['advance_amount REAL DEFAULT 0', 'advance_pay REAL DEFAULT 0', 'advance_status TEXT']) { try { db.exec('ALTER TABLE orders ADD COLUMN ' + c); } catch { /* already there */ } }
+db.exec(`CREATE TABLE IF NOT EXISTS otp_codes(id INTEGER PRIMARY KEY, email TEXT NOT NULL, code_hash TEXT NOT NULL, expires_at TEXT NOT NULL, attempts INTEGER DEFAULT 0, used INTEGER DEFAULT 0, created_at TEXT NOT NULL)`);
+db.exec('CREATE INDEX IF NOT EXISTS otp_email ON otp_codes(email, id)');
+try { db.exec('ALTER TABLE customers ADD COLUMN email_verified INTEGER DEFAULT 0'); } catch { /* already there */ }
+
 const tx = fn => db.transaction(fn);
 module.exports = db;
 module.exports.tx = tx;

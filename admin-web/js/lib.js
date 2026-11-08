@@ -27,7 +27,7 @@ export const setp = (o, path, v) => { const ks = path.split('.'); let c = o; ks.
 export async function api(path, { method = 'GET', body, form } = {}) {
   const opt = { method, headers: { 'x-sy-csrf': '1' }, credentials: 'same-origin' };
   if (form) opt.body = form; else if (body !== undefined) { opt.headers['content-type'] = 'application/json'; opt.body = JSON.stringify(body); }
-  let res; try { res = await fetch('/api' + path, opt); } catch { throw Object.assign(new Error('Cannot reach the server. Is it running?'), { offline: true }); }
+  let res; try { res = await fetch('api' + path, opt); } catch { throw Object.assign(new Error('Cannot reach the server. Is it running?'), { offline: true }); }
   let data = null; try { data = await res.json(); } catch { /* */ }
   if (res.status === 401 && !path.startsWith('/login') && path !== '/me') { location.hash = '#/login'; location.reload(); }
   if (!res.ok) throw Object.assign(new Error((data && data.error) || 'Something went wrong.'), { status: res.status, data });
@@ -46,8 +46,8 @@ export function modal(title, content, { wide, onClose } = {}) {
   wrap.addEventListener('mousedown', e => { if (e.target === wrap) api_.close(); }); document.addEventListener('keydown', esc); document.body.append(wrap);
   return api_;
 }
-export const confirmBox = (msg, okText = 'Yes, do it') => new Promise(res => { const m = modal('Please confirm', h('div', { class: 'stack' }, h('p', null, msg), h('div', { class: 'row end' }, h('button', { class: 'btn', onclick: () => { m.close(); res(false); } }, 'Cancel'), h('button', { class: 'btn primary', onclick: () => { m.close(); res(true); } }, okText))), { onClose: () => res(false) }); });
-export const promptBox = (title, label, { multiline, ok = 'Save', value = '' } = {}) => new Promise(res => { const inp = multiline ? h('textarea', { class: 'inp', rows: 3 }) : h('input', { class: 'inp' }); inp.value = value; const m = modal(title, h('div', { class: 'stack' }, h('label', { class: 'fld' }, h('span', null, label), inp), h('div', { class: 'row end' }, h('button', { class: 'btn', onclick: () => { m.close(); res(null); } }, 'Cancel'), h('button', { class: 'btn primary', onclick: () => { m.close(); res(inp.value); } }, ok))), { onClose: () => res(null) }); setTimeout(() => inp.focus(), 50); });
+export const confirmBox = (msg, okText = 'Yes, do it') => new Promise(res => { const m = modal('Please confirm', h('div', { class: 'stack' }, h('p', null, msg), h('div', { class: 'row end' }, h('button', { class: 'btn', onclick: () => { res(false); m.close(); } }, 'Cancel'), h('button', { class: 'btn primary', onclick: () => { res(true); m.close(); } }, okText))), { onClose: () => res(false) }); });
+export const promptBox = (title, label, { multiline, ok = 'Save', value = '' } = {}) => new Promise(res => { const inp = multiline ? h('textarea', { class: 'inp', rows: 3 }) : h('input', { class: 'inp' }); inp.value = value; const m = modal(title, h('div', { class: 'stack' }, h('label', { class: 'fld' }, h('span', null, label), inp), h('div', { class: 'row end' }, h('button', { class: 'btn', onclick: () => { res(null); m.close(); } }, 'Cancel'), h('button', { class: 'btn primary', onclick: () => { res(inp.value); m.close(); } }, ok))), { onClose: () => res(null) }); setTimeout(() => inp.focus(), 50); });
 export async function busy(btn, fn) { btn.disabled = true; btn.classList.add('busy'); try { return await fn(); } finally { btn.disabled = false; btn.classList.remove('busy'); } }
 export const badge = (text, kind = '') => h('span', { class: 'badge ' + kind }, text);
 export const STATUS_KIND = { placed: 'info', payment_pending: 'warn', cod_confirm: 'warn', confirmed: 'info', packed: 'info', shipped: 'info', delivered: 'ok', cancelled: 'bad', returned: 'bad', published: 'ok', draft: '', scheduled: 'info', green: 'ok', yellow: 'warn', red: 'bad', amber: 'warn' };

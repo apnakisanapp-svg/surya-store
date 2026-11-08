@@ -13,11 +13,20 @@ const images = require('../shared/images');
 const { esc, now } = require('../shared/util');
 const { notFoundApi, errorHandler } = require('../shared/http');
 const { api, bootstrap, fillPolicy } = require('./api');
+const auth = require('../shared/auth');
 
 function createApp() {
   const app = express();
   app.set('trust proxy', 1);
   app.disable('x-powered-by');
+  // Optional (free hosting with only one web address): open the admin panel at /<ADMIN_PATH>/ on the same site.
+  // It is still protected by the owner login (and 2-step login if you turn it on).
+  const ap = process.env.ADMIN_PATH || '';
+  if (/^[a-z0-9-]{8,}$/.test(ap)) {
+    app.use((req, res, next) => (req.path === '/' + ap && !req.originalUrl.split('?')[0].endsWith('/') ? res.redirect('/' + ap + '/') : next()));
+    app.use('/' + ap + '/', require('../admin/server').createApp());
+    console.log('  Admin also at /' + ap + '/ (same address as the website)');
+  }
   app.use(helmet({
     contentSecurityPolicy: {
       useDefaults: false,
@@ -72,7 +81,7 @@ function createApp() {
 
   app.get('/robots.txt', (req, res) => {
     const idx = settings.get('seo').robots_index !== false;
-    res.type('text/plain').send(idx ? `User-agent: *\nDisallow: /api/\nDisallow: /cart\nDisallow: /checkout\nDisallow: /account\nDisallow: /order/\nSitemap: ${cfg.SITE_URL}/sitemap.xml\n` : 'User-agent: *\nDisallow: /\n');
+    res.type('text/plain').send(idx ? `User-agent: *\nDisallow: /api/\nDisallow: /cart\nDisallow: /checkout\nDisallow: /account\nDisallow: /orders\nDisallow: /profile\nDisallow: /wishlist\nDisallow: /order/\nSitemap: ${cfg.SITE_URL}/sitemap.xml\n` : 'User-agent: *\nDisallow: /\n');
   });
   app.get('/sitemap.xml', (req, res) => {
     const urls = ['/', '/shop', '/contact', '/faq', '/track'];
@@ -99,6 +108,7 @@ function createApp() {
     let html;
     try { html = readTpl(); } catch { return res.status(500).send('Storefront files are missing.'); }
     const { head, status } = headFor(req);
+    try { req.customer = auth.customerFromReq(req); } catch { req.customer = null; } // so a logged-in customer stays logged in after a page load
     const boot = JSON.stringify(bootstrap(req)).replace(/</g, '\\u003c');
     html = html.replace('<!--SEO-->', head).replace('<!--BOOT-->', `<script type="application/json" id="boot">${boot}</script>`);
     res.status(status).set('Cache-Control', 'no-cache').type('html').send(html);
@@ -139,7 +149,7 @@ function headFor(req) {
   } else if ((m = p.match(/^\/policy\/([^/]+)$/))) {
     const pol = db.prepare('SELECT title,body FROM policies WHERE slug=?').get(m[1]);
     if (pol) { title = pol.title + ' | ' + B.name; desc = fillPolicy(pol.body).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160); } else status = 404;
-  } else if (/^\/(cart|checkout|account|login|order|reset|wishlist|track)/.test(p)) { noindex = true; title = B.name; }
+  } else if (/^\/(cart|checkout|account|login|order|orders|profile|reset|wishlist|track)/.test(p)) { noindex = true; title = B.name; }
   const tags = [
     `<title>${esc(title)}</title>`, desc ? `<meta name="description" content="${esc(desc)}">` : '', `<link rel="canonical" href="${esc(canonical)}">`,
     (noindex || S.robots_index === false) ? '<meta name="robots" content="noindex,nofollow">' : '',

@@ -9,7 +9,7 @@ const catalog = require('../shared/catalog');
 const auth = require('../shared/auth');
 const mail = require('../shared/mail');
 const { crud } = require('./crud');
-const { asyncH, bad, notFound, int, num, jparse, now, uniqueSlug, toCSV, isEmail } = require('../shared/util');
+const { itemImage, asyncH, bad, notFound, int, num, jparse, now, uniqueSlug, toCSV, isEmail } = require('../shared/util');
 
 const r = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024, files: 1 } });
@@ -93,6 +93,18 @@ r.get('/customers', asyncH((req, res) => {
   res.json(db.prepare(`SELECT c.id,c.email,c.phone,c.name,c.blocked,c.block_reason,c.marketing_optin,c.created_at,
     (SELECT COUNT(*) FROM orders o WHERE o.customer_id=c.id) orders, (SELECT COALESCE(SUM(total),0) FROM orders o WHERE o.customer_id=c.id AND o.status NOT IN ('cancelled')) spent
     FROM customers c WHERE ${where.join(' AND ')} ORDER BY c.id DESC LIMIT 500`).all(...args));
+}));
+r.get('/customers/history/:phone', asyncH((req, res) => { // everything one buyer ordered (account or guest), with photos
+  const ph = String(req.params.phone).replace(/\D/g, '').slice(-10);
+  if (ph.length < 10) throw bad('Phone number looks wrong.');
+  const rows = db.prepare('SELECT id,number,status,payment_method,payment_status,total,placed_at,name,email FROM orders WHERE phone=? ORDER BY id DESC LIMIT 200').all(ph);
+  const ids = rows.map(o => o.id);
+  const items = ids.length ? db.prepare(`SELECT order_id,product_id,name,variant_name,qty,price,image FROM order_items WHERE order_id IN (${ids.map(() => '?').join(',')})`).all(...ids) : [];
+  const by = {}; for (const i of items) (by[i.order_id] = by[i.order_id] || []).push({ ...i, image_url: itemImage(i.image) });
+  const orders = rows.map(o => ({ ...o, items: by[o.id] || [] }));
+  const acct = db.prepare('SELECT id,name,email,blocked,created_at FROM customers WHERE phone=?').get(ph);
+  res.json({ phone: ph, name: (acct && acct.name) || (rows[0] && rows[0].name) || '', email: (acct && acct.email) || (rows[0] && rows[0].email) || '', blocked: !!(acct && acct.blocked), has_account: !!acct,
+    count: rows.length, spent: rows.filter(o => !['cancelled'].includes(o.status)).reduce((a, o) => a + o.total, 0), orders });
 }));
 r.get('/customers/phone/:phone', asyncH((req, res) => { // guests too
   const ph = String(req.params.phone).replace(/\D/g, '').slice(-10);

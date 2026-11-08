@@ -5,7 +5,7 @@ reg(/^\/products$/, async (v, m, q) => {
   const st = { status: '', q: '', page: 1, low: q.get('low') || '', trash: '' };
   const box = h('div'), tabBar = h('div');
   const search = h('input', { class: 'inp', placeholder: 'Search name or SKU…', style: { maxWidth: '300px' }, onkeydown: e => { if (e.key === 'Enter') { st.q = e.target.value; st.page = 1; load(); } } });
-  v.append(pageHead('Products', h('a', { class: 'btn', href: '/api/products/export/csv', download: 'products.csv' }, 'Export CSV'), h('button', { class: 'btn', onclick: importModal }, 'Import CSV'), h('a', { class: 'btn primary', href: '#/products/new' }, '+ Add product')), h('div', { class: 'row', style: { marginBottom: '12px' } }, search), tabBar, box);
+  v.append(pageHead('Products', h('a', { class: 'btn', href: 'api/products/export/csv', download: 'products.csv' }, 'Export CSV'), h('button', { class: 'btn', onclick: importModal }, 'Import CSV'), h('a', { class: 'btn primary', href: '#/products/new' }, '+ Add product')), h('div', { class: 'row', style: { marginBottom: '12px' } }, search), tabBar, box);
   async function load() {
     const p = new URLSearchParams({ page: st.page }); if (st.status) p.set('status', st.status); if (st.q) p.set('q', st.q); if (st.low) p.set('low', '1'); if (st.trash) p.set('trash', '1');
     const r = await api('/products?' + p), c = r.counts;
@@ -22,7 +22,7 @@ reg(/^\/products$/, async (v, m, q) => {
       { l: 'Profit', f: r => h('span', { class: 'verdict ' + r.verdict, title: `Margin ${r.margin}%` }, `${r.margin}%`) },
       { l: 'Risk', f: r => badge(r.risk_level === 'green' ? 'OK' : r.risk_level === 'amber' ? 'Check' : 'Blocked', r.risk_level === 'green' ? 'ok' : r.risk_level === 'amber' ? 'warn' : 'bad') },
       { l: 'Status', f: r => statusBadge(r.status) },
-      { l: '', f: r => r.deleted_at ? h('button', { class: 'btn sm', onclick: async () => { await api(`/products/${r.id}/restore`, { method: 'POST' }); load(); } }, 'Restore') : null },
+      { l: '', f: r => r.deleted_at ? h('div', { class: 'row end' }, h('button', { class: 'btn sm', onclick: async () => { await api(`/products/${r.id}/restore`, { method: 'POST' }); load(); } }, 'Restore'), h('button', { class: 'btn sm bad', onclick: async () => { if (await confirmBox('Delete this product forever? This cannot be undone. Old orders keep their own copy of the details.', 'Delete forever')) { try { await api(`/products/${r.id}`.concat('/forever'), { method: 'DELETE' }); toast('Deleted forever'); load(); } catch (x) { toast(x.message, true); } } } }, 'Delete forever')) : null },
     ], r.items, { onRow: r => go('/products/' + r.id), empty: 'No products here. Press "+ Add product".' }));
     if (r.pages > 1) box.append(h('div', { class: 'row end', style: { marginTop: '12px' } }, h('span', { class: 'muted' }, `Page ${r.page} of ${r.pages}`), h('button', { class: 'btn sm', disabled: r.page <= 1, onclick: () => { st.page--; load(); } }, 'Previous'), h('button', { class: 'btn sm', disabled: r.page >= r.pages, onclick: () => { st.page++; load(); } }, 'Next')));
   }
@@ -54,6 +54,8 @@ const SPEC = (cats) => [
   { k: 'safety', l: 'Safety instructions shown on the product page', t: 'textarea', rows: 4 }, { k: 'safety_hi', l: 'Safety (Hindi, optional)', t: 'textarea' },
   { k: 'safety_ack', l: 'Customer must tick "I read the safety instructions" at checkout', t: 'check' },
   { k: 'brand_used', l: 'Brand name you use (if any)', t: 'text', h: 'Do not use another company\'s brand.' },
+  { t: 'heading', l: 'How can customers pay for this product?', h: 'Use this for risky or high-value items. If a cart has several products, the strictest rule applies.' },
+  { k: 'pay_rule', l: 'Payment rule', t: 'select', opts: [['', 'Normal (follow Settings > Payments)'], ['upi_only', 'UPI only (no cash on delivery)'], ['cod_advance', 'Cash on delivery allowed, but advance is compulsory']] },
   { k: 'weight_g', l: 'Weight (grams)', t: 'number', w: 'half' }, { k: 'dims', l: 'Size (L x W x H cm)', t: 'text', w: 'half' },
   { t: 'heading', l: 'Details table & questions' },
   { k: 'specs', l: 'Details table', t: 'list', add: 'Add row', blank: { k: '', v: '' }, sub: [{ k: 'k', l: 'Label', t: 'text', w: 'half' }, { k: 'v', l: 'Value', t: 'text', w: 'half' }] },

@@ -29,9 +29,16 @@ function hero(banners) {
   let i = 0, timer; const n = banners.length;
   const track = h('div', { class: 'hero-track' }, banners.map(b => {
     const img = b.image || (b.product && b.product.images[0] && b.product.images[0].gal);
+    const title = (lang() === 'hi' && b.title_hi) || b.title || BOOT.brand.name, subt = (lang() === 'hi' && b.subtitle_hi) || b.subtitle;
+    if (b.image) { // uploaded banner: show the WHOLE picture, with a soft blurred copy filling the rest
+      return h('div', { class: 'bslide' }, h('div', { class: 'bn-bg', style: { backgroundImage: `url("${b.image}")` } }),
+        h('img', { class: 'bn-img', src: b.image, alt: b.title || '', loading: 'eager', decoding: 'async', onerror: e => { e.target.remove(); } }),
+        (b.title || subt || b.cta_url || b.product) ? h('div', { class: 'bn-txt wrap' }, h('div', { class: 'bn-card' }, b.title ? h('h1', null, title) : null, subt ? h('p', { class: 'sub' }, subt) : null,
+          b.cta_url || b.product ? h('div', { class: 'ctas row' }, h('a', { class: 'btn', href: b.cta_url || `/p/${b.product.slug}` }, (lang() === 'hi' && b.cta_text_hi) || b.cta_text || t('shop'))) : null)) : null);
+    }
     return h('div', { class: 'slide wrap' }, h('div', { style: { minWidth: 0 } }, h('h1', null, (lang() === 'hi' && b.title_hi) || b.title || BOOT.brand.name), (b.subtitle || b.subtitle_hi) ? h('p', { class: 'sub' }, (lang() === 'hi' && b.subtitle_hi) || b.subtitle) : null,
       b.cta_url || b.product ? h('div', { class: 'ctas row' }, h('a', { class: 'btn', href: b.cta_url || `/p/${b.product.slug}` }, (lang() === 'hi' && b.cta_text_hi) || b.cta_text || t('shop'))) : null),
-      img ? h('div', { class: 'slide-img' }, h('img', { src: img, alt: b.title || '', loading: 'eager', decoding: 'async' })) : null);
+      img ? h('div', { class: 'slide-img' }, h('img', { src: img, alt: b.title || '', loading: 'eager', decoding: 'async', onerror: e => { const w = e.target.closest('.slide-img'); if (w) w.remove(); } })) : null);
   }));
   const dots = h('div', { class: 'dots' }, banners.map((_, k) => h('button', { 'aria-label': 'Slide ' + (k + 1), onclick: () => go(k) })));
   const go = k => { i = (k + n) % n; track.style.transform = `translateX(-${i * 100}%)`; $$('button', dots).forEach((d, j) => d.classList.toggle('on', j === i)); play(); };

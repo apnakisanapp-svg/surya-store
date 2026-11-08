@@ -76,6 +76,7 @@ function priceCart(items, opts = {}) {
   for (const it of merged.values()) {
     const p = db.prepare(`SELECT p.* FROM products p WHERE p.id=? AND ${catalog.LIVE_SQL}`).get(it.product_id, ...catalog.liveArgs());
     const line = { key: `${it.product_id}:${it.variant_id || 0}`, product_id: it.product_id, variant_id: it.variant_id, qty: it.qty, ok: false, issue: null };
+    line.pay_rule = p ? (p.pay_rule || '') : '';
     if (!p) { line.issue = 'unavailable'; line.name = 'Unavailable product'; lines.push(line); continue; }
     const variants = db.prepare('SELECT * FROM variants WHERE product_id=? AND active=1 ORDER BY sort,id').all(p.id);
     let v = null;
@@ -128,7 +129,10 @@ function priceCart(items, opts = {}) {
   if (!P.cod_enabled) codMsg = 'Cash on delivery is not available right now.';
   else if (pin && !pin.cod) codMsg = 'Cash on delivery is not available for this pincode.';
   else if (!codRangeOk) codMsg = P.cod_max && payTotalNoCod > P.cod_max ? `Cash on delivery is available up to ₹${P.cod_max}.` : `Cash on delivery needs a minimum order of ₹${P.cod_min}.`;
-  const codOk = codBase && codRangeOk;
+  const okRules = lines.filter(l => l.ok).map(l => l.pay_rule);
+  const upiOnly = okRules.includes('upi_only'), forceAdvance = okRules.includes('cod_advance');
+  if (upiOnly && codBase) codMsg = 'An item in your cart can only be paid online by UPI.';
+  const codOk = codBase && codRangeOk && !upiOnly;
   const method = opts.method === 'cod' ? 'cod' : opts.method === 'upi' ? 'upi' : null;
   const codFee = method === 'cod' && codOk ? (P.cod_fee || 0) : 0;
   const total = round2(payTotalNoCod + codFee);
@@ -149,9 +153,19 @@ function priceCart(items, opts = {}) {
     lines, count: okLines.reduce((s, l) => s + l.qty, 0), subtotal, mrp_total: mrpTotal, savings: round2(Math.max(0, mrpTotal - subtotal) + discount),
     discount, coupon, shipping, packaging, gift_fee: giftFee, cod_fee: codFee, total, gst: { enabled: !!B.gst_enabled, amount: gstAmount, inclusive: true },
     free_above: freeAbove, free_shipping_remaining: freeAbove && !freeShipCoupon ? Math.max(0, round2(freeAbove - afterDiscount)) : 0,
-    pincode: pin, cod: { ok: codOk, message: codMsg, fee: P.cod_fee || 0 }, upi_ok: !!P.upi_enabled && !!P.upi_id,
-    has_battery: hasBattery, battery_notice: hasBattery ? S.battery_notice : '', needs_safety_ack: needsSafety, method, errors,
+    pincode: pin, cod: { ok: codOk, message: codMsg, fee: P.cod_fee || 0, advance: codOk ? advanceFor(P, { method: 'cod', total: method === 'cod' ? total : round2(total + (P.cod_fee || 0)), phone: opts.identity && opts.identity.phone, risky: false, force: forceAdvance }) : 0, advance_note: P.cod_advance_note || '' }, upi_ok: !!P.upi_enabled && !!P.upi_id,
+    force_advance: forceAdvance, upi_only: upiOnly, has_battery: hasBattery, battery_notice: hasBattery ? S.battery_notice : '', needs_safety_ack: needsSafety, method, errors,
   };
 }
 
-module.exports = { priceCart, checkPincode, couponFor, validateCoupon, eta };
+function advanceFor(P, { method, total, phone, risky, force }) {
+  if (method !== 'cod' || !P.upi_enabled || !P.upi_id) return 0;
+  if (!force && !P.cod_advance_on) return 0;
+  if (!force && total < (Number(P.cod_advance_min_total) || 0)) return 0;
+  if (!force && P.cod_advance_for === 'new' && phone && db.prepare("SELECT 1 FROM orders WHERE phone=? AND status='delivered' LIMIT 1").get(phone)) return 0;
+  if (!force && P.cod_advance_for === 'risky' && !risky) return 0;
+  let a = P.cod_advance_mode === 'percent' ? Math.round(total * (Number(P.cod_advance_value) || 0) / 100) : Math.round(Number(P.cod_advance_value) || (force ? 99 : 0));
+  return Math.max(0, Math.min(a, Math.floor(total) - 1));
+}
+
+module.exports = { advanceFor, priceCart, checkPincode, couponFor, validateCoupon, eta };

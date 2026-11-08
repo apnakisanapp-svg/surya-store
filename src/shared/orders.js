@@ -3,12 +3,13 @@ const db = require('./db');
 const settings = require('./settings');
 const pricing = require('./pricing');
 const mail = require('./mail');
-const { now, jstr, jparse, orderNumber, token, normPhone, isPhone, isEmail, isPin, isUTR, bad, HttpError, hashIp, round2 } = require('./util');
+const notify = require('./notify');
+const { itemImage, now, jstr, jparse, orderNumber, token, normPhone, isPhone, isEmail, isPin, isUTR, bad, HttpError, hashIp, round2 } = require('./util');
 
 const STATUSES = ['placed', 'payment_pending', 'cod_confirm', 'confirmed', 'packed', 'shipped', 'delivered', 'cancelled', 'returned'];
 const NEXT = {
   placed: ['payment_pending', 'cod_confirm', 'confirmed', 'cancelled'],
-  payment_pending: ['confirmed', 'cancelled'],
+  payment_pending: ['confirmed', 'cod_confirm', 'cancelled'],
   cod_confirm: ['confirmed', 'cancelled'],
   confirmed: ['packed', 'cancelled'],
   packed: ['shipped', 'cancelled'],
@@ -37,6 +38,15 @@ function validateAddress(a) {
 }
 
 /** Create an order. Stock is checked and reduced inside one SQLite transaction, so the last piece can only be sold once. */
+/* ---- COD advance: a small online payment (for example Rs 99) that must reach you before a COD order is accepted ---- */
+const hasAdvance = o => o.payment_method === 'cod' && Number(o.advance_amount) > 0;
+const payAmount = o => hasAdvance(o) ? Number(o.advance_pay || o.advance_amount) : Number(o.total);
+const dueOnDelivery = o => o.payment_method === 'cod' ? round2(Number(o.total) - (o.advance_status === 'verified' || o.advance_status === 'refund_due' ? Number(o.advance_amount) || 0 : 0)) : 0;
+const amountsInUse = () => new Set([
+  ...db.prepare("SELECT total v FROM orders WHERE payment_method='upi' AND payment_status IN ('pending','submitted') AND status IN ('payment_pending','placed')").all().map(r => round2(r.v).toFixed(2)),
+  ...db.prepare("SELECT advance_pay v FROM orders WHERE payment_method='cod' AND advance_amount>0 AND payment_status IN ('pending','submitted') AND status='payment_pending'").all().map(r => round2(r.v).toFixed(2)),
+]);
+
 function createOrder(body, ctx) {
   const P = settings.get('payments'), ST = settings.get('store');
   if (ST.maintenance) throw new HttpError(503, 'The store is temporarily closed.');
@@ -72,9 +82,10 @@ function createOrder(body, ctx) {
     else if (priced.total > 3000) { risky = 1; riskReason = 'High-value COD order'; }
   }
 
+  const advance = pricing.advanceFor(P, { method, total: priced.total, phone: address.phone, risky, force: priced.force_advance });
   const run = db.transaction(() => {
     // duplicate guard: same phone + same total in last 2 minutes
-    const dup = db.prepare("SELECT * FROM orders WHERE phone=? AND total=? AND placed_at > ? AND status NOT IN ('cancelled') ORDER BY id DESC LIMIT 1")
+    const dup = db.prepare("SELECT * FROM orders WHERE phone=? AND ABS(total+COALESCE(upi_adjust,0)-?)<0.001 AND placed_at > ? AND status NOT IN ('cancelled') ORDER BY id DESC LIMIT 1")
       .get(address.phone, priced.total, new Date(Date.now() - 120000).toISOString());
     if (dup) return { order: dup, duplicate: true };
 
@@ -89,18 +100,38 @@ function createOrder(body, ctx) {
       if (!r.changes) throw new HttpError(409, `Sorry, "${l.name}" just went out of stock.`, { out_of_stock: l.product_id });
     }
     const ts = now();
+    // UPI: take a few paise off so every waiting order has its own exact amount (for example 298.63).
+    // The owner then matches money received to orders by amount. The customer never pays more than the price.
+    let adj = 0;
+    if (method === 'upi' && P.upi_unique_paise !== false) {
+      const used = amountsInUse();
+      const free = []; for (let k = 1; k <= 99; k++) { const t = round2(priced.total - k / 100); if (t > 1 && !used.has(t.toFixed(2))) free.push(k); }
+      if (free.length) adj = free[Math.floor(Math.random() * free.length)] / 100;
+    }
+    const orderTotal = round2(priced.total - adj), orderDiscount = round2(priced.discount + adj);
     const number = (() => { for (let i = 0; i < 8; i++) { const n = orderNumber(); if (!db.prepare('SELECT 1 FROM orders WHERE number=?').get(n)) return n; } throw new Error('order number'); })();
-    const status = method === 'upi' ? 'payment_pending' : (P.cod_phone_confirm ? 'cod_confirm' : 'confirmed');
-    const payStatus = method === 'upi' ? 'pending' : 'cod_due';
-    const expires = method === 'upi' ? new Date(Date.now() + ((P.upi_timer_min || 15) + (P.upi_grace_min || 60)) * 60000).toISOString() : null;
+    // COD with an advance waits for the advance, like a UPI order waits for its payment
+    let advPay = 0;
+    if (advance > 0) {
+      advPay = advance;
+      if (P.upi_unique_paise !== false) {
+        const used = amountsInUse(), free = []; for (let k = 1; k <= 99; k++) { const t = round2(advance - k / 100); if (t > 0 && !used.has(t.toFixed(2))) free.push(t); }
+        if (free.length) advPay = free[Math.floor(Math.random() * free.length)];
+      }
+    }
+    const status = method === 'upi' || advance > 0 ? 'payment_pending' : (P.cod_phone_confirm ? 'cod_confirm' : 'confirmed');
+    const payStatus = method === 'upi' || advance > 0 ? 'pending' : 'cod_due';
+    const expires = method === 'upi' || advance > 0 ? new Date(Date.now() + ((P.upi_timer_min || 15) + (P.upi_grace_min || 60)) * 60000).toISOString() : null;
     const info = db.prepare(`INSERT INTO orders(number,customer_id,email,phone,name,address,status,payment_method,payment_status,subtotal,discount,coupon_code,shipping,cod_fee,gift_fee,gst_amount,total,
       gift,customer_note,risky,risk_reason,placed_at,expires_at,ip,ua,lang,access_token,has_battery,updated_at)
       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
-      number, ctx.customer?.id || null, email || null, address.phone, address.name, jstr(address), status, method, payStatus, priced.subtotal, priced.discount,
-      priced.coupon?.ok ? priced.coupon.code : null, priced.shipping + priced.packaging, priced.cod_fee, priced.gift_fee, priced.gst.amount, priced.total,
+      number, ctx.customer?.id || null, email || null, address.phone, address.name, jstr(address), status, method, payStatus, priced.subtotal, orderDiscount,
+      priced.coupon?.ok ? priced.coupon.code : null, priced.shipping + priced.packaging, priced.cod_fee, priced.gift_fee, priced.gst.amount, orderTotal,
       body.gift ? jstr({ wrap: true, message: String(body.gift_message || '').slice(0, 200) }) : null, String(body.note || '').slice(0, 300) || null, risky, riskReason || null,
       ts, expires, hashIp(ctx.ip), String(ctx.ua || '').slice(0, 200), body.lang === 'hi' ? 'hi' : 'en', token(16), priced.has_battery ? 1 : 0, ts);
     const orderId = info.lastInsertRowid;
+    if (adj) db.prepare('UPDATE orders SET upi_adjust=? WHERE id=?').run(adj, orderId);
+    if (advance > 0) db.prepare("UPDATE orders SET advance_amount=?, advance_pay=?, advance_status='pending' WHERE id=?").run(advance, advPay, orderId);
     const ins = db.prepare('INSERT INTO order_items(order_id,product_id,variant_id,name,variant_name,sku,qty,price,mrp,cost,image,gst_rate,hsn) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)');
     for (const l of priced.lines) if (l.ok) {
       const cost = unitCost(l.product_id, l.variant_id, l.cost);
@@ -108,7 +139,7 @@ function createOrder(body, ctx) {
       db.prepare('UPDATE products SET sold_count=sold_count+? WHERE id=?').run(l.qty, l.product_id);
     }
     if (priced.coupon?.ok) db.prepare('UPDATE coupons SET used_count=used_count+1 WHERE UPPER(code)=UPPER(?)').run(priced.coupon.code);
-    addEvent(orderId, status, method === 'upi' ? 'Waiting for UPI payment' : 'Cash on delivery', 'customer');
+    addEvent(orderId, status, advance > 0 ? `Waiting for COD advance of ${advance} (exact amount ${advPay.toFixed(2)}). Rest on delivery: ${round2(priced.total - advance).toFixed(2)}` : method === 'upi' ? 'Waiting for UPI payment' + (adj ? ` (exact amount ${orderTotal.toFixed(2)}, includes a UPI offer of ${adj.toFixed(2)})` : '') : 'Cash on delivery', 'customer');
     // consents
     const ip = hashIp(ctx.ip), ua = String(ctx.ua || '').slice(0, 200);
     const addC = (kind, slug, accepted = 1) => {
@@ -129,8 +160,10 @@ function createOrder(body, ctx) {
   });
   const res = run();
   if (!res.duplicate) {
-    mail.queueOrderMessage(res.order, 'placed');
-    if (res.order.status === 'payment_pending') mail.queueOrderMessage(res.order, 'payment_pending');
+    try { notify.orderPlaced(res.order); } catch (e) { /* alerts are optional */ }
+    // UPI orders are not "placed" for the customer until payment is checked: send only the payment request.
+    if (res.order.payment_method === 'upi') mail.queueOrderMessage(res.order, 'payment_pending');
+    else if (!hasAdvance(res.order)) mail.queueOrderMessage(res.order, 'placed');
   }
   return res;
 }
@@ -194,7 +227,12 @@ function setStatus(orderId, to, { actor = 'system', note = '', reason = '', forc
     args.push(orderId);
     db.prepare(`UPDATE orders SET ${sets.join(', ')} WHERE id=?`).run(...args);
     const fresh = db.prepare('SELECT * FROM orders WHERE id=?').get(orderId);
-    if (to === 'cancelled') releaseStock(fresh);
+    if (to === 'cancelled') {
+      releaseStock(fresh);
+      // a verified COD advance is the customer's money: it must go back if the order is cancelled
+      if (hasAdvance(fresh) && fresh.advance_status === 'verified') { db.prepare("UPDATE orders SET advance_status='refund_due' WHERE id=?").run(orderId); fresh.advance_status = 'refund_due'; addEvent(orderId, 'cancelled', `Advance of ${fresh.advance_amount} must be refunded to the customer`, 'system'); }
+      else if (hasAdvance(fresh) && fresh.advance_status === 'pending') db.prepare("UPDATE orders SET advance_status='cancelled' WHERE id=?").run(orderId);
+    }
     if (to === 'confirmed') consumeBatches(orderId);
     addEvent(orderId, to, note || reason, actor);
     return fresh;
@@ -205,7 +243,7 @@ function setStatus(orderId, to, { actor = 'system', note = '', reason = '', forc
 }
 
 function submitUTR(order, utr, screenshotFile) {
-  if (order.payment_method !== 'upi') throw bad('This order is not a UPI order.');
+  if (order.payment_method !== 'upi' && !hasAdvance(order)) throw bad('This order does not need an online payment.');
   if (order.status === 'cancelled') throw bad('This order was cancelled. Please place a new order.');
   if (order.payment_status === 'verified') throw bad('Payment is already verified.');
   const u = String(utr || '').trim();
@@ -214,12 +252,20 @@ function submitUTR(order, utr, screenshotFile) {
   if (used) throw bad('This transaction ID was already used for another order.');
   db.prepare("UPDATE orders SET utr=?, payment_status='submitted', payment_screenshot=COALESCE(?,payment_screenshot), updated_at=? WHERE id=?").run(u, screenshotFile || null, now(), order.id);
   addEvent(order.id, order.status, `Customer submitted UTR ${u}`, 'customer');
+  try { notify.paymentSubmitted({ ...order, pay_amount: payAmount(order) }, u); } catch (e) { /* alerts are optional */ }
 }
 
 function verifyPayment(orderId, actor, ok, note) {
   const o = db.prepare('SELECT * FROM orders WHERE id=?').get(orderId);
   if (!o) throw new HttpError(404, 'Order not found');
-  if (o.payment_method !== 'upi') throw bad('Only UPI orders need payment verification.');
+  if (o.payment_method !== 'upi' && !hasAdvance(o)) throw bad('Only UPI orders (or COD orders with an advance) need payment verification.');
+  if (ok && hasAdvance(o)) {
+    const P = settings.get('payments');
+    db.prepare("UPDATE orders SET advance_status='verified', payment_status='cod_due', updated_at=? WHERE id=?").run(now(), orderId);
+    addEvent(orderId, o.status, `COD advance of ${o.advance_amount} verified${note ? ': ' + note : ''}. Collect ${dueOnDelivery({ ...o, advance_status: 'verified' }).toFixed(2)} on delivery.`, actor);
+    if (o.status === 'payment_pending' || o.status === 'placed') return setStatus(orderId, P.cod_phone_confirm ? 'cod_confirm' : 'confirmed', { actor, note: 'COD advance received' });
+    return db.prepare('SELECT * FROM orders WHERE id=?').get(orderId);
+  }
   if (ok) {
     db.prepare("UPDATE orders SET payment_status='verified', updated_at=? WHERE id=?").run(now(), orderId);
     addEvent(orderId, o.status, 'Payment verified' + (note ? ': ' + note : ''), actor);
@@ -238,8 +284,21 @@ function expireUnpaid() {
   return rows.length;
 }
 
+// Public tracking page for a parcel. Used when you do not paste a link yourself.
+function trackingLink(courier, no) {
+  no = String(no || '').trim(); if (!no) return null;
+  const c = String(courier || '').toLowerCase(), n = encodeURIComponent(no);
+  if (c.includes('delhivery')) return `https://www.delhivery.com/track-v2/package/${n}`;
+  if (c.includes('shiprocket')) return `https://shiprocket.co/tracking/${n}`;
+  return `https://t.17track.net/en#nums=${n}`; // works for most Indian couriers incl. India Post
+}
+
 function serializeForCustomer(o) {
-  const items = db.prepare('SELECT name, variant_name, qty, price, image, product_id FROM order_items WHERE order_id=?').all(o.id);
+  const items = db.prepare('SELECT name, variant_name, qty, price, image, product_id FROM order_items WHERE order_id=?').all(o.id).map(i => {
+    // photo + link to the product page (link only while the product is still on sale)
+    const pr = i.product_id ? db.prepare("SELECT slug FROM products WHERE id=? AND deleted_at IS NULL AND status='published'").get(i.product_id) : null;
+    return { ...i, image_url: itemImage(i.image), slug: pr ? pr.slug : null };
+  });
   const events = db.prepare('SELECT status, note, actor, created_at FROM order_events WHERE order_id=? ORDER BY id').all(o.id).filter(e => e.actor !== 'admin-note');
   const reqs = db.prepare('SELECT id, type, reason, status, created_at FROM order_requests WHERE order_id=? ORDER BY id DESC').all(o.id);
   const R = settings.get('returns');
@@ -249,11 +308,11 @@ function serializeForCustomer(o) {
   }
   return {
     number: o.number, status: o.status, payment_method: o.payment_method, payment_status: o.payment_status, name: o.name, phone_last4: String(o.phone).slice(-4),
-    address: jparse(o.address, {}), subtotal: o.subtotal, discount: o.discount, coupon_code: o.coupon_code, shipping: o.shipping, cod_fee: o.cod_fee, gift_fee: o.gift_fee, total: o.total,
+    address: jparse(o.address, {}), subtotal: o.subtotal, discount: o.discount, coupon_code: o.coupon_code, shipping: o.shipping, cod_fee: o.cod_fee, gift_fee: o.gift_fee, advance: Number(o.advance_amount) || 0, advance_status: o.advance_status || null, pay_now: payAmount(o), due_on_delivery: o.payment_method === 'cod' ? dueOnDelivery(o) : 0, total: o.total,
     gst_amount: o.gst_amount, utr: o.utr, courier: o.courier, tracking_no: o.tracking_no, tracking_url: o.tracking_url, placed_at: o.placed_at, expires_at: o.expires_at,
     delivered_at: o.delivered_at, cancel_reason: o.cancel_reason, items, events, requests: reqs, can_request: canRequest, return_window_days: R.window_days,
     invoice_no: o.invoice_no, cod_confirmed: !!o.cod_confirmed,
   };
 }
 
-module.exports = { STATUSES, NEXT, createOrder, setStatus, submitUTR, verifyPayment, expireUnpaid, addEvent, releaseStock, serializeForCustomer, saveAddress, validateAddress, unitCost };
+module.exports = { hasAdvance, payAmount, dueOnDelivery, STATUSES, NEXT, createOrder, setStatus, submitUTR, verifyPayment, expireUnpaid, addEvent, releaseStock, serializeForCustomer, saveAddress, validateAddress, unitCost, trackingLink };

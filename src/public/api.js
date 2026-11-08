@@ -46,7 +46,7 @@ function bootstrap(req) {
     seo: { ga_id: S.seo.ga_id, meta_pixel: S.seo.meta_pixel }, categories: cats, policies: pol, customer: req && req.customer ? publicCustomer(req.customer) : null,
   };
 }
-const publicCustomer = c => ({ id: c.id, email: c.email, name: c.name, phone: c.phone, marketing_optin: !!c.marketing_optin });
+const publicCustomer = c => ({ id: c.id, email: c.email, name: c.name, first_name: c.first_name || (c.name || '').split(' ')[0] || '', last_name: c.last_name || (c.name || '').split(' ').slice(1).join(' '), phone: c.phone, marketing_optin: !!c.marketing_optin, has_password: !!c.pass_hash });
 
 api.get('/bootstrap', (req, res) => res.json(bootstrap(req)));
 
@@ -142,7 +142,7 @@ const ctxOf = req => ({ customer: req.customer, ip: ipOf(req), ua: req.headers['
 api.post('/orders', lim(10, +process.env.ORDER_RATE_MAX || 12, 'Too many orders from this device. Please wait a few minutes.'), asyncH((req, res) => {
   if (process.env.CATALOGUE_ONLY === '1') { const B = settings.get('brand'); const wa = String(B.whatsapp || B.phone || '').replace(/\D/g, '').slice(-10); throw bad('Orders are not taken on this preview website. Please order on WhatsApp' + (wa ? ': +91 ' + wa : '') + '.'); }
   const r = orders.createOrder(req.body || {}, ctxOf(req));
-  res.json({ number: r.order.number, token: r.order.access_token, status: r.order.status, method: r.order.payment_method, total: r.order.total, duplicate: r.duplicate });
+  res.json({ number: r.order.number, token: r.order.access_token, status: r.order.status, method: r.order.payment_method, total: r.order.total, advance: Number(r.order.advance_amount) || 0, duplicate: r.duplicate });
 }));
 
 function orderAccess(req) {
@@ -167,13 +167,13 @@ api.get('/orders/:number', asyncH((req, res) => {
 
 api.get('/orders/:number/pay', asyncH(async (req, res) => {
   const o = orderAccess(req), P = settings.get('payments');
-  if (o.payment_method !== 'upi') throw bad('This is not a UPI order.');
+  if (o.payment_method !== 'upi' && !orders.hasAdvance(o)) throw bad('This order does not need an online payment.');
   if (!P.upi_id) throw bad('UPI is not set up yet. Please contact us.');
-  const am = Number(o.total).toFixed(2);
+  const am = orders.payAmount(o).toFixed(2);
   const link = `upi://pay?pa=${encodeURIComponent(P.upi_id)}&pn=${encodeURIComponent(P.upi_name || settings.get('brand').name)}&am=${am}&cu=INR&tn=${encodeURIComponent('Order ' + o.number)}&tr=${encodeURIComponent(o.number)}`;
   const qr = await QRCode.toDataURL(link, { margin: 1, width: 360, errorCorrectionLevel: 'M' });
   const payBy = new Date(new Date(o.placed_at).getTime() + (P.upi_timer_min || 15) * 60000).toISOString();
-  res.json({ upi_id: P.upi_id, name: P.upi_name, amount: Number(am), link, qr, pay_by: payBy, expires_at: o.expires_at, status: o.status, payment_status: o.payment_status, screenshot: !!P.upi_screenshot });
+  res.json({ upi_id: P.upi_id, name: P.upi_name, amount: Number(am), adjust: Number(o.upi_adjust || 0), advance: orders.hasAdvance(o) ? { amount: o.advance_amount, due_on_delivery: orders.dueOnDelivery({ ...o, advance_status: 'verified' }), note: P.cod_advance_note || '' } : null, link, qr, pay_by: payBy, expires_at: o.expires_at, status: o.status, payment_status: o.payment_status, screenshot: !!P.upi_screenshot });
 }));
 api.post('/orders/:number/utr', lim(15, 15), upload.single('screenshot'), asyncH(async (req, res) => {
   const o = orderAccess(req);
@@ -218,7 +218,7 @@ api.post('/auth/register', authLim, asyncH((req, res) => {
     const pol = db.prepare('SELECT version FROM policies WHERE slug=?').get(slug);
     db.prepare('INSERT INTO consents(customer_id,email,phone,kind,policy_slug,policy_version,accepted,ip_hash,ua,created_at) VALUES(?,?,?,?,?,?,1,?,?,?)').run(id, email, phone, 'terms', slug, pol?.version || null, hashIp(ipOf(req)), String(req.headers['user-agent'] || '').slice(0, 200), now());
   }
-  db.prepare('UPDATE orders SET customer_id=? WHERE customer_id IS NULL AND email=?').run(id, email);
+  // guest orders are linked only after the email is proven with a login code (see /auth/otp/verify)
   auth.startCustomerSession(res, id);
   res.json({ customer: publicCustomer(db.prepare('SELECT * FROM customers WHERE id=?').get(id)) });
 }));
@@ -229,6 +229,53 @@ api.post('/auth/login', authLim, asyncH((req, res) => {
   if (c.blocked) throw new HttpError(403, 'This account is not available. Please contact support.');
   auth.startCustomerSession(res, c.id);
   res.json({ customer: publicCustomer(c) });
+}));
+/* ---- email login code (free, no password needed). Mobile number is just saved, not verified. ---- */
+const otpHash = (email, code) => sha256(`${email}|${code}|${cfg.SALT}`);
+api.post('/auth/otp/send', lim(15, 12, 'Too many codes asked. Please wait a few minutes.'), asyncH(async (req, res) => {
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  if (!isEmail(email)) throw bad('Enter a valid email address.');
+  const last = db.prepare('SELECT created_at FROM otp_codes WHERE email=? ORDER BY id DESC LIMIT 1').get(email);
+  if (last && Date.now() - new Date(last.created_at).getTime() < 45000) throw bad('A code was just sent. Please wait 45 seconds before asking again.');
+  const hourly = db.prepare('SELECT COUNT(*) c FROM otp_codes WHERE email=? AND created_at>?').get(email, new Date(Date.now() - 3600e3).toISOString()).c;
+  if (hourly >= 5) throw bad('Too many codes for this email. Please try again in an hour.');
+  const c = db.prepare('SELECT blocked FROM customers WHERE email=? AND deleted_at IS NULL').get(email);
+  if (c && c.blocked) throw new HttpError(403, 'This account is not available. Please contact support.');
+  const code = String(require('crypto').randomInt(0, 1000000)).padStart(6, '0');
+  db.prepare('UPDATE otp_codes SET used=1 WHERE email=? AND used=0').run(email);
+  db.prepare('INSERT INTO otp_codes(email,code_hash,expires_at,created_at) VALUES(?,?,?,?)').run(email, otpHash(email, code), new Date(Date.now() + 10 * 60000).toISOString(), now());
+  if (!(await mail.sendOtp(email, code))) throw bad('We could not send the email right now. Please use your password, or try again later.');
+  res.json({ ok: true, message: 'We sent a 6-digit code to your email. It works for 10 minutes.' });
+}));
+api.post('/auth/otp/verify', authLim, asyncH((req, res) => {
+  const b = req.body || {}, email = String(b.email || '').trim().toLowerCase(), code = String(b.code || '').replace(/\D/g, '');
+  if (!isEmail(email) || code.length !== 6) throw bad('Enter the 6-digit code from your email.');
+  const row = db.prepare('SELECT * FROM otp_codes WHERE email=? AND used=0 ORDER BY id DESC LIMIT 1').get(email);
+  if (!row || row.expires_at < now()) throw bad('This code has expired. Please ask for a new one.');
+  if (row.attempts >= 5) { db.prepare('UPDATE otp_codes SET used=1 WHERE id=?').run(row.id); throw bad('Too many wrong tries. Please ask for a new code.'); }
+  if (row.code_hash !== otpHash(email, code)) { db.prepare('UPDATE otp_codes SET attempts=attempts+1 WHERE id=?').run(row.id); throw bad('That code is not right. Please check and try again.'); }
+  let c = db.prepare('SELECT * FROM customers WHERE email=? AND deleted_at IS NULL').get(email), isNew = false;
+  if (!c && !b.terms) throw bad('Please accept the Terms and Privacy Policy to create your account.'); // checked before the code is used up, so the person can tick and retry
+  db.prepare('UPDATE otp_codes SET used=1 WHERE id=?').run(row.id);
+  const phone = b.phone ? normPhone(b.phone) : null;
+  if (phone && !isPhone(phone)) throw bad('Enter a valid 10-digit mobile number.');
+  if (!c) {
+    if (!b.terms) throw bad('Please accept the Terms and Privacy Policy to create your account.');
+    const id = db.prepare('INSERT INTO customers(email,phone,name,pass_hash,email_verified,marketing_optin,ref_code,created_at) VALUES(?,?,?,?,1,0,?,?)')
+      .run(email, phone, String(b.name || '').trim().slice(0, 80) || null, null, token(4), now()).lastInsertRowid;
+    for (const slug of ['terms', 'privacy']) {
+      const pol = db.prepare('SELECT version FROM policies WHERE slug=?').get(slug);
+      db.prepare('INSERT INTO consents(customer_id,email,phone,kind,policy_slug,policy_version,accepted,ip_hash,ua,created_at) VALUES(?,?,?,?,?,?,1,?,?,?)').run(id, email, phone, 'terms', slug, pol?.version || null, hashIp(ipOf(req)), String(req.headers['user-agent'] || '').slice(0, 200), now());
+    }
+    c = db.prepare('SELECT * FROM customers WHERE id=?').get(id); isNew = true;
+  } else {
+    if (c.blocked) throw new HttpError(403, 'This account is not available. Please contact support.');
+    db.prepare('UPDATE customers SET email_verified=1, phone=COALESCE(phone, ?) WHERE id=?').run(phone, c.id);
+    c = db.prepare('SELECT * FROM customers WHERE id=?').get(c.id);
+  }
+  db.prepare('UPDATE orders SET customer_id=? WHERE customer_id IS NULL AND email=?').run(c.id, email); // email is now proven, so earlier guest orders join the account
+  auth.startCustomerSession(res, c.id);
+  res.json({ customer: publicCustomer(c), is_new: isNew });
 }));
 api.post('/auth/logout', (req, res) => { auth.customerLogout(req, res); res.json({ ok: true }); });
 api.post('/auth/forgot', lim(60, 6), asyncH((req, res) => {
@@ -255,15 +302,24 @@ const acct = express.Router();
 acct.use(auth.requireCustomer);
 acct.get('/me', (req, res) => res.json({ customer: publicCustomer(req.customer) }));
 acct.patch('/me', asyncH((req, res) => {
-  const b = req.body || {}, phone = b.phone ? normPhone(b.phone) : req.customer.phone;
+  const b = req.body || {}, c0 = req.customer, phone = b.phone ? normPhone(b.phone) : c0.phone;
+  if (b.complete && !phone) throw bad('Please enter your mobile number.');
   if (phone && !isPhone(phone)) throw bad('Enter a valid 10-digit mobile number.');
-  db.prepare('UPDATE customers SET name=?, phone=?, marketing_optin=? WHERE id=?').run(String(b.name || '').trim().slice(0, 80) || null, phone || null, b.marketing_optin ? 1 : 0, req.customer.id);
-  res.json({ customer: publicCustomer(db.prepare('SELECT * FROM customers WHERE id=?').get(req.customer.id)) });
+  const clean = v => String(v || '').replace(/\s+/g, ' ').trim().slice(0, 40);
+  let first = b.first_name !== undefined ? clean(b.first_name) : (c0.first_name || (c0.name || '').split(' ')[0] || '');
+  let last = b.last_name !== undefined ? clean(b.last_name) : (c0.last_name || (c0.name || '').split(' ').slice(1).join(' '));
+  if (b.name !== undefined && b.first_name === undefined) { const parts = clean(b.name).split(' '); first = parts[0] || ''; last = parts.slice(1).join(' '); }
+  if (b.complete && first.length < 2) throw bad('Please enter your first name.');
+  const full = [first, last].filter(Boolean).join(' ') || null;
+  const mk = b.marketing_optin === undefined ? c0.marketing_optin : (b.marketing_optin ? 1 : 0);
+  db.prepare('UPDATE customers SET name=?, first_name=?, last_name=?, phone=?, marketing_optin=? WHERE id=?').run(full, first || null, last || null, phone || null, mk, c0.id);
+  res.json({ customer: publicCustomer(db.prepare('SELECT * FROM customers WHERE id=?').get(c0.id)) });
 }));
 acct.post('/password', authLim, asyncH((req, res) => {
-  if (!bcrypt.compareSync(String(req.body?.old || ''), req.customer.pass_hash || '')) throw bad('Current password is wrong.');
+  if (req.customer.pass_hash && !bcrypt.compareSync(String(req.body?.old || ''), req.customer.pass_hash)) throw bad('Current password is wrong.');
   if (String(req.body?.password || '').length < 8) throw bad('Password must be at least 8 characters.');
   db.prepare('UPDATE customers SET pass_hash=? WHERE id=?').run(bcrypt.hashSync(String(req.body.password), 10), req.customer.id);
+  require('../shared/mail').sendPasswordChanged(req.customer.email, req.customer.first_name || (req.customer.name || '').split(' ')[0]).catch(() => {});
   res.json({ ok: true });
 }));
 acct.get('/orders', (req, res) => res.json(db.prepare('SELECT * FROM orders WHERE customer_id=? ORDER BY id DESC LIMIT 100').all(req.customer.id).map(o => ({ ...orders.serializeForCustomer(o), token: o.access_token }))));
@@ -289,7 +345,7 @@ acct.get('/export', (req, res) => {
     consents: db.prepare('SELECT kind,policy_slug,policy_version,accepted,created_at FROM consents WHERE customer_id=?').all(c.id), reviews: db.prepare('SELECT product_id,rating,body,created_at FROM reviews WHERE customer_id=?').all(c.id) });
 });
 acct.post('/delete', authLim, asyncH((req, res) => {
-  if (!bcrypt.compareSync(String(req.body?.password || ''), req.customer.pass_hash || '')) throw bad('Password is wrong.');
+  if (req.customer.pass_hash ? !bcrypt.compareSync(String(req.body?.password || ''), req.customer.pass_hash) : String(req.body?.password || '').trim() !== 'DELETE') throw bad(req.customer.pass_hash ? 'Password is wrong.' : 'Type DELETE to confirm.');
   const id = req.customer.id;
   db.transaction(() => {
     db.prepare("UPDATE customers SET email=?, phone=NULL, name=NULL, pass_hash=NULL, marketing_optin=0, deleted_at=? WHERE id=?").run(`deleted-${id}@deleted.invalid`, now(), id);

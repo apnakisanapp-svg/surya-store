@@ -8,7 +8,7 @@ const settings = require('../shared/settings');
 const orders = require('../shared/orders');
 const auth = require('../shared/auth');
 const mail = require('../shared/mail');
-const { asyncH, bad, notFound, int, num, jparse, now, esc, rupee, toCSV, round2 } = require('../shared/util');
+const { itemImage, asyncH, bad, notFound, int, num, jparse, now, esc, rupee, toCSV, round2 } = require('../shared/util');
 
 const r = express.Router();
 const addr = o => jparse(o.address, {});
@@ -16,7 +16,7 @@ const addr = o => jparse(o.address, {});
 function listWhere(q) {
   const where = ['1=1'], args = [];
   if (q.status) {
-    if (q.status === 'action') where.push("(status IN ('payment_pending','cod_confirm') OR (status='confirmed') OR payment_status='submitted')");
+    if (q.status === 'action') where.push("(status='cod_confirm' OR status='confirmed' OR payment_status='submitted')"); // unpaid UPI orders wait in their own tab until a payment is submitted
     else { where.push('status=?'); args.push(q.status); }
   }
   if (q.method) { where.push('payment_method=?'); args.push(q.method); }
@@ -54,14 +54,14 @@ function orderProfit(o, items) {
 r.get('/:id', asyncH((req, res) => {
   const o = db.prepare('SELECT * FROM orders WHERE id=?').get(int(req.params.id));
   if (!o) throw notFound('Order not found.');
-  const items = db.prepare('SELECT * FROM order_items WHERE order_id=?').all(o.id).map(i => ({ ...i, image_url: i.image ? `/media/${i.image}-thumb.webp` : null }));
+  const items = db.prepare('SELECT * FROM order_items WHERE order_id=?').all(o.id).map(i => ({ ...i, image_url: itemImage(i.image) }));
   const events = db.prepare('SELECT * FROM order_events WHERE order_id=? ORDER BY id').all(o.id);
   const requests = db.prepare('SELECT * FROM order_requests WHERE order_id=? ORDER BY id DESC').all(o.id).map(x => ({ ...x, photos: jparse(x.photos, []) }));
   const refunds = db.prepare('SELECT * FROM refunds WHERE order_id=? ORDER BY id').all(o.id);
   const history = db.prepare("SELECT COUNT(*) total, SUM(status='delivered') delivered, SUM(status IN ('cancelled','returned')) bad FROM orders WHERE phone=? AND id<>?").get(o.phone, o.id);
   const consents = db.prepare('SELECT kind,policy_slug,policy_version,accepted,created_at FROM consents WHERE order_id=?').all(o.id);
   const outbox = db.prepare('SELECT id,channel,kind,link,status,created_at FROM outbox WHERE order_id=? ORDER BY id DESC').all(o.id);
-  res.json({ order: { ...o, address: addr(o), gift: jparse(o.gift, null), access_token: undefined, payment_screenshot: !!o.payment_screenshot }, items, events, requests, refunds, history, consents, outbox, profit: orderProfit(o, items), next: orders.NEXT[o.status] || [] });
+  res.json({ order: { ...o, address: addr(o), gift: jparse(o.gift, null), access_token: undefined, payment_screenshot: !!o.payment_screenshot, pay_amount: orders.payAmount(o), has_advance: orders.hasAdvance(o), due_on_delivery: orders.dueOnDelivery(o) }, items, events, requests, refunds, history, consents, outbox, profit: orderProfit(o, items), next: orders.NEXT[o.status] || [] });
 }));
 
 r.post('/:id/status', asyncH((req, res) => {
@@ -72,15 +72,47 @@ r.post('/:id/status', asyncH((req, res) => {
   auth.logActivity(req.admin.id, 'order_status', 'order', id, to, req);
   res.json({ order: o });
 }));
+// Match money received (pasted from your bank or UPI app) with orders that are waiting for payment.
+// It only SUGGESTS matches. Nothing is confirmed until the owner presses the button.
+r.post('/match-payments', asyncH((req, res) => {
+  const text = String(req.body?.text || '').slice(0, 200000);
+  const waiting = db.prepare("SELECT id,number,name,CASE WHEN payment_method='cod' THEN advance_pay ELSE total END AS total,utr,payment_status,placed_at FROM orders WHERE (payment_method='upi' OR advance_amount>0) AND payment_status IN ('pending','submitted') AND status IN ('payment_pending','placed') ORDER BY id DESC LIMIT 500").all();
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  const amountOf = l => [...l.matchAll(/(?:^|[^0-9.,])((?:\d{1,3}(?:,\d{2,3})+|\d+)\.\d{2})(?!\d)/g)].map(m => Number(m[1].replace(/,/g, '')));
+  const doneUtr = new Set(db.prepare("SELECT utr FROM orders WHERE utr IS NOT NULL AND payment_status='verified'").all().map(r => String(r.utr).toUpperCase()));
+  const found = [], seen = new Set();
+  for (const o of waiting) {
+    const hits = lines.filter(l => amountOf(l).some(a => Math.abs(a - o.total) < 0.005));
+    if (!hits.length) continue;
+    const u = o.utr ? String(o.utr).toUpperCase() : '';
+    const utrHit = u && hits.find(l => l.toUpperCase().includes(u));
+    const sameAmount = waiting.filter(x => Math.abs(x.total - o.total) < 0.005).length;
+    const usedElsewhere = hits.every(l => [...doneUtr].some(d => l.toUpperCase().includes(d)));
+    const level = utrHit && sameAmount === 1 ? 'certain' : 'probable';
+    if (usedElsewhere && !utrHit) continue; // this credit already belongs to an earlier confirmed order
+    if (seen.has(o.id)) continue; seen.add(o.id);
+    found.push({ id: o.id, number: o.number, name: o.name, total: o.total, utr: o.utr, level, line: (utrHit || hits[0]).trim().slice(0, 200), note: level === 'certain' ? 'Amount and transaction ID both match.' : (u ? 'Amount matches, but the customer\'s transaction ID was not found on that line.' : 'Amount matches. The customer has not sent a transaction ID yet.') });
+  }
+  res.json({ matches: found, waiting: waiting.length, lines: lines.length });
+}));
 r.post('/:id/verify', asyncH((req, res) => {
   const o = orders.verifyPayment(int(req.params.id), 'admin', !!req.body?.ok, String(req.body?.note || ''));
   auth.logActivity(req.admin.id, req.body?.ok ? 'payment_verified' : 'payment_rejected', 'order', o.id, o.utr || '', req);
   res.json({ order: o });
 }));
+r.post('/:id/advance-refunded', asyncH((req, res) => { // you returned the COD advance to the customer (UPI) and now record it
+  const id = int(req.params.id), o = db.prepare('SELECT * FROM orders WHERE id=?').get(id);
+  if (!o || !orders.hasAdvance(o)) throw notFound('This order has no advance.');
+  if (!['refund_due', 'verified'].includes(o.advance_status)) throw bad('There is no advance waiting to be refunded.');
+  db.prepare("UPDATE orders SET advance_status='refunded', updated_at=? WHERE id=?").run(now(), id);
+  orders.addEvent(id, o.status, `Advance of ${o.advance_amount} refunded to the customer${req.body?.note ? ': ' + String(req.body.note).slice(0, 200) : ''}`, 'admin');
+  auth.logActivity(req.admin.id, 'advance_refunded', 'order', id, String(o.advance_amount), req);
+  res.json({ ok: true });
+}));
 r.post('/:id/ship', asyncH((req, res) => {
   const id = int(req.params.id), b = req.body || {};
   if (!String(b.courier || '').trim()) throw bad('Please choose or type the courier name.');
-  db.prepare('UPDATE orders SET courier=?, tracking_no=?, tracking_url=?, ship_cost=COALESCE(?,ship_cost) WHERE id=?').run(String(b.courier).trim(), String(b.tracking_no || '').trim() || null, String(b.tracking_url || '').trim() || null, b.ship_cost === '' || b.ship_cost == null ? null : num(b.ship_cost), id);
+  db.prepare('UPDATE orders SET courier=?, tracking_no=?, tracking_url=?, ship_cost=COALESCE(?,ship_cost) WHERE id=?').run(String(b.courier).trim(), String(b.tracking_no || '').trim() || null, String(b.tracking_url || '').trim() || orders.trackingLink(b.courier, b.tracking_no), b.ship_cost === '' || b.ship_cost == null ? null : num(b.ship_cost), id);
   const o = db.prepare('SELECT * FROM orders WHERE id=?').get(id);
   if (!['shipped', 'delivered'].includes(o.status)) orders.setStatus(id, 'shipped', { actor: 'admin', note: `${b.courier} ${b.tracking_no || ''}` });
   auth.logActivity(req.admin.id, 'order_ship', 'order', id, b.courier, req);
@@ -150,7 +182,7 @@ function doc(o, items, kind) {
   <div class="grid"><div><h1>${esc(B.name)}</h1><small>${esc(B.legal_name)}<br>${esc(B.address)} ${esc(B.city)} ${esc(B.state)} ${esc(B.pincode)}<br>${esc(B.phone)} ${esc(B.email)}${gst && B.gstin ? '<br>GSTIN: ' + esc(B.gstin) : ''}</small></div>
   <div class="r"><b>${kind === 'invoice' ? (gst ? 'TAX INVOICE' : 'INVOICE / BILL OF SUPPLY') : 'PACKING SLIP'}</b><br>${esc(o.invoice_no || o.number)}<br>Order ${esc(o.number)}<br>${esc(new Date(o.placed_at).toLocaleDateString('en-IN'))}</div></div>
   <div class="grid" style="margin-top:18px"><div><b>Ship to</b><br>${addrHtml}</div><div><b>Payment</b><br>${o.payment_method === 'cod' ? 'Cash on delivery' : 'UPI'}${o.utr ? '<br>UTR: ' + esc(o.utr) : ''}</div></div>
-  ${kind === 'slip' && o.payment_method === 'cod' ? `<div class="cod">COLLECT ${rupee(o.total)} (COD)</div>` : ''}
+  ${kind === 'slip' && o.payment_method === 'cod' ? `<div class="cod">COLLECT ${rupee(orders.dueOnDelivery(o))} (COD)${orders.hasAdvance(o) && o.advance_status === 'verified' ? ` &middot; advance ${rupee(o.advance_amount)} already paid` : ''}</div>` : ''}
   <table><thead><tr><th>#</th><th>Item</th><th class="r">Qty</th>${kind === 'invoice' ? '<th class="r">Rate</th><th class="r">Amount</th>' : ''}</tr></thead><tbody>${rows}</tbody></table>
   ${kind === 'invoice' ? `<table class="tot" style="width:320px;margin-left:auto"><tr><td>Subtotal</td><td class="r">${rupee(o.subtotal)}</td></tr>${o.discount ? `<tr><td>Discount ${o.coupon_code ? '(' + esc(o.coupon_code) + ')' : ''}</td><td class="r">-${rupee(o.discount)}</td></tr>` : ''}
   <tr><td>Shipping</td><td class="r">${rupee(o.shipping)}</td></tr>${o.cod_fee ? `<tr><td>COD fee</td><td class="r">${rupee(o.cod_fee)}</td></tr>` : ''}${o.gift_fee ? `<tr><td>Gift wrap</td><td class="r">${rupee(o.gift_fee)}</td></tr>` : ''}

@@ -4,6 +4,8 @@ const crypto = require('crypto');
 const now = () => new Date().toISOString();
 const sha256 = s => crypto.createHash('sha256').update(String(s)).digest('hex');
 const token = (n = 32) => crypto.randomBytes(n).toString('hex');
+// order_items.image already holds the stored image URL (/media/...); older rows may hold only a file id
+const itemImage = v => !v ? null : (/^(\/|https?:)/.test(v) ? v : `/media/${v}-thumb.webp`);
 const jparse = (s, d = null) => { try { return s == null || s === '' ? d : JSON.parse(s); } catch { return d; } };
 const jstr = v => JSON.stringify(v == null ? null : v);
 const clamp = (n, a, b) => Math.min(Math.max(n, a), b);
@@ -93,7 +95,7 @@ function parseCSV(text) {
   return rows.filter(r => r.some(x => x !== ''));
 }
 
-module.exports = {
+module.exports = { itemImage,
   now, sha256, token, jparse, jstr, clamp, int, num, round2, rupee, slugify, uniqueSlug, orderNumber,
   isEmail, normPhone, isPhone, isPin, isUTR, esc, cleanHtml, hashIp, ipOf, asyncH, HttpError, bad, notFound, forbid,
   csvEscape, toCSV, parseCSV,

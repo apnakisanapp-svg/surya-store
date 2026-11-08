@@ -7,6 +7,8 @@ export const ls = {
 };
 
 /* ---------- tiny DOM builder ---------- */
+/* DOM append/prepend: skip null/undefined/false (a ternary that gives null must not print the word "null") */
+for (const m of ['append', 'prepend']) { const o = Element.prototype[m]; Element.prototype[m] = function (...a) { return o.apply(this, a.filter(x => x != null && x !== false)); }; }
 export function h(tag, attrs, ...kids) {
   const el = document.createElement(tag);
   if (attrs) for (const [k, v] of Object.entries(attrs)) {
@@ -35,6 +37,7 @@ const P = {
   menu: 'M4 7h16M4 12h16M4 17h16', x: 'M6 6l12 12M18 6L6 18', card: 'M3 6h18v12H3zM3 10h18', refresh: 'M20 12a8 8 0 10-2.3 5.7M20 5v5h-5', chat: 'M4 5h16v11H9l-5 4V5z',
   truck: 'M2 6h11v9H2zM13 9h4l4 3v3h-8zM6 18a2 2 0 100-.1M17 18a2 2 0 100-.1', check: 'M5 12l5 5 9-10', warn: 'M12 4l9 16H3L12 4zM12 10v4M12 17v.5', info: 'M12 3a9 9 0 100 18 9 9 0 000-18zM12 11v6M12 7.5v.5',
   chev: 'M9 6l6 6-6 6', chevl: 'M15 6l-6 6 6 6', up: 'M6 14l6-6 6 6', share: 'M12 3v12M7 8l5-5 5 5M5 14v6h14v-6', wa: 'M4 20l1.3-4.2A8 8 0 1112 20a8 8 0 01-3.6-.9L4 20zM9 9c0 3 3 6 6 6l1.2-1.5-2-1-1 .6a4 4 0 01-1.8-1.8l.6-1-1-2L9 9z',
+  home: 'M4 11l8-7 8 7v9h-5v-6H9v6H4v-9z', grid: 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z',
   box: 'M3 8l9-5 9 5v9l-9 5-9-5V8zM3 8l9 5 9-5M12 13v9', shield: 'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z', zoom: 'M11 4a7 7 0 100 14 7 7 0 000-14zM8 11h6M11 8v6', leaf: 'M5 19c0-9 6-14 15-14 0 9-5 15-14 15M5 19c2-5 5-8 9-10',
 };
 export function icon(name, cls) {

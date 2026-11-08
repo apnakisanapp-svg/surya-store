@@ -9,7 +9,8 @@
     "start:public": "node src/public/server.js",
     "start:admin": "node src/admin/server.js",
     "seed:demo": "node scripts/seed-demo.js",
-    "test": "node test/run.js"
+    "test": "node test/run.js",
+    "starter": "node scripts/starter.js"
   },
   "engines": {
     "node": ">=20"

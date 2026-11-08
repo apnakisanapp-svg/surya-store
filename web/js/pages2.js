@@ -2,6 +2,7 @@ import { BOOT, h, $, $$, clear, icon, t, tr, lang, bus, api, money, cart, wish, 
 import { productCard, skeletons, lineEl, shipBar, priceNow, syncFromPrice } from './ui.js';
 import { faqList } from './pages1.js';
 
+const gwrap = (...k) => h('div', { class: 'wrap gpage', style: { paddingTop: '28px', paddingBottom: '20px' } }, h('i', { class: 'g-orb a' }), h('i', { class: 'g-orb b' }), ...k);
 const wrap = (...k) => h('div', { class: 'wrap', style: { paddingTop: '28px', paddingBottom: '20px' } }, ...k);
 const field = (label, input, err) => h('label', { class: 'field' }, h('span', null, label), input, err);
 const busy = async (btn, fn) => { btn.classList.add('is-busy'); try { return await fn(); } finally { btn.classList.remove('is-busy'); } };
@@ -77,7 +78,7 @@ route(/^\/checkout$/, async view => {
     const cod = price.cod, upiOk = price.upi_ok && BOOT.payments.upi;
     const pm = (id, ok, title, sub, extra) => h('label', { class: 'pm' + (F.method === id ? ' on' : '') + (!ok ? ' off' : '') }, h('input', { type: 'radio', name: 'pm', checked: F.method === id, disabled: !ok, onchange: () => { F.method = id; reprice().then(paintPay); } }), h('div', { class: 'grow' }, h('b', null, title), h('div', { class: 'muted small' }, sub)), extra);
     box.append(pm('upi', upiOk, t('upi'), upiOk ? 'GPay, PhonePe, Paytm or any UPI app. Order is confirmed after we check your payment.' : 'UPI is not available right now.'),
-      pm('cod', cod.ok, t('cod'), cod.ok ? 'Pay when your parcel arrives.' : cod.message, cod.ok && price.cod.fee ? h('b', null, '+' + money(price.cod.fee)) : null));
+      pm('cod', cod.ok, t('cod'), cod.ok ? (cod.advance > 0 ? `Pay ${money(cod.advance)} now by UPI to confirm your order. The rest is paid when your parcel arrives.` : 'Pay when your parcel arrives.') : cod.message, cod.ok && price.cod.fee ? h('b', null, '+' + money(price.cod.fee)) : null));
     if (F.method === 'cod' && !cod.ok) F.method = upiOk ? 'upi' : 'cod';
   }
   function stepPay() {
@@ -118,6 +119,13 @@ route(/^\/checkout$/, async view => {
 });
 
 /* ================= ORDER PAGE ================= */
+
+/* an order line: photo, name, qty x price; clicking opens the product page (only while it is on sale) */
+const itemRow = i => {
+  const img = i.image_url ? h('img', { class: 'oi-img', src: i.image_url, alt: '', width: 56, height: 56, loading: 'lazy' }) : h('div', { class: 'oi-img ph' });
+  const parts = [img, h('div', { class: 'oi-body' }, h('div', { class: 'oi-name' }, i.name), i.variant_name ? h('div', { class: 'muted small' }, i.variant_name) : null, h('div', { class: 'muted small' }, `Qty ${i.qty} × ${money(i.price)}`)), h('b', { class: 'small' }, money(i.price * i.qty))];
+  return i.slug ? h('a', { class: 'oi link', href: `/p/${i.slug}`, title: 'Open product' }, ...parts) : h('div', { class: 'oi' }, ...parts);
+};
 const STEPS = [['placed', 'Order placed'], ['confirmed', 'Confirmed'], ['packed', 'Packed'], ['shipped', 'Shipped'], ['delivered', 'Delivered']];
 route(/^\/order\/([A-Za-z0-9-]+)$/, async (view, m, q) => {
   const num = m[1].toUpperCase(), tok = q.get('t') || (ls.get('sy_last_order') || {}).t || '';
@@ -133,23 +141,27 @@ route(/^\/order\/([A-Za-z0-9-]+)$/, async (view, m, q) => {
     clear(box); clearInterval(timerId);
     const isNew = q.get('new') === '1'; if (isNew) { history.replaceState({}, '', `/order/${num}?t=${token}`); q.delete('new'); }
     const cancelled = o.status === 'cancelled', idx = STEPS.findIndex(s => s[0] === (o.status === 'payment_pending' || o.status === 'cod_confirm' ? 'placed' : o.status));
-    const head = h('div', { class: 'center stack' }, isNew && !cancelled ? successMark() : null, h('h1', { style: { fontSize: 'clamp(1.6rem,4vw,2.4rem)' } }, cancelled ? 'Order cancelled' : isNew ? 'Thank you!' : `Order ${o.number}`), h('p', { class: 'muted' }, `${o.number} · ${new Date(o.placed_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}`));
-    if (isNew && !cancelled) confetti();
+    const needsPay = (o.payment_method === 'upi' || o.advance > 0) && o.status === 'payment_pending';
+    const unpaid = needsPay;
+    const head = h('div', { class: 'center stack' }, isNew && !cancelled && !unpaid ? successMark() : null, h('h1', { style: { fontSize: 'clamp(1.6rem,4vw,2.4rem)' } }, cancelled ? 'Order cancelled' : unpaid ? (o.payment_status === 'submitted' ? 'Payment being checked' : (o.advance > 0 ? `Pay ${money(o.pay_now)} to confirm your order` : 'Almost done: complete your payment')) : isNew ? 'Thank you!' : `Order ${o.number}`), h('p', { class: 'muted' }, `${o.number} · ${new Date(o.placed_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}`));
+    if (isNew && !cancelled && !unpaid) confetti();
     box.append(head);
     // payment panel
-    if (o.payment_method === 'upi' && ['payment_pending'].includes(o.status)) await upiPanel(o, token);
+    if (needsPay) await upiPanel(o, token);
     else if (o.status === 'cod_confirm') box.append(h('div', { class: 'card box-note', style: { marginTop: '22px' } }, icon('info'), h('span', null, 'Your order is placed. We may call you to confirm it before packing. Please keep your phone nearby.')));
     // timeline
     box.append(h('div', { class: 'co', style: { marginTop: '24px' } }, h('div', { class: 'stack-lg' },
-      !cancelled ? h('div', { class: 'card' }, h('ul', { class: 'tl' }, STEPS.map((s, i) => h('li', { class: i < idx ? 'done' : i === idx ? 'done now' : '' }, s[1], o.events.filter(e => e.status === s[0]).slice(-1).map(e => h('div', { class: 'small muted' }, new Date(e.created_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }))))))) : h('div', { class: 'card box-note warn' }, icon('warn'), h('span', null, o.cancel_reason || 'This order was cancelled.')),
+      !cancelled ? h('div', { class: 'card' }, h('ul', { class: 'tl' }, STEPS.map((s, i) => h('li', { class: i < idx ? 'done' : i === idx ? 'done now' : '' }, (i === 0 && unpaid ? 'Waiting for payment' : s[1]), o.events.filter(e => e.status === s[0]).slice(-1).map(e => h('div', { class: 'small muted' }, new Date(e.created_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }))))))) : h('div', { class: 'card box-note warn' }, icon('warn'), h('span', null, o.cancel_reason || 'This order was cancelled.')),
       o.courier || o.tracking_no ? h('div', { class: 'card' }, h('b', null, 'Courier'), h('p', null, `${o.courier || ''} ${o.tracking_no || ''}`), o.tracking_url ? h('a', { class: 'btn sm', href: o.tracking_url, target: '_blank', rel: 'noopener' }, 'Track parcel') : null) : null,
-      o.payment_method === 'upi' && o.payment_status === 'submitted' && o.status === 'payment_pending' ? h('div', { class: 'card box-note' }, icon('info'), h('span', null, `We received your transaction ID ${o.utr}. We are checking your payment.`)) : null,
+      needsPay && o.payment_status === 'submitted' ? h('div', { class: 'card box-note' }, icon('info'), h('span', null, `We received your transaction ID ${o.utr}. We are checking your payment.`)) : null,
+      o.advance > 0 && o.advance_status === 'verified' && !['cancelled', 'delivered', 'returned'].includes(o.status) ? h('div', { class: 'card box-note' }, icon('info'), h('span', null, `We received your advance of ${money(o.advance)}. Please keep ${money(o.due_on_delivery)} ready to pay when your parcel arrives.`)) : null,
+      o.advance > 0 && o.advance_status === 'refund_due' ? h('div', { class: 'card box-note' }, icon('info'), h('span', null, `This order was cancelled. Your advance of ${money(o.advance)} will be sent back to you.`)) : null,
       actions(o, token)),
-      h('aside', { class: 'card stack' }, h('b', null, 'Items'), ...o.items.map(i => h('div', { class: 'row between', style: { flexWrap: 'nowrap' } }, h('span', { class: 'small' }, `${i.name}${i.variant_name ? ' (' + i.variant_name + ')' : ''} × ${i.qty}`), h('b', { class: 'small' }, money(i.price * i.qty)))),
+      h('aside', { class: 'card stack' }, h('b', null, 'Items'), ...o.items.map(itemRow),
         totals({ subtotal: o.subtotal, discount: o.discount, coupon: { code: o.coupon_code }, shipping: o.shipping, packaging: 0, gift_fee: o.gift_fee, cod_fee: o.cod_fee, total: o.total, gst: { enabled: false } }),
         h('div', { class: 'small muted' }, h('b', null, 'Delivering to'), h('br'), o.address.name, h('br'), `${o.address.line1}, ${o.address.city}, ${o.address.state} - ${o.address.pincode}`), h('div', { class: 'small muted' }, `Payment: ${o.payment_method === 'cod' ? t('cod') : t('upi')}`),
         h('a', { class: 'btn ghost sm', href: '/contact?order=' + o.number }, 'Need help?'))));
-    if (!['cancelled', 'delivered'].includes(o.status) && !(o.payment_method === 'upi' && o.status === 'payment_pending')) setTimeout(() => view.isConnected && load(), 60000);
+    if (!['cancelled', 'delivered'].includes(o.status) && !needsPay) setTimeout(() => view.isConnected && load(), 60000);
   }
   function actions(o, token) {
     const out = h('div', { class: 'stack' });
@@ -169,8 +181,8 @@ route(/^\/order\/([A-Za-z0-9-]+)$/, async (view, m, q) => {
     const tick = () => { const s = Math.floor(left() / 1000); timer.textContent = s > 0 ? `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}` : 'Please pay as soon as possible'; timer.classList.toggle('low', s < 120); }; tick(); timerId = setInterval(tick, 1000);
     const utr = h('input', { class: 'inp', placeholder: t('utr'), maxlength: 24, 'aria-label': t('utr'), autocapitalize: 'characters', value: o.payment_status === 'rejected' ? '' : (o.utr || '') }), shot = pay.screenshot ? h('input', { type: 'file', accept: 'image/*', class: 'inp', 'aria-label': 'Payment screenshot (optional)' }) : null;
     const sub = h('button', { class: 'btn block', onclick: async e => { const f = new FormData(); f.append('utr', utr.value.trim()); if (shot && shot.files[0]) f.append('screenshot', shot.files[0]); try { const r = await busy(e.currentTarget, () => api(`/orders/${o.number}/utr?t=${token}`, { method: 'POST', form: f })); toast(r.message); load(); } catch (x) { toast(x.message, { err: true }); } } }, t('have_paid'));
-    box.append(h('div', { class: 'card upi-box', style: { marginTop: '22px' } }, h('h3', null, `${t('pay_now')} ${money(pay.amount)}`), o.payment_status === 'rejected' ? h('div', { class: 'box-note warn' }, icon('warn'), h('span', null, 'We could not find that payment. Please send the correct transaction ID.')) : null,
-      h('div', { class: 'muted small' }, 'Time left to pay'), timer, h('img', { src: pay.qr, alt: 'UPI QR code', width: 240, height: 240 }), h('a', { class: 'btn', href: pay.link }, 'Open UPI app'),
+    box.append(h('div', { class: 'card upi-box', style: { marginTop: '22px' } }, h('h3', null, `${t('pay_now')} ${money(pay.amount)}`), pay.advance ? h('div', { class: 'box-note' }, icon('info'), h('span', null, `This is the advance for your cash-on-delivery order. After we check it, your order is confirmed and you pay ${money(pay.advance.due_on_delivery)} when the parcel arrives. ${pay.advance.note || ''}`)) : null, pay.advance && pay.amount !== pay.advance.amount ? h('p', { class: 'small muted', style: { margin: '0' } }, `Please pay exactly ${money(pay.amount)}. It counts as your full ${money(pay.advance.amount)} advance. The exact amount helps us confirm your payment faster.`) : null, o.payment_status === 'rejected' ? h('div', { class: 'box-note warn' }, icon('warn'), h('span', null, 'We could not find that payment. Please send the correct transaction ID.')) : null,
+      pay.adjust ? h('p', { class: 'small muted', style: { margin: '0' } }, `Please pay exactly ${money(pay.amount)} (we took ${money(pay.adjust)} off your total). The exact amount helps us confirm your payment faster.`) : null, h('div', { class: 'muted small' }, 'Time left to pay'), timer, h('img', { src: pay.qr, alt: 'UPI QR code', width: 240, height: 240 }), h('a', { class: 'btn', href: pay.link }, 'Open UPI app'),
       h('div', { class: 'row', style: { justifyContent: 'center' } }, h('span', { class: 'muted small' }, 'UPI ID'), h('button', { class: 'copy', onclick: () => { navigator.clipboard && navigator.clipboard.writeText(pay.upi_id).then(() => toast(t('copied'))).catch(() => {}); } }, pay.upi_id, ' ⧉')),
       h('div', { class: 'stack', style: { width: '100%', maxWidth: '420px', textAlign: 'left' } }, h('p', { class: 'small muted' }, 'After paying, enter the transaction ID (UTR) from your UPI app. It is 12 digits or letters.'), utr, shot ? field('Payment screenshot (optional)', shot) : null, sub)));
   }
@@ -185,51 +197,133 @@ function confetti() {
 }
 
 /* ================= TRACK ================= */
-route(/^\/track$/, async (view, m, q) => {
-  setTitle(t('track'));
+/* ---------- glass segmented tabs (sliding pill) ---------- */
+function segTabs(items, active, onPick) {
+  const pill = h('span', { class: 'seg-pill', 'aria-hidden': 'true' });
+  const btns = items.map(([k, l]) => h('button', { class: 'seg-b' + (k === active ? ' on' : ''), type: 'button', 'data-k': k, onclick: () => pick(k) }, l));
+  const el = h('div', { class: 'seg', role: 'tablist' }, pill, ...btns);
+  const place = animate => { const b = btns.find(x => x.classList.contains('on')); if (!b || !el.isConnected) return; if (!animate) pill.style.transition = 'none'; pill.style.width = b.offsetWidth + 'px'; pill.style.transform = `translateX(${b.offsetLeft}px)`; if (!animate) { void pill.offsetWidth; pill.style.transition = ''; } b.scrollIntoView && el.scrollTo && el.scrollTo({ left: Math.max(0, b.offsetLeft - 20), behavior: 'smooth' }); };
+  const pick = k => { btns.forEach(x => x.classList.toggle('on', x.dataset.k === k)); place(true); history.replaceState({}, '', location.pathname + location.search + (k === items[0][0] ? '' : '#' + k)); onPick(k); };
+  requestAnimationFrame(() => requestAnimationFrame(() => place(false))); window.addEventListener('resize', () => place(false));
+  el.pick = pick; return el;
+}
+const pageHead = (title, sub, extra) => h('div', { class: 'pg-head' }, h('div', null, h('h1', null, title), sub ? h('p', { class: 'muted' }, sub) : null), extra || null);
+const swap = (body, node) => { clear(body).append(node); body.classList.remove('swap-in'); void body.offsetWidth; body.classList.add('swap-in'); };
+
+function trackCard(q) {
   const last = ls.get('sy_last_order') || {};
-  const n = h('input', { class: 'inp', placeholder: 'SY-000000-XXXX', value: q.get('order') || last.n || '', autocapitalize: 'characters' }), ph = h('input', { class: 'inp', inputmode: 'numeric', maxlength: 10, placeholder: t('phone'), value: (ls.get('sy_addr') || {}).phone || '' });
-  view.append(wrap(h('div', { class: 'card stack', style: { maxWidth: '480px', margin: '0 auto' } }, h('h1', { style: { fontSize: '1.8rem' } }, t('track')), field(t('order_no'), n), field(t('phone'), ph), h('button', { class: 'btn', onclick: async e => { try { const r = await busy(e.currentTarget, () => api('/track', { method: 'POST', body: { number: n.value, phone: ph.value } })); nav(`/order/${r.order.number}?t=${r.token}`); } catch (x) { toast(x.message, { err: true }); } } }, t('find')))));
+  const n = h('input', { class: 'inp', placeholder: 'SY-000000-XXXX', value: (q && q.get('order')) || last.n || '', autocapitalize: 'characters' }), ph = h('input', { class: 'inp', inputmode: 'numeric', maxlength: 10, placeholder: t('phone'), value: (ls.get('sy_addr') || {}).phone || (me.customer && me.customer.phone) || '' });
+  return h('div', { class: 'card stack glass-card', style: { maxWidth: '480px' } }, h('h3', null, t('track')), h('p', { class: 'muted small' }, 'Enter your order number and the mobile number used for the order.'), field(t('order_no'), n), field(t('phone'), ph),
+    h('button', { class: 'btn', onclick: async e => { try { const r = await busy(e.currentTarget, () => api('/track', { method: 'POST', body: { number: n.value, phone: ph.value } })); nav(`/order/${r.order.number}?t=${r.token}`); } catch (x) { toast(x.message, { err: true }); } } }, t('find')));
+}
+const ordersList = list => list.length ? h('div', { class: 'stack' }, list.map(o => h('div', { class: 'card ocard glass-card' }, h('a', { class: 'row between ohead', href: `/order/${o.number}?t=${o.token}`, style: { textDecoration: 'none' } }, h('div', null, h('b', null, o.number), h('div', { class: 'muted small' }, new Date(o.placed_at).toLocaleDateString('en-IN', { dateStyle: 'medium' }))), h('div', { style: { textAlign: 'right' } }, h('b', null, money(o.total)), h('div', { class: 'badge soft' }, o.status.replace(/_/g, ' ')))), h('div', { class: 'oitems' }, o.items.map(itemRow))))) : h('div', { class: 'empty' }, icon('box'), h('p', null, 'No orders yet.'));
+
+/* /orders : My orders + Track order tabs (guests only see Track) */
+async function ordersPage(view, q, forceTrack) {
+  setTitle(t('orders'));
+  const body = h('div', { class: 'seg-body' }); let tab = forceTrack || location.hash === '#track' || !me.customer ? 'track' : 'orders';
+  const show = async k => { if (k === 'track') return swap(body, trackCard(q)); swap(body, skeletons(1)); try { swap(body, ordersList(await api('/account/orders'))); } catch (e) { swap(body, h('p', { class: 'muted' }, e.message)); } };
+  const items = me.customer ? [['orders', 'My orders'], ['track', 'Track order']] : [['track', 'Track order']];
+  view.append(gwrap(pageHead('Orders', me.customer ? 'Your orders and tracking in one place.' : 'Track your order. Log in to see all your orders.', me.customer ? null : h('a', { class: 'btn ghost sm', href: '/login' }, 'Log in')), segTabs(items, tab, show), body)); show(tab);
+}
+route(/^\/orders$/, async (view, m, q) => ordersPage(view, q));
+route(/^\/track$/, async (view, m, q) => ordersPage(view, q, true));
+
+/* /wishlist */
+route(/^\/wishlist$/, async view => {
+  setTitle(t('wishlist')); if (!me.customer) return loginView(view);
+  const body = h('div', { class: 'seg-body swap-in' }, skeletons(1)); view.append(gwrap(pageHead('Wishlist', 'Products you saved for later.'), body));
+  try { const list = await api('/account/wishlist'); swap(body, list.length ? h('div', { class: 'pgrid' }, list.map(p => productCard(p))) : h('div', { class: 'empty' }, icon('heart'), h('p', null, 'Nothing saved yet.'))); } catch (e) { swap(body, h('p', { class: 'muted' }, e.message)); }
 });
 
-/* ================= ACCOUNT ================= */
+/* /account and /login: log in, or send a logged-in person to the right page */
 route(/^\/(account|login)$/, async view => {
-  setTitle(t('account'));
-  if (!me.customer) return loginView(view);
-  const tab = location.hash.slice(1) || 'orders', body = h('div', { style: { marginTop: '20px' } });
-  const tabs = h('div', { class: 'tabs' }, [['orders', t('orders')], ['wishlist', t('wishlist')], ['addresses', t('addresses')], ['profile', t('profile')]].map(([k, l]) => h('button', { class: tab === k ? 'on' : '', onclick: e => { history.replaceState({}, '', '#' + k); $$('button', tabs).forEach(b => b.classList.remove('on')); e.currentTarget.classList.add('on'); show(k); } }, l)));
-  view.append(wrap(h('div', { class: 'row between' }, h('h1', { style: { fontSize: 'clamp(1.6rem,4vw,2.4rem)' } }, `Hi ${me.customer.name || ''}`.trim()), h('button', { class: 'btn ghost sm', onclick: async () => { await api('/auth/logout', { method: 'POST' }); me.customer = null; ls.del('sy_wish'); wish.ids.clear(); location.href = '/'; } }, t('logout'))), tabs, body));
-  async function show(k) {
-    clear(body).append(skeletons(1));
-    try {
-      if (k === 'orders') { const list = await api('/account/orders'); clear(body).append(list.length ? h('div', { class: 'stack' }, list.map(o => h('a', { class: 'card row between', href: `/order/${o.number}?t=${o.token}`, style: { textDecoration: 'none' } }, h('div', null, h('b', null, o.number), h('div', { class: 'muted small' }, o.items.map(i => i.name).join(', ').slice(0, 80))), h('div', { style: { textAlign: 'right' } }, h('b', null, money(o.total)), h('div', { class: 'badge soft' }, o.status.replace('_', ' ')))))) : h('div', { class: 'empty' }, icon('box'), h('p', null, 'No orders yet.'))); }
-      else if (k === 'wishlist') { const list = await api('/account/wishlist'); clear(body).append(list.length ? h('div', { class: 'pgrid' }, list.map(p => productCard(p))) : h('div', { class: 'empty' }, icon('heart'), h('p', null, 'Nothing saved yet.'))); }
-      else if (k === 'addresses') { const list = await api('/account/addresses'); clear(body).append(list.length ? h('div', { class: 'stack' }, list.map(a => h('div', { class: 'card row between', style: { flexWrap: 'nowrap' } }, h('div', { class: 'small' }, h('b', null, a.name), h('br'), `${a.line1}, ${a.city}, ${a.state} - ${a.pincode}`, h('br'), a.phone), h('button', { class: 'btn ghost sm', onclick: async () => { await api('/account/addresses/' + a.id, { method: 'DELETE' }); show('addresses'); } }, t('remove'))))) : h('p', { class: 'muted' }, 'Addresses you save at checkout appear here.')); }
-      else profile();
-    } catch (e) { clear(body).append(h('p', { class: 'muted' }, e.message)); }
-  }
+  if (!me.customer) { setTitle(t('account')); return loginView(view); }
+  const hs = location.hash.slice(1); const to = hs === 'wishlist' ? '/wishlist' : hs === 'profile' || hs === 'addresses' ? '/profile' + (hs === 'addresses' ? '#addresses' : '') : '/orders';
+  nav(to, true);
+});
+
+/* /profile : Profile + Addresses tabs */
+route(/^\/profile$/, async view => {
+  setTitle(t('profile')); if (!me.customer) return loginView(view);
+  const body = h('div', { class: 'seg-body' });
+  const logout = h('button', { class: 'btn ghost sm', onclick: async () => { await api('/auth/logout', { method: 'POST' }); me.customer = null; ls.del('sy_wish'); wish.ids.clear(); location.href = '/'; } }, t('logout'));
+  const show = async k => {
+    if (k === 'addresses') { swap(body, skeletons(1)); try { const list = await api('/account/addresses'); swap(body, list.length ? h('div', { class: 'stack' }, list.map(a => h('div', { class: 'card row between glass-card', style: { flexWrap: 'nowrap' } }, h('div', { class: 'small' }, h('b', null, a.name), h('br'), `${a.line1}, ${a.city}, ${a.state} - ${a.pincode}`, h('br'), a.phone), h('button', { class: 'btn ghost sm', onclick: async () => { await api('/account/addresses/' + a.id, { method: 'DELETE' }); show('addresses'); } }, t('remove'))))) : h('p', { class: 'muted' }, 'Addresses you save at checkout appear here.')); } catch (e) { swap(body, h('p', { class: 'muted' }, e.message)); } }
+    else { profile(); }
+  };
+  const first = me.customer.first_name || (me.customer.name || '').split(' ')[0] || '';
+  view.append(gwrap(pageHead(first ? `Hi ${first}` : 'Profile', me.customer.email, logout), segTabs([['profile', 'Profile'], ['addresses', 'Addresses']], location.hash === '#addresses' ? 'addresses' : 'profile', show), body));
   function profile() {
-    const c = me.customer, name = h('input', { class: 'inp', value: c.name || '' }), phone = h('input', { class: 'inp', value: c.phone || '', inputmode: 'numeric', maxlength: 10 }), mk = h('input', { type: 'checkbox', checked: c.marketing_optin });
+    const c = me.customer, fn = h('input', { class: 'inp', value: c.first_name || '' }), ln = h('input', { class: 'inp', value: c.last_name || '' }), phone = h('input', { class: 'inp', value: c.phone || '', inputmode: 'numeric', maxlength: 10 }), mk = h('input', { type: 'checkbox', checked: c.marketing_optin });
     const old = h('input', { class: 'inp', type: 'password', autocomplete: 'current-password' }), np = h('input', { class: 'inp', type: 'password', autocomplete: 'new-password' });
-    clear(body).append(h('div', { class: 'co' }, h('div', { class: 'card stack' }, h('h3', null, t('profile')), field(t('name'), name), field(t('phone'), phone), h('p', { class: 'muted small' }, c.email), h('label', { class: 'check' }, mk, t('marketing_ok')), h('button', { class: 'btn', onclick: async e => { try { const r = await busy(e.currentTarget, () => api('/account/me', { method: 'PATCH', body: { name: name.value, phone: phone.value, marketing_optin: mk.checked } })); me.customer = r.customer; toast('Saved'); } catch (x) { toast(x.message, { err: true }); } } }, t('save'))),
-      h('div', { class: 'stack-lg' }, h('div', { class: 'card stack' }, h('h3', null, 'Password'), field('Current password', old), field('New password (8+ characters)', np), h('button', { class: 'btn ghost', onclick: async e => { try { await busy(e.currentTarget, () => api('/account/password', { method: 'POST', body: { old: old.value, password: np.value } })); toast('Password changed'); old.value = np.value = ''; } catch (x) { toast(x.message, { err: true }); } } }, t('save'))),
-        h('div', { class: 'card stack' }, h('h3', null, 'Your data'), h('p', { class: 'muted small' }, 'Download what we hold about you, or delete your account. Order records needed for tax and law are kept without your login.'), h('a', { class: 'btn ghost', href: '/api/account/export', download: 'my-data.json' }, 'Download my data'), h('button', { class: 'btn ghost', style: { color: 'var(--err)' }, onclick: () => { const pw = h('input', { class: 'inp', type: 'password', placeholder: 'Your password' }); const m = modal(h('div', { class: 'stack' }, h('h3', null, 'Delete account?'), h('p', { class: 'muted' }, 'This cannot be undone.'), pw, h('button', { class: 'btn', onclick: async () => { try { const r = await api('/account/delete', { method: 'POST', body: { password: pw.value } }); me.customer = null; m.close(); toast(r.message); nav('/'); } catch (x) { toast(x.message, { err: true }); } } }, 'Delete my account'))); } }, 'Delete account')))));
+    swap(body, h('div', { class: 'co' }, h('div', { class: 'card stack glass-card' }, h('h3', null, t('profile')), h('div', { class: 'fl-two' }, field('First name', fn), field('Last name', ln)), field(t('phone'), phone), h('p', { class: 'muted small' }, c.email), h('label', { class: 'check' }, mk, t('marketing_ok')), h('button', { class: 'btn', onclick: async e => { try { const r = await busy(e.currentTarget, () => api('/account/me', { method: 'PATCH', body: { first_name: fn.value, last_name: ln.value, phone: phone.value, marketing_optin: mk.checked, complete: true } })); me.customer = r.customer; toast('Saved'); } catch (x) { toast(x.message, { err: true }); } } }, t('save'))),
+      h('div', { class: 'stack-lg' }, h('div', { class: 'card stack' }, h('h3', null, c.has_password ? 'Change password' : 'Set a password (optional)'), h('p', { class: 'muted small' }, c.has_password ? 'We will email you a confirmation when it changes.' : 'You can log in with an email code anyway. A password is optional.'), c.has_password ? field('Current password', old) : null, field('New password (8+ characters)', np), h('button', { class: 'btn ghost', onclick: async e => { try { await busy(e.currentTarget, () => api('/account/password', { method: 'POST', body: { old: old.value, password: np.value } })); toast('Password changed. We emailed you a confirmation.'); me.customer.has_password = true; old.value = np.value = ''; } catch (x) { toast(x.message, { err: true }); } } }, t('save'))),
+        h('div', { class: 'card stack' }, h('h3', null, 'Your data'), h('p', { class: 'muted small' }, 'Download what we hold about you, or delete your account. Order records needed for tax and law are kept without your login.'), h('a', { class: 'btn ghost', href: '/api/account/export', download: 'my-data.json' }, 'Download my data'), h('button', { class: 'btn ghost', style: { color: 'var(--err)' }, onclick: () => { const pw = h('input', { class: 'inp', type: c.has_password ? 'password' : 'text', placeholder: c.has_password ? 'Your password' : 'Type DELETE to confirm' }); const m = modal(h('div', { class: 'stack' }, h('h3', null, 'Delete account?'), h('p', { class: 'muted' }, c.has_password ? 'This cannot be undone. Enter your password to confirm.' : 'This cannot be undone. Type the word DELETE below to confirm.'), pw, h('button', { class: 'btn', onclick: async () => { try { const r = await api('/account/delete', { method: 'POST', body: { password: pw.value } }); me.customer = null; m.close(); toast(r.message); nav('/'); } catch (x) { toast(x.message, { err: true }); } } }, 'Delete my account'))); } }, 'Delete account')))));
   }
-  show(tab);
+  show(location.hash === '#addresses' ? 'addresses' : 'profile');
 });
 function loginView(view) {
-  let mode = 'login'; const box = h('div', { class: 'card stack', style: { maxWidth: '440px', margin: '0 auto' } });
+  // 4 steps: 1 email -> 2 code -> 3 name + mobile -> 4 address (can be skipped). Each step has its own glass card.
+  let step = 1, tick = null; const keep = { email: '' };
+  const wrapEl = h('div', { class: 'auth-wrap' }, h('div', { class: 'auth-orb o1' }), h('div', { class: 'auth-orb o2' }));
+  const card = h('div', { class: 'auth-card' }); const prog = h('div', { class: 'auth-prog' });
+  wrapEl.append(h('div', { class: 'auth-col' }, prog, card));
+  const finish = () => { nav('/orders', true); location.reload(); };
+  const afterAuth = async r => { me.customer = r.customer; await wish.sync(); const c = r.customer; if (!c.first_name || !c.phone) { step = 3; paint(); } else finish(); };
+  const bar = () => { clear(prog); for (let k = 1; k <= 4; k++) prog.append(h('i', { class: k < step ? 'done' : k === step ? 'on' : '' })); };
+  const head = (title, sub) => h('div', { class: 'auth-head' }, h('div', { class: 'auth-mark' }, icon('user')), h('h2', null, title), sub ? h('p', { class: 'muted' }, sub) : null);
+  const fld = (label, input) => h('label', { class: 'fl' }, input, h('span', null, label));
+  const mk = (type, ph, extra) => h('input', Object.assign({ class: 'fl-in', type, placeholder: ' ' }, extra || {}));
   const paint = () => {
-    clear(box); const email = h('input', { class: 'inp', type: 'email', autocomplete: 'email' }), pw = h('input', { class: 'inp', type: 'password', autocomplete: mode === 'login' ? 'current-password' : 'new-password' }), name = h('input', { class: 'inp', autocomplete: 'name' }), terms = h('input', { type: 'checkbox' });
-    const done = async r => { me.customer = r.customer; await wish.sync(); nav('/account', true); location.reload(); };
-    box.append(h('div', { class: 'tabs' }, h('button', { class: mode === 'login' ? 'on' : '', onclick: () => { mode = 'login'; paint(); } }, t('login')), h('button', { class: mode === 'reg' ? 'on' : '', onclick: () => { mode = 'reg'; paint(); } }, t('register'))),
-      mode === 'reg' ? field(t('name'), name) : null, field('Email', email), field(t('password'), pw),
-      mode === 'reg' ? h('label', { class: 'check' }, terms, h('span', null, 'I agree to the ', h('a', { class: 'link', href: '/policy/terms', target: '_blank' }, 'Terms'), ' and ', h('a', { class: 'link', href: '/policy/privacy', target: '_blank' }, 'Privacy Policy'))) : null,
-      h('button', { class: 'btn', onclick: async e => { try { await busy(e.currentTarget, async () => done(await api(mode === 'login' ? '/auth/login' : '/auth/register', { method: 'POST', body: { email: email.value, password: pw.value, name: name.value, terms: terms.checked } }))); } catch (x) { toast(x.message, { err: true }); } } }, mode === 'login' ? t('login') : t('register')),
-      mode === 'login' ? h('button', { class: 'link', style: { background: 'none', border: 0, cursor: 'pointer' }, onclick: async () => { if (!email.value) return toast('Enter your email first', { err: true }); try { toast((await api('/auth/forgot', { method: 'POST', body: { email: email.value } })).message); } catch (x) { toast(x.message, { err: true }); } } }, 'Forgot password?') : null,
-      h('p', { class: 'muted small center' }, 'You can also order without an account.'));
+    clear(card); if (tick) { clearInterval(tick); tick = null; } bar(); card.className = 'auth-card gl' + step; card.style.animation = 'none'; void card.offsetWidth; card.style.animation = '';
+    if (step === 1) {
+      const email = mk('email', '', { autocomplete: 'email', inputmode: 'email', value: keep.email });
+      const send = async btn => { keep.email = email.value.trim().toLowerCase(); if (!/^\S+@\S+\.\S+$/.test(keep.email)) return toast('Enter a valid email address.', { err: true });
+        try { await busy(btn, () => api('/auth/otp/send', { method: 'POST', body: { email: keep.email } })); step = 2; paint(); } catch (x) { toast(x.message, { err: true }); } };
+      card.append(head('Welcome to ' + BOOT.brand.name, 'Log in or create your account with just your email. No password needed.'), fld('Email address', email),
+        h('button', { class: 'btn auth-btn', onclick: e => send(e.currentTarget) }, 'Continue'),
+        h('p', { class: 'auth-fine' }, 'By continuing you agree to our ', h('a', { class: 'link', href: '/policy/terms', target: '_blank' }, 'Terms'), ' and ', h('a', { class: 'link', href: '/policy/privacy', target: '_blank' }, 'Privacy Policy'), '.'));
+      email.addEventListener('keydown', e => { if (e.key === 'Enter') send(card.querySelector('.auth-btn')); }); setTimeout(() => email.focus(), 60);
+    } else if (step === 2) {
+      const boxes = Array.from({ length: 6 }, () => h('input', { class: 'otp-b', inputmode: 'numeric', maxlength: 1, autocomplete: 'one-time-code' }));
+      const row = h('div', { class: 'otp-row' }, boxes); let busyNow = false;
+      const value = () => boxes.map(b => b.value).join('');
+      const verify = async () => { if (busyNow || value().length !== 6) return; busyNow = true;
+        try { afterAuth(await api('/auth/otp/verify', { method: 'POST', body: { email: keep.email, code: value(), terms: true } })); } catch (x) { toast(x.message, { err: true }); boxes.forEach(b => { b.value = ''; }); boxes[0].focus(); busyNow = false; } };
+      boxes.forEach((b, k) => {
+        b.addEventListener('input', () => { b.value = b.value.replace(/\D/g, '').slice(-1); if (b.value && boxes[k + 1]) boxes[k + 1].focus(); verify(); });
+        b.addEventListener('keydown', e => { if (e.key === 'Backspace' && !b.value && boxes[k - 1]) boxes[k - 1].focus(); });
+        b.addEventListener('paste', e => { const d = (e.clipboardData.getData('text') || '').replace(/\D/g, '').slice(0, 6); if (!d) return; e.preventDefault(); d.split('').forEach((c, q) => { boxes[q].value = c; }); (boxes[Math.min(d.length, 5)]).focus(); verify(); });
+      });
+      const resend = h('button', { class: 'link auth-link', disabled: true }, 'Resend code'); let left = 45;
+      const upd = () => { resend.disabled = left > 0; resend.textContent = left > 0 ? `Resend code in ${left}s` : 'Resend code'; }; upd();
+      tick = setInterval(() => { if (!card.isConnected) { clearInterval(tick); return; } left = Math.max(0, left - 1); upd(); }, 1000);
+      resend.addEventListener('click', async () => { try { await api('/auth/otp/send', { method: 'POST', body: { email: keep.email } }); left = 45; upd(); toast('A new code is on its way.'); } catch (x) { toast(x.message, { err: true }); } });
+      card.append(head('Check your email', `We sent a 6-digit code to ${keep.email}. It works for 10 minutes. Check Spam if you do not see it.`), row,
+        h('button', { class: 'btn auth-btn', onclick: verify }, 'Verify'), h('div', { class: 'row between' }, resend, h('button', { class: 'link auth-link', onclick: () => { step = 1; paint(); } }, 'Change email')));
+      setTimeout(() => boxes[0].focus(), 60);
+    } else if (step === 3) {
+      const c = me.customer || {};
+      const fn = mk('text', '', { autocomplete: 'given-name', value: c.first_name || '' }), ln = mk('text', '', { autocomplete: 'family-name', value: c.last_name || '' }), ph = mk('tel', '', { autocomplete: 'tel-national', inputmode: 'numeric', maxlength: 10, value: c.phone || '' });
+      const save = async btn => { const phone = ph.value.replace(/\D/g, '');
+        if (fn.value.trim().length < 2) return toast('Please enter your first name.', { err: true }); if (!/^[6-9]\d{9}$/.test(phone)) return toast('Enter a valid 10-digit mobile number.', { err: true });
+        try { const r = await busy(btn, () => api('/account/me', { method: 'PATCH', body: { first_name: fn.value, last_name: ln.value, phone, complete: true } })); me.customer = r.customer; step = 4; paint(); } catch (x) { toast(x.message, { err: true }); } };
+      card.append(head('Tell us about you', 'So we can deliver your orders and reach you if needed.'), h('div', { class: 'fl-two' }, fld('First name', fn), fld('Last name', ln)),
+        h('div', { class: 'fl-phone' }, h('span', { class: 'cc' }, '+91'), fld('Mobile number', ph)), h('button', { class: 'btn auth-btn', onclick: e => save(e.currentTarget) }, 'Continue'));
+      setTimeout(() => fn.focus(), 60);
+    } else {
+      const l1 = mk('text', '', { autocomplete: 'address-line1' }), l2 = mk('text', '', { autocomplete: 'address-line2' }), pin = mk('text', '', { inputmode: 'numeric', maxlength: 6, autocomplete: 'postal-code' }), city = mk('text', '', { autocomplete: 'address-level2' }), st = mk('text', '', { autocomplete: 'address-level1' });
+      const save = async btn => { const a = { name: [me.customer.first_name, me.customer.last_name].filter(Boolean).join(' '), phone: me.customer.phone, line1: l1.value, line2: l2.value, pincode: pin.value.trim(), city: city.value, state: st.value, is_default: 1 };
+        try { await busy(btn, () => api('/account/addresses', { method: 'POST', body: a })); finish(); } catch (x) { toast(x.message, { err: true }); } };
+      card.append(head('Where should we deliver?', 'You can skip this now and add it when you place your first order.'), fld('House no., street, area', l1), fld('Landmark (optional)', l2),
+        h('div', { class: 'fl-two' }, fld('Pincode', pin), fld('City', city)), fld('State', st),
+        h('button', { class: 'btn auth-btn', onclick: e => save(e.currentTarget) }, 'Save and continue'), h('button', { class: 'link auth-link center', onclick: finish }, 'Skip for now'));
+      setTimeout(() => l1.focus(), 60);
+    }
   };
-  paint(); view.append(wrap(box));
+  if (me.customer && (!me.customer.first_name || !me.customer.phone)) step = 3;
+  paint(); view.append(wrapEl);
 }
 route(/^\/reset$/, async (view, m, q) => {
   const pw = h('input', { class: 'inp', type: 'password', autocomplete: 'new-password' });

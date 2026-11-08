@@ -29,12 +29,19 @@ const gh = async (p, { method = 'GET', body, raw } = {}) => {
 };
 const gitSha = buf => crypto.createHash('sha1').update(`blob ${buf.length}\0`).update(buf).digest('hex');
 async function remoteTree() {
-  try { const d = await gh(`/git/trees/${encodeURIComponent(BRANCH)}?recursive=1`); const m = new Map(); for (const t of d.tree || []) if (t.type === 'blob') m.set(t.path, t.sha); return m; }
-  catch (e) { if (e.status === 404 || e.status === 409) return new Map(); throw e; }
+  try { const d = await gh(`/git/trees/${encodeURIComponent(BRANCH)}?recursive=1`); const m = new Map(); for (const t of d.tree || []) if (t.type === 'blob') m.set(t.path, t.sha); m.treeSha = d.sha; return m; }
+  catch (e) { if (e.status === 404 || e.status === 409) { const m = new Map(); m.treeSha = null; return m; } throw e; }
 }
 const walk = (dir, base = dir) => { const out = []; if (!fs.existsSync(dir)) return out; for (const n of fs.readdirSync(dir, { withFileTypes: true })) { const f = path.join(dir, n.name); if (n.isDirectory()) out.push(...walk(f, base)); else out.push(f); } return out; };
 const rel = f => 'data/' + path.relative(cfg.DATA, f).split(path.sep).join('/');
-const put = (p, buf, sha) => gh(`/contents/${p.split('/').map(encodeURIComponent).join('/')}`, { method: 'PUT', body: { message: 'sync ' + new Date().toISOString(), content: buf.toString('base64'), branch: BRANCH, ...(sha ? { sha } : {}) } });
+// One commit with no history: old versions are dropped, so the repository never grows without limit.
+async function commitFiles(files, tree) {
+  const entries = [];
+  for (const f of files) { const b = await gh('/git/blobs', { method: 'POST', body: { content: f.buf.toString('base64'), encoding: 'base64' } }); entries.push({ path: f.path, mode: '100644', type: 'blob', sha: b.sha }); }
+  const t = await gh('/git/trees', { method: 'POST', body: { ...(tree.treeSha ? { base_tree: tree.treeSha } : {}), tree: entries } });
+  const c = await gh('/git/commits', { method: 'POST', body: { message: 'sync ' + new Date().toISOString(), tree: t.sha, parents: [] } });
+  await gh(`/git/refs/heads/${encodeURIComponent(BRANCH)}`, { method: 'PATCH', body: { sha: c.sha, force: true } });
+}
 
 /** Call BEFORE the database is opened. */
 async function restore() {
@@ -66,21 +73,21 @@ async function pushOnce(db) {
     const tmp = path.join(cfg.DATA, 'sync-tmp.db');
     await db.backup(tmp);
     const gz = zlib.gzipSync(fs.readFileSync(tmp), { level: 9 }); fs.rmSync(tmp, { force: true });
-    if (gitSha(gz) !== tree.get(DB_PATH)) { await put(DB_PATH, gz, tree.get(DB_PATH)); console.log(`  Sync: database saved (${(gz.length / 1024).toFixed(0)} KB)`); }
-    let sent = 0;
+    const batch = []; let photos = 0;
+    if (gitSha(gz) !== tree.get(DB_PATH)) batch.push({ path: DB_PATH, buf: gz });
     for (const f of [...walk(cfg.UPLOADS), ...walk(cfg.PRIVATE)]) {
       const p = rel(f); if (tree.has(p)) continue;
-      if (sent >= 40) break; // the rest goes in the next round
+      if (photos >= 40) break; // the rest goes in the next round
       const buf = fs.readFileSync(f); if (buf.length > 25e6) continue;
-      await put(p, buf); sent++;
+      batch.push({ path: p, buf }); photos++;
     }
-    if (sent) console.log(`  Sync: ${sent} photo file(s) saved`);
+    if (batch.length) { await commitFiles(batch, tree); console.log(`  Sync: saved${batch.some(x => x.path === DB_PATH) ? ' database' : ''}${photos ? ` + ${photos} photo file(s)` : ''}`); }
   } catch (e) { console.error('  Sync push problem:', e.message); } finally { busy = false; }
 }
 
 function start(db) {
   if (!enabled) return { stop: async () => { } };
-  const mins = Math.max(1, Number(process.env.SYNC_INTERVAL_MIN || (MODE === 'pull' ? 10 : 5)));
+  const mins = Math.max(1, Number(process.env.SYNC_INTERVAL_MIN || (MODE === 'pull' ? 10 : 1)));
   console.log(`  Sync: GitHub ${MODE} mode on (${REPO}), every ${mins} min`);
   if (MODE === 'push') {
     setTimeout(() => pushOnce(db), 20000);

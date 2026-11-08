@@ -19,7 +19,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 
 const glbUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024, files: 1 } });
 
 const TEXT = ['sku', 'name', 'name_hi', 'tagline', 'tagline_hi', 'description', 'description_hi', 'safety', 'safety_hi', 'warranty', 'warranty_hi', 'origin_country', 'manufacturer', 'importer', 'hsn', 'brand_used',
-  'seo_title', 'seo_desc', 'video_url', 'badge', 'dims', 'similar_mode', 'publish_at'];
+  'seo_title', 'seo_desc', 'video_url', 'badge', 'dims', 'similar_mode', 'publish_at', 'pay_rule'];
 const NUMS = ['price', 'mrp', 'cost', 'gst_rate', 'packaging_cost', 'ad_cost', 'shipping_cost'];
 const INTS = ['category_id', 'stock', 'low_stock_limit', 'max_per_order', 'weight_g', 'sort'];
 const BOOLS = ['preorder', 'sold_out', 'safety_ack', 'has_battery', 'is_electronic', 'has_blade', 'is_liquid', 'is_cosmetic_food', 'featured'];
@@ -172,6 +172,15 @@ r.delete('/:id', asyncH((req, res) => {
   db.prepare("UPDATE products SET deleted_at=?, status='draft', updated_at=? WHERE id=?").run(now(), now(), id);
   catalog.reindex(id);
   auth.logActivity(req.admin.id, 'trash', 'product', id, '', req);
+  res.json({ ok: true });
+}));
+r.delete('/:id/forever', asyncH((req, res) => {
+  const id = int(req.params.id), p = db.prepare('SELECT id, deleted_at FROM products WHERE id=?').get(id);
+  if (!p) throw notFound();
+  if (!p.deleted_at) throw bad('Move the product to Trash first.');
+  db.prepare('DELETE FROM products WHERE id=?').run(id);
+  try { catalog.reindex(id); } catch (e) { /* index entry already gone */ }
+  auth.logActivity(req.admin.id, 'delete-forever', 'product', id, '', req);
   res.json({ ok: true });
 }));
 r.post('/:id/restore', asyncH((req, res) => { const id = int(req.params.id); db.prepare('UPDATE products SET deleted_at=NULL, updated_at=? WHERE id=?').run(now(), id); catalog.reindex(id); res.json({ ok: true }); }));

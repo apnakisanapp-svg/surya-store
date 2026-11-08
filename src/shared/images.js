@@ -75,6 +75,17 @@ function removeFiles(file) {
     try { fs.unlinkSync(path.join(cfg.UPLOADS, file + suf)); } catch { /* ignore */ }
   }
 }
-const url = (file, kind = 'card') => file ? `/media/${file}-${kind}.webp` : null;
+// Product photos are saved in several sizes (thumb/card/gal); logos, banners and category pictures only as "img".
+// Use the wanted size when it exists, otherwise the best one that does, so a picture never shows as broken.
+const _found = new Map();
+const url = (file, kind = 'card') => {
+  if (!file) return null;
+  const key = file + '|' + kind; if (_found.has(key)) return _found.get(key);
+  let pick = null;
+  for (const k of [kind, 'img', 'gal', 'card', 'thumb', 'orig']) { try { if (fs.existsSync(path.join(cfg.UPLOADS, `${file}-${k}.webp`))) { pick = k; break; } } catch { /* ignore */ } }
+  const out = `/media/${file}-${pick || kind}.webp`;
+  if (pick) _found.set(key, out);
+  return out;
+};
 
 module.exports = { processProductImage, processGeneric, processPrivate, recrop, removeFiles, url };
