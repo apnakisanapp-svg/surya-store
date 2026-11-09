@@ -33,7 +33,7 @@ const cfg = {
   ADMIN_HOST: process.env.ADMIN_HOST || '127.0.0.1', // admin listens on localhost by default
   SITE_URL: (process.env.SITE_URL || 'http://localhost:3000').replace(/\/$/, ''),
   PRODUCTION: process.env.NODE_ENV === 'production',
-  SECURE_COOKIES: process.env.SECURE_COOKIES === '1' || process.env.NODE_ENV === 'production',
+  SECURE_COOKIES: process.env.SECURE_COOKIES === undefined ? process.env.NODE_ENV === 'production' : process.env.SECURE_COOKIES === '1',
   ADMIN_EMAIL: process.env.ADMIN_EMAIL || '',
   ADMIN_PASSWORD: process.env.ADMIN_PASSWORD || '',
   SMTP_URL: process.env.SMTP_URL || '', // e.g. smtps://user:pass@smtp.example.com

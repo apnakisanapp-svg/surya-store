@@ -43,13 +43,13 @@ export function buildChrome(root) {
   const refreshCount = () => { const n = cart.count(); count.textContent = n; count.classList.toggle('hide', !n); count.classList.remove('pop'); void count.offsetWidth; if (n) count.classList.add('pop'); };
   bus.on('cart', refreshCount); refreshCount();
   const nv = h('nav', { class: 'nav', 'aria-label': 'Main' }, (BOOT.menu.header || []).map(menuLink));
-  const langBtn = h('button', { class: 'ibtn lang', 'aria-label': 'Language', onclick: () => { setLang(lang() === 'hi' ? 'en' : 'hi'); location.reload(); } }, t('lang'));
-  const burger = h('button', { class: 'ibtn burger', 'aria-label': 'Menu', onclick: () => { const d = drawer(BOOT.brand.name, h('nav', { class: 'stack' }, (BOOT.menu.header || []).map(it => h('a', { href: it.url, style: { display: 'block', padding: '10px 0', fontSize: '1.15rem', textDecoration: 'none' }, onclick: () => d.close() }, tr(it, 'label'))), h('hr', { style: { border: 0, borderTop: '1px solid var(--line)' } }), h('a', { href: '/orders#track', style: { display: 'block', padding: '10px 0', textDecoration: 'none' }, onclick: () => d.close() }, t('track')), h('a', { href: me.customer ? '/profile' : '/login', style: { display: 'block', padding: '10px 0', textDecoration: 'none' }, onclick: () => d.close() }, t('account'))), null, { side: 'left' }); } }, icon('menu'));
+  const langBtn = h('button', { class: 'ibtn lang hsm', 'aria-label': 'Language', onclick: () => { setLang(lang() === 'hi' ? 'en' : 'hi'); location.reload(); } }, t('lang'));
+  const burger = h('button', { class: 'ibtn burger', 'aria-label': 'Menu', onclick: () => { const d = drawer(BOOT.brand.name, h('nav', { class: 'stack' }, (BOOT.menu.header || []).map(it => h('a', { href: it.url, style: { display: 'block', padding: '10px 0', fontSize: '1.15rem', textDecoration: 'none' }, onclick: () => d.close() }, tr(it, 'label'))), h('hr', { style: { border: 0, borderTop: '1px solid var(--line)' } }), h('a', { href: '/orders#track', style: { display: 'block', padding: '10px 0', textDecoration: 'none' }, onclick: () => d.close() }, t('track')), h('a', { href: me.customer ? '/profile' : '/login', style: { display: 'block', padding: '10px 0', textDecoration: 'none' }, onclick: () => d.close() }, t('account')), BOOT.store.wishlist ? h('a', { href: '/wishlist', style: { display: 'block', padding: '10px 0', textDecoration: 'none' }, onclick: () => d.close() }, t('wishlist')) : null, BOOT.store.language_toggle ? h('a', { href: '#', style: { display: 'block', padding: '10px 0', textDecoration: 'none' }, onclick: e => { e.preventDefault(); setLang(lang() === 'hi' ? 'en' : 'hi'); location.reload(); } }, lang() === 'hi' ? 'English' : 'हिंदी') : null), null, { side: 'left' }); } }, icon('menu'));
   const hdr = h('header', { class: 'hdr glass' }, h('div', { class: 'wrap hdr-in' }, burger, logo(), nv, h('div', { class: 'grow' }),
     h('button', { class: 'ibtn', 'aria-label': t('search'), onclick: openSearch }, icon('search')),
     BOOT.store.language_toggle ? langBtn : null,
     acctMenu(),
-    BOOT.store.wishlist ? h('a', { class: 'ibtn', href: '/wishlist', 'aria-label': t('wishlist') }, icon('heart')) : null,
+    BOOT.store.wishlist ? h('a', { class: 'ibtn hsm', href: '/wishlist', 'aria-label': t('wishlist') }, icon('heart')) : null,
     h('button', { class: 'ibtn', 'aria-label': t('cart'), onclick: openCart }, icon('bag'), count)));
   const prog = h('div', { class: 'pbar', 'aria-hidden': 'true' });
   addEventListener('scroll', () => { hdr.classList.toggle('scrolled', scrollY > 8); const m = document.documentElement.scrollHeight - innerHeight; if (BOOT.ui.scroll_progress) prog.style.width = m > 0 ? (scrollY / m * 100) + '%' : '0'; }, { passive: true });
@@ -123,7 +123,7 @@ export function buildChrome(root) {
 }
 function acctMenu() {
   const c = me.customer;
-  if (!c) return h('a', { class: 'ibtn', href: '/login', 'aria-label': t('account') }, icon('user'));
+  if (!c) return h('a', { class: 'ibtn hsm', href: '/login', 'aria-label': t('account') }, icon('user'));
   const first = c.first_name || (c.name || '').split(' ')[0] || c.email.split('@')[0];
   let isOpen = false;
   const item = (href, label, ic) => h('a', { class: 'am-i', href, onclick: () => close() }, h('span', { class: 'am-ic' }, icon(ic)), label);
@@ -136,7 +136,7 @@ function acctMenu() {
   const moveHl = el => { hl.style.opacity = '1'; hl.style.height = el.offsetHeight + 'px'; hl.style.transform = `translateY(${el.offsetTop}px)`; };
   list.addEventListener('mouseover', e => { const a = e.target.closest('.am-i'); if (a) moveHl(a); }); list.addEventListener('mouseleave', () => { hl.style.opacity = '0'; });
   list.addEventListener('focusin', e => { const a = e.target.closest('.am-i'); if (a) moveHl(a); });
-  const btn = h('button', { class: 'ibtn', 'aria-label': t('account'), 'aria-haspopup': 'menu', 'aria-expanded': 'false', onclick: e => { e.stopPropagation(); isOpen ? close() : open(); } }, icon('user'));
+  const btn = h('button', { class: 'ibtn hsm', 'aria-label': t('account'), 'aria-haspopup': 'menu', 'aria-expanded': 'false', onclick: e => { e.stopPropagation(); isOpen ? close() : open(); } }, icon('user'));
   // The menu lives on <body> (not inside the glass header) so its blur can see the page behind it.
   const place = () => { const r = btn.getBoundingClientRect(); menu.style.top = (r.bottom + 10) + 'px'; menu.style.right = Math.max(10, window.innerWidth - r.right - 4) + 'px'; };
   function open() { isOpen = true; place(); if (!menu.isConnected) document.body.append(menu); menu.classList.remove('closing'); void menu.offsetWidth; menu.classList.add('show'); btn.setAttribute('aria-expanded', 'true'); }
@@ -245,6 +245,7 @@ export function cookieBanner(force) {
   const C = BOOT.popups.cookie || {};
   const el = h('div', { class: 'cookie glass', role: 'dialog', 'aria-label': 'Cookies' }, h('p', { class: 'small' }, (lang() === 'hi' && C.text_hi) || C.text || t('cookies_text'), ' ', h('a', { class: 'link', href: '/policy/cookies' }, 'Read more')),
     h('div', { class: 'row', style: { marginTop: '12px' } }, h('button', { class: 'btn sm grow', onclick: () => { ls.set('sy_cookie', 'all'); el.remove(); loadAnalytics(); } }, t('accept')), h('button', { class: 'btn sm ghost grow', onclick: () => { ls.set('sy_cookie', 'essential'); el.remove(); } }, t('reject'))));
+  const upd = path => { el.style.display = /^\/(login|checkout|account|profile)/.test(path || location.pathname) ? 'none' : ''; }; upd(); bus.on('route', upd); // never cover the login / checkout forms
   document.body.append(el);
 }
 export function loadAnalytics() {

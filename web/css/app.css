@@ -309,3 +309,31 @@ a.oi.link{transition:background .2s}a.oi.link:hover{background:color-mix(in srgb
 .otp-b:focus{border-color:#c9a24b;box-shadow:0 0 0 4px rgba(201,162,75,.25);transform:translateY(-2px)}
 
 .gpage{position:relative;isolation:isolate}.g-orb{position:absolute;border-radius:50%;filter:blur(70px);z-index:-1;pointer-events:none}.g-orb.a{width:300px;height:300px;background:rgba(240,180,58,.38);left:-60px;top:20px}.g-orb.b{width:320px;height:320px;background:rgba(231,111,81,.22);right:-60px;top:260px}
+
+/* ---------- phones: cleaner top bar, slim cookie notice ---------- */
+@media(max-width:720px){
+  .hdr .hsm{display:none!important}
+  .hdr-in{gap:6px}
+  .cookie{left:10px;right:10px;padding:10px 12px;border-radius:16px;bottom:calc(88px + env(safe-area-inset-bottom))}
+  .cookie p{font-size:.76rem;line-height:1.35;margin:0}
+  .cookie .row{margin-top:8px!important;gap:8px}
+  .cookie .btn{padding:8px 12px;font-size:.84rem;min-height:36px}
+}
+
+/* ---------- old phone browsers: safe fallbacks (no color-mix / no backdrop-filter) ---------- */
+@supports not (color: color-mix(in srgb, red, blue)){
+  .bbar{background:rgba(255,255,255,.66);box-shadow:0 12px 32px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.7),inset 0 0 0 1px rgba(0,0,0,.07)}
+  .bb-bubble{background:linear-gradient(180deg,rgba(255,255,255,.7),rgba(243,216,134,.55));box-shadow:inset 0 1px 1px rgba(255,255,255,.95),0 4px 14px rgba(201,162,75,.4)}
+  .hdr.glass{background:rgba(255,255,255,.82)}
+  .skel{background:#ececec}
+  a.oi.link:hover{background:rgba(0,0,0,.04)}
+}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  .bbar,.glass,.am,.seg,.glass-card,.cookie{background:rgba(255,255,255,.95)}
+}
+@media(prefers-color-scheme:dark){
+  @supports not (color: color-mix(in srgb, red, blue)){.bbar{background:rgba(32,28,22,.7)}.hdr.glass{background:rgba(22,19,14,.86)}.skel{background:#26231e}}
+  @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.bbar,.glass,.am,.seg,.glass-card,.cookie{background:rgba(28,24,18,.96)}}
+}
+.gpage{overflow-x:clip}.g-orb.a{left:0}.g-orb.b{right:0}
+@media(max-width:720px){.g-orb{width:220px!important;height:220px!important;filter:blur(55px)}.auth-orb.o1{left:-30px}.auth-orb.o2{right:-30px}.pg-head h1{font-size:1.8rem}.seg{max-width:100%}}

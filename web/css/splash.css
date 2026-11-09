@@ -27,3 +27,15 @@ body:has(#splash){overflow:hidden}
 /* header / footer sun mark */
 .logo .sunmark{width:30px;height:30px;overflow:visible;transition:transform .6s cubic-bezier(.3,1.4,.5,1);filter:drop-shadow(0 1px 3px rgba(214,150,20,.35))}
 .logo:hover .sunmark{transform:rotate(45deg) scale(1.06)}
+
+/* phones: shorter and lighter (no heavy blur animations) */
+@media(max-width:720px),(pointer:coarse){
+  #splash{animation-delay:1.55s!important;animation-duration:.4s!important}
+  .sp-in{animation-delay:1.55s!important;animation-duration:.4s!important}
+  #splash *{filter:none!important}
+  .sp-glow{animation-duration:1.4s!important}
+  .sp-mark .disc{animation-duration:.55s!important;animation-delay:.1s!important}
+  .sp-mark g{animation-duration:1.4s!important;animation-delay:.15s!important}
+  .sp-mark .ray{animation-delay:calc(.3s + var(--i)*.03s)!important;animation-duration:.45s!important}
+  .sp-word span{animation-duration:.45s,.8s!important;animation-delay:calc(.45s + var(--i)*.07s),calc(.75s + var(--i)*.07s)!important}
+}

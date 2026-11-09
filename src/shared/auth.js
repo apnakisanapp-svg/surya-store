@@ -10,7 +10,7 @@ const ADMIN_TTL_H = 12, CUST_TTL_D = 30;
 const plusHours = h => new Date(Date.now() + h * 3600e3).toISOString();
 
 function cookieOpts(maxAgeMs) {
-  return { httpOnly: true, sameSite: 'strict', secure: cfg.SECURE_COOKIES, path: '/', maxAge: maxAgeMs };
+  return { httpOnly: true, sameSite: 'lax', secure: cfg.SECURE_COOKIES, path: '/', maxAge: maxAgeMs };
 }
 
 /* ---------- admin ---------- */
