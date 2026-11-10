@@ -480,3 +480,31 @@ em.pop,span.pop,b.pop{display:inline-block;animation:popin .45s cubic-bezier(.2,
 .trust p{font-size:.68rem;line-height:1.3}
 @media(min-width:700px){.trust>div{padding:20px 16px;border-radius:22px}.trust svg{width:28px;height:28px;margin-bottom:10px}.trust h3{font-size:1.05rem;margin-bottom:4px}.trust p{font-size:.9rem}}
 @media(prefers-color-scheme:dark){.trust>div{background:linear-gradient(150deg,rgba(60,52,38,.7),rgba(30,26,18,.6));border-color:rgba(255,255,255,.1)}}
+
+/* ===== 10 Nov (4): premium glass nav, checkout button row ===== */
+/* bottom nav: clearer glass, rim light, gold active state, ripple, glow */
+.bbar{background:linear-gradient(180deg,rgba(255,255,255,.68),rgba(255,255,255,.5));-webkit-backdrop-filter:blur(30px) saturate(230%) brightness(1.06);backdrop-filter:blur(30px) saturate(230%) brightness(1.06);box-shadow:0 18px 40px -14px rgba(120,84,10,.38),0 6px 18px rgba(0,0,0,.1),inset 0 1px 0 rgba(255,255,255,.9),inset 0 -1px 0 rgba(255,255,255,.25)}
+.bbar::after{content:'';position:absolute;inset:0;border-radius:inherit;padding:1.2px;pointer-events:none;z-index:2;background:linear-gradient(160deg,rgba(255,255,255,.95),rgba(255,255,255,.15) 38%,rgba(201,162,75,.15) 62%,rgba(201,162,75,.75));-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude}
+.bb-i{overflow:hidden;border-radius:28px}
+.bb-i.on{color:#8a5f0a}
+.bb-i.on svg{transform:translateY(-2px);filter:drop-shadow(0 3px 5px rgba(201,162,75,.55))}
+.bb-i svg{transition:transform .3s cubic-bezier(.3,1.5,.5,1),filter .3s}
+.bb-rip{position:absolute;border-radius:50%;pointer-events:none;background:radial-gradient(circle,rgba(255,255,255,.85),rgba(243,216,134,.35) 55%,transparent 70%);transform:scale(0);opacity:.9;animation:bbrip .6s ease-out forwards}
+@keyframes bbrip{to{transform:scale(1);opacity:0}}
+.bb-i .cnt{background:linear-gradient(145deg,#f3d886,#c9a24b);color:#1a1405;border:1px solid rgba(255,255,255,.8);box-shadow:0 3px 8px -2px rgba(169,128,31,.7),inset 0 1px 0 rgba(255,255,255,.7);min-width:18px;height:18px;border-radius:9px;font-size:.66rem;font-weight:700}
+.bb-i .cnt.pop{animation:popin .45s cubic-bezier(.2,.9,.3,1.5)}
+@supports not (color: color-mix(in srgb, red, blue)){.bbar{background:rgba(255,255,255,.7)}}
+@media(prefers-color-scheme:dark){.bbar{background:linear-gradient(180deg,rgba(60,52,38,.55),rgba(30,26,18,.4));box-shadow:0 18px 40px -14px rgba(0,0,0,.7),inset 0 1px 0 rgba(255,255,255,.18)}.bb-i.on{color:#f3d886}}
+@media(prefers-reduced-motion:reduce){body:not(:has(#splash)) .bb-rip{animation-duration:.6s!important}}
+/* top bar: a little more glass */
+.hdr.glass{-webkit-backdrop-filter:saturate(210%) blur(22px);backdrop-filter:saturate(210%) blur(22px);box-shadow:0 10px 30px -18px rgba(120,84,10,.35)}
+/* checkout button row */
+.co-nav{display:flex;gap:10px;align-items:center;justify-content:flex-end}
+.co-nav .btn{height:46px;min-height:0;padding:0 18px;font-size:.95rem;display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap}
+.co-nav .btn svg{width:18px;height:18px}
+.co-nav .gl-next,.co-nav .gl-place{flex:1}
+.btn.gl-back{flex:0 0 auto;background:linear-gradient(145deg,rgba(255,255,255,.9),rgba(255,255,255,.55));color:#1a1405;border:1px solid rgba(255,255,255,.9);-webkit-backdrop-filter:blur(14px) saturate(180%);backdrop-filter:blur(14px) saturate(180%);box-shadow:0 8px 20px -10px rgba(60,40,0,.4),inset 0 1px 0 #fff;font-weight:600}
+.btn.gl-place{background:linear-gradient(145deg,#f3d886,#c9a24b 55%,#a9801f);color:#1a1405;border:1px solid rgba(255,240,190,.8);box-shadow:0 10px 26px -10px rgba(169,128,31,.8),inset 0 1px 0 rgba(255,255,255,.6);font-weight:700}
+.btn.gl-back:active,.btn.gl-place:active{transform:scale(.97)}
+@media(max-width:899px){.co-nav{position:sticky;bottom:calc(92px + env(safe-area-inset-bottom));z-index:40;padding:10px;border-radius:24px;background:linear-gradient(160deg,rgba(255,255,255,.8),rgba(255,255,255,.55));-webkit-backdrop-filter:blur(22px) saturate(180%);backdrop-filter:blur(22px) saturate(180%);border:1px solid rgba(255,255,255,.85);box-shadow:0 14px 34px -14px rgba(60,40,0,.5),inset 0 1px 0 #fff;margin-top:6px}}
+@media(prefers-color-scheme:dark){.btn.gl-back{background:rgba(255,255,255,.12);color:#fff;border-color:rgba(255,255,255,.2)}.co-nav{background:linear-gradient(160deg,rgba(44,38,28,.85),rgba(20,17,12,.7))}}

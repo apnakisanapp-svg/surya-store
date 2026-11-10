@@ -98,6 +98,7 @@ export function buildChrome(root) {
     ? h('button', { class: 'bb-i', 'data-k': it.k, onclick: openCart }, icon(it.ic), it.badge, h('span', null, it.label))
     : h('a', { class: 'bb-i', 'data-k': it.k, href: it.url }, icon(it.ic), h('span', null, it.label)));
   const bar = h('nav', { class: 'bbar', 'aria-label': 'Quick menu' }, bubble, ...links);
+  bar.addEventListener('pointerdown', e => { const it = e.target.closest('.bb-i'); if (!it) return; const r = it.getBoundingClientRect(), d = Math.max(r.width, r.height) * 1.3, rip = h('i', { class: 'bb-rip', style: { width: d + 'px', height: d + 'px', left: (e.clientX - r.left - d / 2) + 'px', top: (e.clientY - r.top - d / 2) + 'px' } }); it.append(rip); setTimeout(() => rip.remove(), 650); });
   let cur = -1;
   const moveBubble = i => {
     const to = `translateX(${i * 100}%)`;

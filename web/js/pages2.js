@@ -62,7 +62,7 @@ route(/^\/checkout$/, async view => {
       h('div', { class: 'grid2' }, inp('name', t('name'), { autocomplete: 'name' }), inp('phone', t('phone'), { inputmode: 'numeric', maxlength: 10, autocomplete: 'tel-national' })), inp('email', t('email'), { type: 'email', autocomplete: 'email' }),
       h('h3', { style: { marginTop: '8px' } }, t('delivery')), inp('line1', t('addr1'), { autocomplete: 'address-line1' }), inp('line2', t('addr2')),
       h('div', { class: 'grid2' }, inp('pincode', t('pincode'), { inputmode: 'numeric', maxlength: 6, autocomplete: 'postal-code', onchange: async e => { F.pincode = e.target.value.trim(); await reprice(); if (/^\d{6}$/.test(F.pincode) && !F.city) lookupPin(); } }), inp('city', t('city'), { autocomplete: 'address-level2' })), inp('state', t('state'), { autocomplete: 'address-level1' }),
-      h('button', { class: 'btn block gl-next', onclick: () => { if (validate()) { step = 2; stepPay(); toTop(); } else { const bad = $('.inp.bad'); if (bad) { bad.scrollIntoView({ behavior: 'smooth', block: 'center' }); bad.focus({ preventScroll: true }); } } } }, t('next'))));
+      h('div', { class: 'co-nav' }, h('button', { class: 'btn gl-next', onclick: () => { if (validate()) { step = 2; stepPay(); toTop(); } else { const bad = $('.inp.bad'); if (bad) { bad.scrollIntoView({ behavior: 'smooth', block: 'center' }); bad.focus({ preventScroll: true }); } } } }, t('next'), icon('chev')))));
   }
   async function lookupPin() { /* city/state are typed by the customer; no third-party lookup is used */ }
   function validate() {
@@ -88,13 +88,13 @@ route(/^\/checkout$/, async view => {
     const cin = h('input', { class: 'inp', placeholder: t('coupon'), value: coupon, 'aria-label': t('coupon') }), cmsg = h('div', { class: 'small' });
     const applyC = async () => { coupon = cin.value.trim(); ls.set('sy_coupon', coupon); await reprice(); if (coupon && price.coupon) { cmsg.style.color = price.coupon.ok ? 'var(--ok)' : 'var(--err)'; cmsg.textContent = price.coupon.ok ? `${price.coupon.code} applied` : price.coupon.message; } else cmsg.textContent = ''; };
     body.append(h('div', { class: 'card stack' }, h('h3', null, t('payment')), h('div', { class: 'stack', id: 'paybox' }), h('div', { class: 'row', style: { flexWrap: 'nowrap' } }, h('div', { class: 'grow' }, cin), h('button', { class: 'btn ghost', onclick: applyC }, t('apply'))), cmsg, gift, gm, field('Order note (optional)', h('input', { class: 'inp', maxlength: 300, value: F.note, oninput: e => { F.note = e.target.value; } })),
-      h('div', { class: 'row' }, h('button', { class: 'btn ghost', onclick: () => { step = 1; stepContact(); toTop(); } }, t('back')), h('button', { class: 'btn grow gl-next', onclick: () => { if (!price || (price.errors && price.errors.length)) return toast((price && price.errors[0]) || '…', { err: true }); step = 3; stepReview(); toTop(); } }, t('next')))));
+      h('div', { class: 'co-nav' }, h('button', { class: 'btn gl-back', onclick: () => { step = 1; stepContact(); toTop(); } }, icon('chevl'), t('back')), h('button', { class: 'btn gl-next', onclick: () => { if (!price || (price.errors && price.errors.length)) return toast((price && price.errors[0]) || '…', { err: true }); step = 3; stepReview(); toTop(); } }, t('next')))));
     paintPay();
   }
   function stepReview() {
     paintSteps(); clear(body);
     const pol = (s, label) => h('a', { class: 'link', href: `/policy/${s}`, target: '_blank', rel: 'noopener' }, label);
-    const termsErr = h('div', { class: 'err-text hide' }), btn = h('button', { class: 'btn block', onclick: async () => {
+    const termsErr = h('div', { class: 'err-text hide' }), btn = h('button', { class: 'btn gl-place', onclick: async () => {
       F.terms = true;
       if (price.needs_safety_ack && !F.safety) { toast('Please confirm the safety instructions.', { err: true }); return; }
       try { await busy(btn, async () => {
@@ -111,7 +111,7 @@ route(/^\/checkout$/, async view => {
       price.needs_safety_ack || price.has_battery ? h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: F.safety, onchange: e => { F.safety = e.target.checked; } }), h('span', null, t('safety_ok'), ' (', pol('safety', 'Safety'), ').')) : null,
       h('p', { class: 'muted small' }, `Easy ${BOOT.returns.window_days || 7}-day replacement on damaged or defective items.`),
       h('p', { class: 'muted small co-fine' }, 'By placing the order you agree to our ', pol('terms', 'Terms'), ', ', pol('privacy', 'Privacy Policy'), ' and ', pol('returns', 'Return Policy'), '.'),
-      h('div', { class: 'row' }, h('button', { class: 'btn ghost', onclick: () => { step = 2; stepPay(); toTop(); } }, t('back'))), btn));
+      h('div', { class: 'co-nav' }, h('button', { class: 'btn gl-back', onclick: () => { step = 2; stepPay(); toTop(); } }, icon('chevl'), t('back')), btn)));
   }
   // polyfill small helper: pol(slug) returns an <a> factory
   stepContact(); await reprice();
