@@ -110,7 +110,8 @@ function createApp() {
     if (path.extname(req.path)) return next(); // missing asset
     let html;
     try { html = readTpl(); } catch { return res.status(500).send('Storefront files are missing.'); }
-    const { head, status } = headFor(req);
+    let { head, status } = headFor(req);
+    if (status === 200 && !/^\/(shop|p\/[^/]+|cart|checkout|order\/[A-Za-z0-9-]+|orders|track|wishlist|account|login|profile|reset|policy\/[a-z0-9-]+|about|faq|contact|grievance)?$/.test(req.path.replace(/\/+$/, '') || '/')) status = 404; // unknown address: tell Google it is not a page
     try { req.customer = auth.customerFromReq(req); } catch { req.customer = null; } // so a logged-in customer stays logged in after a page load
     const boot = JSON.stringify(bootstrap(req)).replace(/</g, '\\u003c');
     html = html.replace('<!--SEO-->', head).replace('<!--BOOT-->', `<script type="application/json" id="boot">${boot}</script>`);
