@@ -53,7 +53,7 @@ function createApp() {
 
   // redirects set by the owner (Admin > SEO > Redirects)
   app.use((req, res, next) => {
-    if (req.method !== 'GET' || req.path.startsWith('/api/') || req.path.startsWith('/media/')) return next();
+    if (req.method !== 'GET' || req.path.startsWith('/api/') || req.path.startsWith('/media/') || req.path.startsWith('/share/')) return next();
     const r = db.prepare('SELECT to_path, code FROM redirects WHERE from_path=?').get(req.path);
     if (r) return res.redirect(r.code || 301, r.to_path);
     next();
@@ -72,6 +72,8 @@ function createApp() {
     const body = themes.css();
     res.type('text/css').set('Cache-Control', 'no-cache').send(body);
   });
+
+  require('./share').mount(app);
 
   // media: only processed webp + model files; never the private folder
   app.use('/media', express.static(cfg.UPLOADS, { maxAge: '365d', immutable: true, index: false, dotfiles: 'deny', fallthrough: false,
@@ -122,14 +124,14 @@ function headFor(req) {
   const B = settings.get('brand'), S = settings.get('seo');
   const p = req.path.replace(/\/+$/, '') || '/';
   const abs = u => (/^https?:/.test(u) ? u : cfg.SITE_URL + u);
-  let title = S.title || B.name, desc = S.description || B.tagline || '', canonical = cfg.SITE_URL + p, img = S.og_image ? abs(S.og_image) : '', type = 'website', ld = [], status = 200, noindex = false;
+  let title = S.title || B.name, desc = S.description || [B.name, B.tagline].filter(Boolean).join(' – ') || '', canonical = cfg.SITE_URL + p, img = cfg.SITE_URL + '/share/home.jpg?' + require('./share').version(), type = 'website', ld = [], status = 200, noindex = false;
   let m;
   if ((m = p.match(/^\/p\/([^/]+)$/))) {
     const prod = catalog.getBySlug(decodeURIComponent(m[1]));
     if (prod) {
       title = (prod.seo_title || prod.name) + ' | ' + B.name;
       desc = prod.seo_desc || String(prod.tagline || prod.description || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160);
-      if (prod.images[0]) img = abs(prod.images[0].gal);
+      img = cfg.SITE_URL + '/share/p/' + encodeURIComponent(prod.slug) + '.jpg?v=' + require('./share').pver(prod);
       type = 'product';
       const avail = prod.stock_state === 'out' ? 'OutOfStock' : prod.preorder ? 'PreOrder' : 'InStock';
       ld.push({ '@context': 'https://schema.org', '@type': 'Product', name: prod.name, description: desc, sku: prod.sku || undefined, image: prod.images.map(i => abs(i.gal)), brand: { '@type': 'Brand', name: B.name },
@@ -154,7 +156,7 @@ function headFor(req) {
     `<title>${esc(title)}</title>`, desc ? `<meta name="description" content="${esc(desc)}">` : '', `<link rel="canonical" href="${esc(canonical)}">`,
     (noindex || S.robots_index === false) ? '<meta name="robots" content="noindex,nofollow">' : '',
     `<meta property="og:site_name" content="${esc(B.name)}"><meta property="og:title" content="${esc(title)}"><meta property="og:type" content="${type}"><meta property="og:url" content="${esc(canonical)}">`,
-    desc ? `<meta property="og:description" content="${esc(desc)}">` : '', img ? `<meta property="og:image" content="${esc(img)}"><meta name="twitter:card" content="summary_large_image">` : '<meta name="twitter:card" content="summary">',
+    desc ? `<meta property="og:description" content="${esc(desc)}">` : '', img ? `<meta property="og:image" content="${esc(img)}"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta name="twitter:card" content="summary_large_image">` : '<meta name="twitter:card" content="summary">',
     S.verification_google ? `<meta name="google-site-verification" content="${esc(S.verification_google)}">` : '',
     ...ld.map(j => `<script type="application/ld+json">${JSON.stringify(j).replace(/</g, '\\u003c')}</script>`),
   ].filter(Boolean).join('\n');

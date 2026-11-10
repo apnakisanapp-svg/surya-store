@@ -124,4 +124,4 @@ async function sendPasswordChanged(to, name) {
   return sendBranded(to, `Your ${brand} password was changed`, text, { heading: 'Password changed', bodyHtml, preheader: 'Your password was just changed.' });
 }
 
-module.exports = { sendOtp, sendPasswordChanged, render, orderVars, waLink, queueOrderMessage, queueEmail, sendEmail };
+module.exports = { LOGO_SVG, sendOtp, sendPasswordChanged, render, orderVars, waLink, queueOrderMessage, queueEmail, sendEmail };

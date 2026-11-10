@@ -132,9 +132,9 @@ export function modal(content, { onClose } = {}) {
   document.body.append(scrim, wrap); requestAnimationFrame(() => scrim.classList.add('on'));
   return { close, box };
 }
-export function drawer(title, body, footer, { side = 'right' } = {}) {
+export function drawer(title, body, footer, { side = 'right', cls = '' } = {}) {
   const scrim = h('div', { class: 'scrim' });
-  const d = h('aside', { class: 'drawer ' + side, role: 'dialog', 'aria-modal': 'true', 'aria-label': title });
+  const d = h('aside', { class: 'drawer ' + side + (cls ? ' ' + cls : ''), role: 'dialog', 'aria-modal': 'true', 'aria-label': title });
   const head = h('div', { class: 'drawer-h' }, h('b', null, title), h('button', { class: 'ibtn', 'aria-label': t('close'), onclick: () => api_.close() }, icon('x')));
   const b = h('div', { class: 'drawer-b' }, body), f = footer ? h('div', { class: 'drawer-f' }, footer) : null;
   d.append(head, b); if (f) d.append(f);

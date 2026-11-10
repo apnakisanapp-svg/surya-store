@@ -107,7 +107,7 @@ route(/^\/p\/([^/]+)$/, async (view, m) => {
     if (S.mode === '3d' && p.model_glb) { galBox.append(modelViewer(p.model_glb, p.name), modeBar()); return; }
     const main = h('div', { class: 'gal-main', role: 'group', 'aria-label': 'Photos' });
     const show = i => { S.img = (i + imgs.length) % imgs.length; const im = imgs[S.img]; clear(main); if (im) main.append(h('img', { src: im.gal, alt: (lang() === 'hi' && im.alt_hi) || im.alt || tr(p, 'name'), width: im.w, height: im.h, decoding: 'async' })); else main.append(h('div', { class: 'center muted', style: { paddingTop: '45%' } }, 'No photo')); if (imgs.length > 1) main.append(h('button', { class: 'ibtn glass gal-nav l', 'aria-label': 'Previous', onclick: e => { e.stopPropagation(); show(S.img - 1); } }, icon('chevl')), h('button', { class: 'ibtn glass gal-nav r', 'aria-label': 'Next', onclick: e => { e.stopPropagation(); show(S.img + 1); } }, icon('chev'))); $$('.thumbs button', galBox).forEach((b, j) => b.classList.toggle('on', j === S.img)); };
-    let sx = null; main.addEventListener('pointerdown', e => { sx = e.clientX; }); main.addEventListener('pointerup', e => { if (sx == null) return; const d = e.clientX - sx; sx = null; if (Math.abs(d) > 45 && imgs.length > 1) show(S.img + (d < 0 ? 1 : -1)); else if (Math.abs(d) < 6 && imgs[S.img]) lightbox(imgs, S.img); });
+    let sx = null; main.addEventListener('pointerdown', e => { sx = e.target.closest('.gal-nav') ? null : e.clientX; }); main.addEventListener('pointerup', e => { if (sx == null || e.target.closest('.gal-nav')) { sx = null; return; } const d = e.clientX - sx; sx = null; if (Math.abs(d) > 45 && imgs.length > 1) show(S.img + (d < 0 ? 1 : -1)); else if (Math.abs(d) < 6 && imgs[S.img]) lightbox(imgs, S.img); });
     galBox.append(main);
     if (imgs.length > 1) galBox.append(h('div', { class: 'thumbs' }, imgs.map((im, j) => h('button', { 'aria-label': 'Photo ' + (j + 1), class: j === S.img ? 'on' : '', onclick: () => show(j) }, h('img', { src: im.thumb, alt: '', width: 68, height: 68, loading: 'lazy' })))));
     show(S.img); galBox.append(modeBar());
@@ -126,7 +126,7 @@ route(/^\/p\/([^/]+)$/, async (view, m) => {
     clear(atcRow);
     if (!c.in_stock) atcRow.append(notifyForm());
     else atcRow.append(h('div', { class: 'row', style: { flexWrap: 'nowrap' } }, h('div', { class: 'qty' }, h('button', { 'aria-label': '-', onclick: () => { S.qty = Math.max(1, S.qty - 1); qtyEl.textContent = S.qty; } }, '−'), qtyEl, h('button', { 'aria-label': '+', onclick: () => { S.qty = Math.min(p.max_per_order || 10, S.qty + 1); qtyEl.textContent = S.qty; } }, '+')),
-      h('button', { class: 'btn alt grow', id: 'atc', onclick: e => addToCart(p, S.vid, S.qty, e.currentTarget) }, t('add'))), h('button', { class: 'btn block', onclick: () => { cart.add(p.id, S.vid, S.qty); nav('/checkout'); } }, t('buy')));
+      h('button', { class: 'btn alt grow gl-add', id: 'atc', onclick: e => addToCart(p, S.vid, S.qty, e.currentTarget) }, t('add'))), h('button', { class: 'btn block gl-buy', onclick: () => { cart.add(p.id, S.vid, S.qty); nav('/checkout'); } }, t('buy')));
     stickyBtn && (stickyBtn.disabled = !c.in_stock); stickyPrice && (stickyPrice.textContent = money(c.price));
   }
   function notifyForm() {
@@ -147,7 +147,7 @@ route(/^\/p\/([^/]+)$/, async (view, m) => {
     priceEl, stockEl, varEl, atcRow,
     h('div', { class: 'stack' }, h('div', { class: 'row', style: { flexWrap: 'nowrap' } }, h('div', { class: 'grow' }, pinInp), h('button', { class: 'btn ghost', onclick: checkPin }, t('check'))), pinOut),
     p.has_battery ? h('div', { class: 'box-note warn' }, icon('warn'), h('span', null, BOOT.shipping.battery_notice)) : null,
-    h('div', { class: 'trust', style: { gridTemplateColumns: '1fr' } }, h('div', { class: 'row', style: { padding: '14px 18px', flexWrap: 'nowrap' } }, icon('refresh'), h('span', { class: 'small' }, BOOT.returns.text)))));
+    h('div', { class: 'ret-chip' }, icon('refresh'), h('span', null, `Easy ${BOOT.returns.window_days || 7}-day replacement`))));
   view.append(h('div', { class: 'wrap' }, h('div', { class: 'crumbs' }, h('a', { href: '/' }, t('home')), ' / ', h('a', { href: '/shop' }, t('shop')), ' / ', tr(p, 'name')), h('div', { class: 'pd' }, h('div', null, galBox), info)));
   gallery(); paint();
   // sticky bar (mobile)
@@ -163,6 +163,7 @@ route(/^\/p\/([^/]+)$/, async (view, m) => {
   const rows = [...(p.specs || []).map(s => [s.k || s.label || s.name, s.v || s.value]), ['Country of origin', p.origin_country], ['Manufacturer', p.manufacturer], ['Imported by', p.importer], ['Warranty', tr(p, 'warranty')], ['Weight', p.weight_g ? p.weight_g + ' g' : ''], ['SKU', p.sku]].filter(r => r[0] && r[1]);
   if (rows.length) tabsData.push([t('specs'), () => h('table', { class: 'specs' }, rows.map(r => h('tr', null, h('td', null, r[0]), h('td', null, r[1]))))]);
   if (p.safety) tabsData.push(['Safety', () => h('div', { class: 'box-note warn' }, icon('warn'), h('div', { class: 'rte', style: { whiteSpace: 'pre-line' } }, tr(p, 'safety')))]);
+  tabsData.push(['Returns & replacement', () => h('div', { class: 'ret-box' }, h('b', null, `Easy ${BOOT.returns.window_days || 7}-day replacement`), h('p', { class: 'muted' }, 'If something arrives damaged or does not work, tell us within ' + (BOOT.returns.window_days || 7) + ' days of delivery and we will make it right with a replacement or refund.'), h('p', { class: 'muted small' }, 'Tip: a short unboxing video helps us sort it out faster.'))]);
   if (p.faq && p.faq.length) tabsData.push(['FAQ', () => faqList(p.faq.map(f => ({ q: f.q, a: f.a })))]);
   if (tabsData.length) { const body = h('div', { style: { padding: '20px 0' } }); const bar = h('div', { class: 'tabs', role: 'tablist' }); const pick = k => { $$('button', bar).forEach((b, j) => b.classList.toggle('on', j === k)); clear(body).append(tabsData[k][1]()); }; tabsData.forEach((d, k) => bar.append(h('button', { role: 'tab', onclick: () => pick(k) }, d[0]))); pick(0); view.append(h('section', { class: 'section rev', style: { paddingBottom: 0 } }, h('div', { class: 'wrap' }, bar, body))); }
   /* reviews */

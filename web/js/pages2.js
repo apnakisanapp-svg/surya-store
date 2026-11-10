@@ -61,7 +61,6 @@ route(/^\/checkout$/, async view => {
       h('div', { class: 'grid2' }, inp('name', t('name'), { autocomplete: 'name' }), inp('phone', t('phone'), { inputmode: 'numeric', maxlength: 10, autocomplete: 'tel-national' })), inp('email', t('email'), { type: 'email', autocomplete: 'email' }),
       h('h3', { style: { marginTop: '8px' } }, t('delivery')), inp('line1', t('addr1'), { autocomplete: 'address-line1' }), inp('line2', t('addr2')),
       h('div', { class: 'grid2' }, inp('pincode', t('pincode'), { inputmode: 'numeric', maxlength: 6, autocomplete: 'postal-code', onchange: async e => { F.pincode = e.target.value.trim(); await reprice(); if (/^\d{6}$/.test(F.pincode) && !F.city) lookupPin(); } }), inp('city', t('city'), { autocomplete: 'address-level2' })), inp('state', t('state'), { autocomplete: 'address-level1' }),
-      me.customer ? h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: F.save_address, onchange: e => { F.save_address = e.target.checked; } }), 'Save this address') : null,
       h('button', { class: 'btn block', onclick: () => { if (validate()) { step = 2; stepPay(); } } }, t('next'))));
   }
   async function lookupPin() { /* city/state are typed by the customer; no third-party lookup is used */ }
@@ -83,7 +82,7 @@ route(/^\/checkout$/, async view => {
   }
   function stepPay() {
     paintSteps(); clear(body); reprice();
-    const gift = BOOT.shipping.gift_enabled ? h('div', { class: 'stack' }, h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: F.gift, onchange: e => { F.gift = e.target.checked; gm.classList.toggle('hide', !F.gift); reprice(); } }), `${t('gift')} (+${money(BOOT.shipping.gift_price)})`)) : null;
+    const gift = BOOT.shipping.gift_enabled ? h('div', { class: 'stack' }, h('label', { class: 'check sw' }, h('input', { type: 'checkbox', role: 'switch', checked: F.gift, onchange: e => { F.gift = e.target.checked; gm.classList.toggle('hide', !F.gift); reprice(); } }), `${t('gift')} (+${money(BOOT.shipping.gift_price)})`)) : null;
     const gm = h('textarea', { class: 'inp' + (F.gift ? '' : ' hide'), maxlength: 200, placeholder: 'Gift message (optional)', value: F.gift_message, oninput: e => { F.gift_message = e.target.value; } }); gm.value = F.gift_message;
     const cin = h('input', { class: 'inp', placeholder: t('coupon'), value: coupon, 'aria-label': t('coupon') }), cmsg = h('div', { class: 'small' });
     const applyC = async () => { coupon = cin.value.trim(); ls.set('sy_coupon', coupon); await reprice(); if (coupon && price.coupon) { cmsg.style.color = price.coupon.ok ? 'var(--ok)' : 'var(--err)'; cmsg.textContent = price.coupon.ok ? `${price.coupon.code} applied` : price.coupon.message; } else cmsg.textContent = ''; };
@@ -95,10 +94,10 @@ route(/^\/checkout$/, async view => {
     paintSteps(); clear(body);
     const pol = (s, label) => h('a', { class: 'link', href: `/policy/${s}`, target: '_blank', rel: 'noopener' }, label);
     const termsErr = h('div', { class: 'err-text hide' }), btn = h('button', { class: 'btn block', onclick: async () => {
-      if (!F.terms) { termsErr.textContent = 'Please accept to continue.'; termsErr.classList.remove('hide'); return; }
+      F.terms = true;
       if (price.needs_safety_ack && !F.safety) { toast('Please confirm the safety instructions.', { err: true }); return; }
       try { await busy(btn, async () => {
-        const r = await api('/orders', { method: 'POST', body: { items: cart.payload(), coupon, method: F.method, gift: F.gift, gift_message: F.gift_message, note: F.note, lang: lang(), email: F.email || undefined, save_address: F.save_address, address: { name: F.name, phone: F.phone, line1: F.line1, line2: F.line2, landmark: F.line2, pincode: F.pincode, city: F.city, state: F.state }, consents: { terms: F.terms, safety: F.safety, marketing: F.marketing } } });
+        const r = await api('/orders', { method: 'POST', body: { items: cart.payload(), coupon, method: F.method, gift: F.gift, gift_message: F.gift_message, note: F.note, lang: lang(), email: F.email || undefined, save_address: !!me.customer, address: { name: F.name, phone: F.phone, line1: F.line1, line2: F.line2, landmark: F.line2, pincode: F.pincode, city: F.city, state: F.state }, consents: { terms: true, safety: F.safety, marketing: !!(me.customer && me.customer.marketing_optin) } } });
         cart.clear(); ls.del('sy_coupon'); ls.set('sy_last_order', { n: r.number, t: r.token });
         nav(`/order/${r.number}?t=${r.token}&new=1`);
       }); } catch (e) { toast(e.message, { err: true }); if (e.data && e.data.out_of_stock) { step = 1; reprice(); } }
@@ -108,10 +107,9 @@ route(/^\/checkout$/, async view => {
       h('div', { class: 'row between', style: { alignItems: 'start' } }, h('div', { class: 'small' }, h('b', null, a.name), h('br'), a.line1, a.line2 ? ', ' + a.line2 : '', h('br'), `${a.city}, ${a.state} - ${a.pincode}`, h('br'), a.phone), h('button', { class: 'link', style: { background: 'none', border: 0, cursor: 'pointer' }, onclick: () => { step = 1; stepContact(); } }, 'Edit')),
       h('div', { class: 'row between' }, h('span', null, F.method === 'cod' ? t('cod') : t('upi')), h('button', { class: 'link', style: { background: 'none', border: 0, cursor: 'pointer' }, onclick: () => { step = 2; stepPay(); } }, 'Edit')),
       price.has_battery ? h('div', { class: 'box-note warn' }, icon('warn'), h('span', null, price.battery_notice)) : null,
-      h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: F.terms, onchange: e => { F.terms = e.target.checked; termsErr.classList.add('hide'); } }), h('span', null, 'I agree to the ', pol('terms', 'Terms'), ', ', pol('privacy', 'Privacy Policy'), ' and ', pol('returns', 'Return Policy'), '.')), termsErr,
       price.needs_safety_ack || price.has_battery ? h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: F.safety, onchange: e => { F.safety = e.target.checked; } }), h('span', null, t('safety_ok'), ' (', pol('safety', 'Safety'), ').')) : null,
-      h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: F.marketing, onchange: e => { F.marketing = e.target.checked; } }), t('marketing_ok')),
-      h('p', { class: 'muted small' }, BOOT.returns.text),
+      h('p', { class: 'muted small' }, `Easy ${BOOT.returns.window_days || 7}-day replacement on damaged or defective items.`),
+      h('p', { class: 'muted small co-fine' }, 'By placing the order you agree to our ', pol('terms', 'Terms'), ', ', pol('privacy', 'Privacy Policy'), ' and ', pol('returns', 'Return Policy'), '.'),
       h('div', { class: 'row' }, h('button', { class: 'btn ghost', onclick: () => { step = 2; stepPay(); } }, t('back'))), btn));
   }
   // polyfill small helper: pol(slug) returns an <a> factory
@@ -216,7 +214,7 @@ function trackCard(q) {
   return h('div', { class: 'card stack glass-card', style: { maxWidth: '480px' } }, h('h3', null, t('track')), h('p', { class: 'muted small' }, 'Enter your order number and the mobile number used for the order.'), field(t('order_no'), n), field(t('phone'), ph),
     h('button', { class: 'btn', onclick: async e => { try { const r = await busy(e.currentTarget, () => api('/track', { method: 'POST', body: { number: n.value, phone: ph.value } })); nav(`/order/${r.order.number}?t=${r.token}`); } catch (x) { toast(x.message, { err: true }); } } }, t('find')));
 }
-const ordersList = list => list.length ? h('div', { class: 'stack' }, list.map(o => h('div', { class: 'card ocard glass-card' }, h('a', { class: 'row between ohead', href: `/order/${o.number}?t=${o.token}`, style: { textDecoration: 'none' } }, h('div', null, h('b', null, o.number), h('div', { class: 'muted small' }, new Date(o.placed_at).toLocaleDateString('en-IN', { dateStyle: 'medium' }))), h('div', { style: { textAlign: 'right' } }, h('b', null, money(o.total)), h('div', { class: 'badge soft' }, o.status.replace(/_/g, ' ')))), h('div', { class: 'oitems' }, o.items.map(itemRow))))) : h('div', { class: 'empty' }, icon('box'), h('p', null, 'No orders yet.'));
+const ordersList = list => list.length ? h('div', { class: 'stack' }, list.map(o => h('div', { class: 'card ocard glass-card' }, h('a', { class: 'row between ohead', href: `/order/${o.number}?t=${o.token}`, style: { textDecoration: 'none' } }, h('div', null, h('b', null, o.number), h('div', { class: 'muted small' }, new Date(o.placed_at).toLocaleDateString('en-IN', { dateStyle: 'medium' }))), h('div', { style: { textAlign: 'right' } }, h('b', null, money(o.total)), h('div', { class: 'badge soft st-' + o.status }, o.status.replace(/_/g, ' ')))), h('div', { class: 'oitems' }, o.items.map(itemRow))))) : h('div', { class: 'empty' }, icon('box'), h('p', null, 'No orders yet.'));
 
 /* /orders : My orders + Track order tabs (guests only see Track) */
 async function ordersPage(view, q, forceTrack) {
@@ -249,17 +247,45 @@ route(/^\/profile$/, async view => {
   const body = h('div', { class: 'seg-body' });
   const logout = h('button', { class: 'btn ghost sm', onclick: async () => { await api('/auth/logout', { method: 'POST' }); me.customer = null; ls.del('sy_wish'); wish.ids.clear(); location.href = '/'; } }, t('logout'));
   const show = async k => {
-    if (k === 'addresses') { swap(body, skeletons(1)); try { const list = await api('/account/addresses'); swap(body, list.length ? h('div', { class: 'stack' }, list.map(a => h('div', { class: 'card row between glass-card', style: { flexWrap: 'nowrap' } }, h('div', { class: 'small' }, h('b', null, a.name), h('br'), `${a.line1}, ${a.city}, ${a.state} - ${a.pincode}`, h('br'), a.phone), h('button', { class: 'btn ghost sm', onclick: async () => { await api('/account/addresses/' + a.id, { method: 'DELETE' }); show('addresses'); } }, t('remove'))))) : h('p', { class: 'muted' }, 'Addresses you save at checkout appear here.')); } catch (e) { swap(body, h('p', { class: 'muted' }, e.message)); } }
+    if (k === 'addresses') addresses();
     else { profile(); }
   };
   const first = me.customer.first_name || (me.customer.name || '').split(' ')[0] || '';
   view.append(gwrap(pageHead(first ? `Hi ${first}` : 'Profile', me.customer.email, logout), segTabs([['profile', 'Profile'], ['addresses', 'Addresses']], location.hash === '#addresses' ? 'addresses' : 'profile', show), body));
   function profile() {
-    const c = me.customer, fn = h('input', { class: 'inp', value: c.first_name || '' }), ln = h('input', { class: 'inp', value: c.last_name || '' }), phone = h('input', { class: 'inp', value: c.phone || '', inputmode: 'numeric', maxlength: 10 }), mk = h('input', { type: 'checkbox', checked: c.marketing_optin });
+    const c = me.customer, val = { fn: c.first_name || '', ln: c.last_name || '', ph: c.phone || '', mk: !!c.marketing_optin };
+    const fn = h('input', { class: 'inp', value: val.fn }), ln = h('input', { class: 'inp', value: val.ln }), phone = h('input', { class: 'inp', value: val.ph, inputmode: 'numeric', maxlength: 10 });
+    const mk = h('input', { type: 'checkbox', role: 'switch', checked: val.mk });
     const old = h('input', { class: 'inp', type: 'password', autocomplete: 'current-password' }), np = h('input', { class: 'inp', type: 'password', autocomplete: 'new-password' });
-    swap(body, h('div', { class: 'co' }, h('div', { class: 'card stack glass-card' }, h('h3', null, t('profile')), h('div', { class: 'fl-two' }, field('First name', fn), field('Last name', ln)), field(t('phone'), phone), h('p', { class: 'muted small' }, c.email), h('label', { class: 'check' }, mk, t('marketing_ok')), h('button', { class: 'btn', onclick: async e => { try { const r = await busy(e.currentTarget, () => api('/account/me', { method: 'PATCH', body: { first_name: fn.value, last_name: ln.value, phone: phone.value, marketing_optin: mk.checked, complete: true } })); me.customer = r.customer; toast('Saved'); } catch (x) { toast(x.message, { err: true }); } } }, t('save'))),
-      h('div', { class: 'stack-lg' }, h('div', { class: 'card stack' }, h('h3', null, c.has_password ? 'Change password' : 'Set a password (optional)'), h('p', { class: 'muted small' }, c.has_password ? 'We will email you a confirmation when it changes.' : 'You can log in with an email code anyway. A password is optional.'), c.has_password ? field('Current password', old) : null, field('New password (8+ characters)', np), h('button', { class: 'btn ghost', onclick: async e => { try { await busy(e.currentTarget, () => api('/account/password', { method: 'POST', body: { old: old.value, password: np.value } })); toast('Password changed. We emailed you a confirmation.'); me.customer.has_password = true; old.value = np.value = ''; } catch (x) { toast(x.message, { err: true }); } } }, t('save'))),
-        h('div', { class: 'card stack' }, h('h3', null, 'Your data'), h('p', { class: 'muted small' }, 'Download what we hold about you, or delete your account. Order records needed for tax and law are kept without your login.'), h('a', { class: 'btn ghost', href: '/api/account/export', download: 'my-data.json' }, 'Download my data'), h('button', { class: 'btn ghost', style: { color: 'var(--err)' }, onclick: () => { const pw = h('input', { class: 'inp', type: c.has_password ? 'password' : 'text', placeholder: c.has_password ? 'Your password' : 'Type DELETE to confirm' }); const m = modal(h('div', { class: 'stack' }, h('h3', null, 'Delete account?'), h('p', { class: 'muted' }, c.has_password ? 'This cannot be undone. Enter your password to confirm.' : 'This cannot be undone. Type the word DELETE below to confirm.'), pw, h('button', { class: 'btn', onclick: async () => { try { const r = await api('/account/delete', { method: 'POST', body: { password: pw.value } }); me.customer = null; m.close(); toast(r.message); nav('/'); } catch (x) { toast(x.message, { err: true }); } } }, 'Delete my account'))); } }, 'Delete account')))));
+    const saveBtn = h('button', { class: 'btn sv-btn', disabled: true }, t('save')), cancelBtn = h('button', { class: 'btn ghost sm sv-cancel', disabled: true }, 'Undo'), hint = h('span', { class: 'sv-hint' }, 'No changes yet');
+    const dirty = () => fn.value !== val.fn || ln.value !== val.ln || phone.value !== val.ph || mk.checked !== val.mk;
+    const check = () => { const d = dirty(); saveBtn.disabled = !d; cancelBtn.disabled = !d; bar.classList.toggle('dirty', d); hint.textContent = d ? 'You have unsaved changes' : 'No changes yet'; };
+    [fn, ln, phone].forEach(x => x.addEventListener('input', check)); mk.addEventListener('change', check);
+    cancelBtn.addEventListener('click', () => { fn.value = val.fn; ln.value = val.ln; phone.value = val.ph; mk.checked = val.mk; check(); });
+    saveBtn.addEventListener('click', async () => { try { const r = await busy(saveBtn, () => api('/account/me', { method: 'PATCH', body: { first_name: fn.value, last_name: ln.value, phone: phone.value, marketing_optin: mk.checked, complete: true } })); me.customer = r.customer; val.fn = fn.value; val.ln = ln.value; val.ph = phone.value; val.mk = mk.checked; check(); toast('Saved'); } catch (x) { toast(x.message, { err: true }); } });
+    const bar = h('div', { class: 'savebar' }, hint, h('div', { class: 'row', style: { gap: '8px' } }, cancelBtn, saveBtn));
+    swap(body, h('div', { class: 'co' }, h('div', { class: 'stack-lg' },
+      h('div', { class: 'card stack glass-card' }, h('h3', null, t('profile')), h('div', { class: 'fl-two' }, field('First name', fn), field('Last name', ln)), field(t('phone'), phone), h('p', { class: 'muted small' }, 'Email: ' + c.email), h('label', { class: 'check sw' }, mk, h('span', null, t('marketing_ok')))),
+      h('div', { class: 'card stack glass-card' }, h('h3', null, c.has_password ? 'Change password' : 'Set a password (optional)'), h('p', { class: 'muted small' }, c.has_password ? 'We will email you a confirmation when it changes.' : 'You can log in with an email code anyway. A password is optional.'), c.has_password ? field('Current password', old) : null, field('New password (8+ characters)', np), h('button', { class: 'btn ghost', onclick: async e => { try { await busy(e.currentTarget, () => api('/account/password', { method: 'POST', body: { old: old.value, password: np.value } })); toast('Password changed. We emailed you a confirmation.'); me.customer.has_password = true; old.value = np.value = ''; } catch (x) { toast(x.message, { err: true }); } } }, 'Change password')),
+      h('div', { class: 'card stack glass-card' }, h('h3', null, 'Your data'), h('p', { class: 'muted small' }, 'Download what we hold about you, or delete your account. Order records needed for tax and law are kept without your login.'), h('a', { class: 'btn ghost', href: '/api/account/export', download: 'my-data.json' }, 'Download my data'), h('button', { class: 'btn ghost', style: { color: 'var(--err)' }, onclick: () => { const pw = h('input', { class: 'inp', type: c.has_password ? 'password' : 'text', placeholder: c.has_password ? 'Your password' : 'Type DELETE to confirm' }); const m = modal(h('div', { class: 'stack' }, h('h3', null, 'Delete account?'), h('p', { class: 'muted' }, c.has_password ? 'This cannot be undone. Enter your password to confirm.' : 'This cannot be undone. Type the word DELETE below to confirm.'), pw, h('button', { class: 'btn', onclick: async () => { try { const r = await api('/account/delete', { method: 'POST', body: { password: pw.value } }); me.customer = null; m.close(); toast(r.message); nav('/'); } catch (x) { toast(x.message, { err: true }); } } }, 'Delete my account'))); } }, 'Delete account')),
+      bar)));
+  }
+  async function addresses() {
+    swap(body, skeletons(1));
+    const openForm = a => {
+      const v = a || {}, f = {};
+      const mk = (k, label, extra) => { f[k] = h('input', Object.assign({ class: 'inp', value: v[k] || '' }, extra || {})); return field(label, f[k]); };
+      let m; const save = async btn => { const payload = {}; Object.keys(f).forEach(k => { payload[k] = f[k].value; });
+        try { await busy(btn, () => api(a ? '/account/addresses/' + a.id : '/account/addresses', { method: a ? 'PUT' : 'POST', body: payload })); m.close(); toast('Address saved'); addresses(); } catch (x) { toast(x.message, { err: true }); } };
+      m = modal(h('div', { class: 'stack' }, h('h3', null, a ? 'Edit address' : 'Add a new address'), mk('name', 'Full name', { autocomplete: 'name', value: v.name || [me.customer.first_name, me.customer.last_name].filter(Boolean).join(' ') }), mk('phone', 'Mobile number', { inputmode: 'numeric', maxlength: 10, value: v.phone || me.customer.phone || '' }), mk('line1', 'House no., street, area'), mk('line2', 'Landmark (optional)'),
+        h('div', { class: 'fl-two' }, mk('pincode', 'Pincode', { inputmode: 'numeric', maxlength: 6 }), mk('city', 'City')), mk('state', 'State'), h('button', { class: 'btn', onclick: e => save(e.currentTarget) }, 'Save address')));
+    };
+    try {
+      const list = await api('/account/addresses');
+      swap(body, h('div', { class: 'stack' }, h('div', { class: 'row between' }, h('p', { class: 'muted small', style: { margin: 0 } }, list.length ? `${list.length} saved address${list.length > 1 ? 'es' : ''}` : 'No saved address yet'), h('button', { class: 'btn sm', onclick: () => openForm(null) }, '+ Add new address')),
+        list.map(a => h('div', { class: 'card glass-card addr' }, h('div', { class: 'small' }, h('div', { class: 'row', style: { gap: '8px' } }, h('b', null, a.name), a.is_default ? h('span', { class: 'badge soft' }, 'Default') : null), h('div', null, `${a.line1}${a.line2 ? ', ' + a.line2 : ''}, ${a.city}, ${a.state} - ${a.pincode}`), h('div', { class: 'muted' }, a.phone)),
+          h('div', { class: 'row', style: { gap: '8px', marginTop: '10px', flexWrap: 'wrap' } }, h('button', { class: 'btn ghost sm', onclick: () => openForm(a) }, 'Edit'), a.is_default ? null : h('button', { class: 'btn ghost sm', onclick: async () => { await api('/account/addresses/' + a.id + '/default', { method: 'POST' }); addresses(); } }, 'Make default'), h('button', { class: 'btn ghost sm', style: { color: 'var(--err)' }, onclick: async () => { await api('/account/addresses/' + a.id, { method: 'DELETE' }); addresses(); } }, t('remove')))))));
+    } catch (e) { swap(body, h('p', { class: 'muted' }, e.message)); }
   }
   show(location.hash === '#addresses' ? 'addresses' : 'profile');
 });

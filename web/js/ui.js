@@ -49,8 +49,8 @@ export function buildChrome(root) {
     h('button', { class: 'ibtn', 'aria-label': t('search'), onclick: openSearch }, icon('search')),
     BOOT.store.language_toggle ? langBtn : null,
     acctMenu(),
-    BOOT.store.wishlist ? h('a', { class: 'ibtn hsm', href: '/wishlist', 'aria-label': t('wishlist') }, icon('heart')) : null,
-    h('button', { class: 'ibtn', 'aria-label': t('cart'), onclick: openCart }, icon('bag'), count)));
+    BOOT.store.wishlist ? h('a', { class: 'ibtn', href: '/wishlist', 'aria-label': t('wishlist') }, icon('heart')) : null,
+    null));
   const prog = h('div', { class: 'pbar', 'aria-hidden': 'true' });
   addEventListener('scroll', () => { hdr.classList.toggle('scrolled', scrollY > 8); const m = document.documentElement.scrollHeight - innerHeight; if (BOOT.ui.scroll_progress) prog.style.width = m > 0 ? (scrollY / m * 100) + '%' : '0'; }, { passive: true });
   bus.on('route', p => { $$('.nav a', hdr).forEach(a => a.classList.toggle('on', a.dataset.url.split('?')[0] === p && p !== '/')); });
@@ -111,7 +111,10 @@ export function buildChrome(root) {
     ...cols,
     h('div', null, h('h4', null, 'Policies'), h('ul', null, pol.map(p => h('li', null, h('a', { href: `/policy/${p.slug}` }, tr(p, 'title')))), h('li', null, h('a', { href: '/grievance' }, t('grievance'))), h('li', null, h('a', { href: '#', onclick: e => { e.preventDefault(); ls.del('sy_cookie'); cookieBanner(true); } }, 'Cookie settings'))))),
     h('div', { class: 'ftr-b' }, h('span', null, `© ${new Date().getFullYear()} ${B.legal_name || B.name}${B.gstin ? ' · GSTIN ' + B.gstin : ''}`), h('span', null, [B.address, B.city].filter(Boolean).join(', ')))));
-  root.append(ftr);
+  const slim = h('nav', { class: 'slimf hide', 'aria-label': 'Legal' }, ...[['terms', 'Terms'], ['privacy', 'Privacy'], ['returns', 'Refund']].map(([k, l]) => h('a', { href: '/policy/' + k }, l)), h('a', { href: '/contact' }, 'Contact'));
+  const fmark = path => { const home = path === '/' || path === ''; ftr.classList.toggle('hide', !home); slim.classList.toggle('hide', home); };
+  bus.on('route', fmark); fmark(location.pathname);
+  root.append(ftr, slim);
   // floating buttons
   const top = h('button', { class: 'btn alt hide', 'aria-label': 'Back to top', onclick: () => scrollTo({ top: 0, behavior: 'smooth' }) }, icon('up'));
   const waIcon = () => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 64 64'); s.setAttribute('aria-hidden', 'true'); s.innerHTML = '<defs><linearGradient id="waG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6BF58A"/><stop offset=".55" stop-color="#25C45A"/><stop offset="1" stop-color="#0E8F3C"/></linearGradient><radialGradient id="waS" cx=".3" cy=".18" r=".8"><stop offset="0" stop-color="#fff" stop-opacity=".75"/><stop offset=".5" stop-color="#fff" stop-opacity=".05"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient></defs><circle cx="32" cy="32" r="30" fill="url(#waG)"/><path d="M32 12c-11 0-20 8.5-20 19 0 4 1.3 7.7 3.5 10.8L13 51l9.6-2.4c2.7 1.4 5.700 2.200 9.400 2.200 11 0 20-8.500 20-19S43 12 32 12z" fill="#fff"/><path d="M25 22.500c-1 0-2 .9-2.300 2-.8 3.200 1.200 8 5.200 12 4 4 8.900 5.900 12 5.200 1.100-.3 2-1.300 2-2.300l-.1-1.900-4.500-2-1.900 2c-2.700-.9-5.500-3.700-6.400-6.500l1.900-1.900-2-4.500-1.900-.1z" fill="#1DAE4E"/><circle cx="32" cy="32" r="30" fill="url(#waS)"/>'; return s; };
@@ -202,11 +205,16 @@ let drawerOpen = null;
 export async function openCart() {
   if (drawerOpen) return;
   const body = h('div'), foot = h('div');
-  const d = drawer(`${t('cart')}`, body, foot); drawerOpen = d;
+  const d = drawer(`${t('cart')}`, body, foot, { cls: 'cart-glass' }); drawerOpen = d;
   const orig = d.close; d.close = () => { drawerOpen = null; bus.off('cart', refresh); orig(); };
   async function refresh() {
     clear(body); clear(foot);
-    if (!cart.items.length) { body.append(h('div', { class: 'empty' }, icon('bag'), h('p', null, t('empty_cart')), h('p', { style: { marginTop: '16px' } }, h('a', { class: 'btn', href: '/shop', onclick: () => d.close() }, t('continue'))))); return; }
+    if (!cart.items.length) {
+      const sug = h('div', { class: 'cart-sug' });
+      body.append(h('div', { class: 'cart-empty' }, h('div', { class: 'ce-art' }, h('i', { class: 'ce-ring' }), h('i', { class: 'ce-ring r2' }), icon('bag')), h('h3', null, 'Your cart is empty'), h('p', { class: 'muted' }, 'Add something you like and it will wait for you here.'), h('a', { class: 'btn ce-btn', href: '/shop', onclick: () => d.close() }, 'Start shopping')), sug);
+      api('/products?sort=trending&limit=4').then(r => { const list = (r.items || r || []).slice(0, 4); if (!list.length) return; sug.append(h('div', { class: 'ce-title' }, 'Popular right now'), h('div', { class: 'pgrid ce-grid' }, list.map(p => { const a = productCard(p); a.addEventListener('click', () => d.close()); return a; }))); }).catch(() => { /* suggestions are optional */ });
+      return;
+    }
     body.append(skeletons(1));
     let p; try { p = await priceNow(); } catch (e) { clear(body).append(h('p', { class: 'muted' }, e.message)); return; }
     syncFromPrice(p); clear(body);

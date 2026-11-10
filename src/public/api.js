@@ -331,6 +331,17 @@ acct.post('/addresses', asyncH((req, res) => {
   if (req.body.label) db.prepare('UPDATE addresses SET label=? WHERE id=?').run(String(req.body.label).slice(0, 30), id);
   res.json({ id });
 }));
+acct.put('/addresses/:id', asyncH((req, res) => {
+  const id = int(req.params.id), row = db.prepare('SELECT id FROM addresses WHERE id=? AND customer_id=?').get(id, req.customer.id);
+  if (!row) throw bad('Address not found.');
+  const a = orders.validateAddress(req.body);
+  db.prepare('UPDATE addresses SET name=?, phone=?, line1=?, line2=?, landmark=?, pincode=?, city=?, state=? WHERE id=?').run(a.name, a.phone, a.line1, a.line2, a.landmark, a.pincode, a.city, a.state, id);
+  res.json({ ok: true });
+}));
+acct.post('/addresses/:id/default', (req, res) => {
+  const id = int(req.params.id); if (!db.prepare('SELECT id FROM addresses WHERE id=? AND customer_id=?').get(id, req.customer.id)) throw bad('Address not found.');
+  db.prepare('UPDATE addresses SET is_default=0 WHERE customer_id=?').run(req.customer.id); db.prepare('UPDATE addresses SET is_default=1 WHERE id=?').run(id); res.json({ ok: true });
+});
 acct.delete('/addresses/:id', (req, res) => { db.prepare('DELETE FROM addresses WHERE id=? AND customer_id=?').run(int(req.params.id), req.customer.id); res.json({ ok: true }); });
 acct.get('/wishlist', (req, res) => {
   const ids = db.prepare('SELECT product_id FROM wishlist WHERE customer_id=? ORDER BY created_at DESC').all(req.customer.id).map(r => r.product_id);
