@@ -13,18 +13,24 @@ export function logo(dark) {
 
 /* ---------- product card ---------- */
 export function stars(avg) { const n = Math.round(avg); return h('span', { class: 'stars', 'aria-label': `${avg} out of 5` }, [1, 2, 3, 4, 5].map(i => h('i', { class: i <= n ? 'on' : '' }, '★'))); }
+export function pctBadge(cls, n, text) {
+  const el = h(cls ? 'span' : 'em', cls ? { class: cls } : null, text(0));
+  const run = () => { if (matchMedia('(prefers-reduced-motion:reduce)').matches) { el.textContent = text(n); return; } const t0 = performance.now(), D = 650; const step = now => { const k = Math.min(1, (now - t0) / D), e = 1 - Math.pow(1 - k, 3); el.textContent = text(Math.round(n * e)); if (k < 1) requestAnimationFrame(step); }; requestAnimationFrame(step); };
+  if ('IntersectionObserver' in window) { const io = new IntersectionObserver(es => { if (es[0].isIntersecting) { io.disconnect(); run(); } }); io.observe(el); } else el.textContent = text(n);
+  return el;
+}
 export function productCard(p, { priority = false } = {}) {
   const img = p.images[0], out = p.stock_state === 'out';
   const heart = h('button', { class: 'heart' + (wish.has(p.id) ? ' on' : ''), 'aria-label': 'Wishlist', onclick: async e => { e.preventDefault(); e.stopPropagation(); const on = await wish.toggle(p.id); heart.classList.toggle('on', on); } }, icon('heart'));
   const a = h('a', { class: 'pc' + (out ? ' soldout' : ''), href: `/p/${p.slug}`, 'aria-label': tr(p, 'name') },
     h('div', { class: 'pc-img' },
       img ? h('img', { src: img.card, alt: (lang() === 'hi' && img.alt_hi) || img.alt || tr(p, 'name'), width: 720, height: 720, loading: priority ? 'eager' : 'lazy', decoding: 'async' }) : null,
-      p.badge ? h('span', { class: 'badge' }, p.badge) : (p.discount_pct >= 10 ? h('span', { class: 'badge' }, `${p.discount_pct}% ${t('off')}`) : null),
+      p.badge ? h('span', { class: 'badge' }, p.badge) : (p.discount_pct >= 10 ? pctBadge('badge', p.discount_pct, v => `${v}% ${t('off')}`) : null),
       out ? h('span', { class: 'so-tag' }, t('oos')) : null, BOOT.store.wishlist ? heart : null),
     h('div', { class: 'pc-body' },
       h('div', { class: 'pc-name' }, tr(p, 'name')),
       p.rating.count ? h('div', { class: 'row', style: { gap: '6px' } }, stars(p.rating.avg), h('span', { class: 'muted small' }, `(${p.rating.count})`)) : null,
-      h('div', { class: 'price' }, h('b', null, money(p.price)), p.mrp ? h('s', null, money(p.mrp)) : null, p.mrp ? h('em', null, `${p.discount_pct}% ${t('off')}`) : null),
+      h('div', { class: 'price' }, h('b', null, money(p.price)), p.mrp ? h('s', null, money(p.mrp)) : null, p.mrp ? pctBadge('', p.discount_pct, v => `${v}% ${t('off')}`) : null),
       p.stock_state === 'low' && p.stock_left ? h('span', { class: 'small', style: { color: 'var(--warn)' } }, t('low', { n: p.stock_left })) : null));
   if (BOOT.ui.card_hover_tilt && matchMedia('(hover:hover) and (pointer:fine)').matches && !matchMedia('(prefers-reduced-motion:reduce)').matches) {
     a.addEventListener('pointermove', e => { const r = a.getBoundingClientRect(), x = (e.clientX - r.left) / r.width - .5, y = (e.clientY - r.top) / r.height - .5; a.style.transform = `perspective(900px) rotateY(${x * 6}deg) rotateX(${-y * 6}deg) translateY(-3px)`; });
@@ -44,7 +50,7 @@ export function buildChrome(root) {
   bus.on('cart', refreshCount); refreshCount();
   const nv = h('nav', { class: 'nav', 'aria-label': 'Main' }, (BOOT.menu.header || []).map(menuLink));
   const langBtn = h('button', { class: 'ibtn lang hsm', 'aria-label': 'Language', onclick: () => { setLang(lang() === 'hi' ? 'en' : 'hi'); location.reload(); } }, t('lang'));
-  const burger = h('button', { class: 'ibtn burger', 'aria-label': 'Menu', onclick: () => { const d = drawer(BOOT.brand.name, h('nav', { class: 'stack' }, (BOOT.menu.header || []).map(it => h('a', { href: it.url, style: { display: 'block', padding: '10px 0', fontSize: '1.15rem', textDecoration: 'none' }, onclick: () => d.close() }, tr(it, 'label'))), h('hr', { style: { border: 0, borderTop: '1px solid var(--line)' } }), h('a', { href: '/orders#track', style: { display: 'block', padding: '10px 0', textDecoration: 'none' }, onclick: () => d.close() }, t('track')), h('a', { href: me.customer ? '/profile' : '/login', style: { display: 'block', padding: '10px 0', textDecoration: 'none' }, onclick: () => d.close() }, t('account')), BOOT.store.wishlist ? h('a', { href: '/wishlist', style: { display: 'block', padding: '10px 0', textDecoration: 'none' }, onclick: () => d.close() }, t('wishlist')) : null, BOOT.store.language_toggle ? h('a', { href: '#', style: { display: 'block', padding: '10px 0', textDecoration: 'none' }, onclick: e => { e.preventDefault(); setLang(lang() === 'hi' ? 'en' : 'hi'); location.reload(); } }, lang() === 'hi' ? 'English' : 'हिंदी') : null), null, { side: 'left' }); } }, icon('menu'));
+  const burger = h('button', { class: 'ibtn burger', 'aria-label': 'Menu', onclick: () => { const d = drawer(BOOT.brand.name, h('nav', { class: 'stack mnav' }, (BOOT.menu.header || []).map(it => h('a', { href: it.url, style: { display: 'block', padding: '10px 0', fontSize: '1.15rem', textDecoration: 'none' }, onclick: () => d.close() }, tr(it, 'label'))), h('hr', { style: { border: 0, borderTop: '1px solid var(--line)' } }), h('a', { href: '/orders#track', style: { display: 'block', padding: '10px 0', textDecoration: 'none' }, onclick: () => d.close() }, t('track')), h('a', { href: me.customer ? '/profile' : '/login', style: { display: 'block', padding: '10px 0', textDecoration: 'none' }, onclick: () => d.close() }, t('account')), BOOT.store.wishlist ? h('a', { href: '/wishlist', style: { display: 'block', padding: '10px 0', textDecoration: 'none' }, onclick: () => d.close() }, t('wishlist')) : null, BOOT.store.language_toggle ? h('a', { href: '#', style: { display: 'block', padding: '10px 0', textDecoration: 'none' }, onclick: e => { e.preventDefault(); setLang(lang() === 'hi' ? 'en' : 'hi'); location.reload(); } }, lang() === 'hi' ? 'English' : 'हिंदी') : null), null, { side: 'left', cls: 'menu-glass' }); } }, icon('menu'));
   const hdr = h('header', { class: 'hdr glass' }, h('div', { class: 'wrap hdr-in' }, burger, logo(), nv, h('div', { class: 'grow' }),
     h('button', { class: 'ibtn', 'aria-label': t('search'), onclick: openSearch }, icon('search')),
     BOOT.store.language_toggle ? langBtn : null,
@@ -118,8 +124,7 @@ export function buildChrome(root) {
   // floating buttons
   const top = h('button', { class: 'btn alt hide', 'aria-label': 'Back to top', onclick: () => scrollTo({ top: 0, behavior: 'smooth' }) }, icon('up'));
   const waIcon = () => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 64 64'); s.setAttribute('aria-hidden', 'true'); s.innerHTML = '<defs><linearGradient id="waG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6BF58A"/><stop offset=".55" stop-color="#25C45A"/><stop offset="1" stop-color="#0E8F3C"/></linearGradient><radialGradient id="waS" cx=".3" cy=".18" r=".8"><stop offset="0" stop-color="#fff" stop-opacity=".75"/><stop offset=".5" stop-color="#fff" stop-opacity=".05"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient></defs><circle cx="32" cy="32" r="30" fill="url(#waG)"/><path d="M32 12c-11 0-20 8.5-20 19 0 4 1.3 7.7 3.5 10.8L13 51l9.6-2.4c2.7 1.4 5.700 2.200 9.400 2.200 11 0 20-8.500 20-19S43 12 32 12z" fill="#fff"/><path d="M25 22.500c-1 0-2 .9-2.300 2-.8 3.200 1.200 8 5.200 12 4 4 8.900 5.900 12 5.200 1.100-.3 2-1.300 2-2.300l-.1-1.900-4.500-2-1.900 2c-2.700-.9-5.500-3.700-6.400-6.500l1.900-1.900-2-4.500-1.900-.1z" fill="#1DAE4E"/><circle cx="32" cy="32" r="30" fill="url(#waS)"/>'; return s; };
-  const wa = (B.whatsapp || B.phone) && BOOT.ui.whatsapp_button ? h('a', { class: 'wa3d', href: `https://wa.me/91${String(B.whatsapp || B.phone).replace(/\D/g, '').slice(-10)}`, target: '_blank', rel: 'noopener', 'aria-label': 'Chat on WhatsApp', title: 'Chat with us' }, waIcon()) : null;
-  root.append(h('div', { class: 'fab' }, BOOT.ui.back_to_top ? top : null, wa));
+  root.append(h('div', { class: 'fab' }, BOOT.ui.back_to_top ? top : null));
   addEventListener('scroll', () => top.classList.toggle('hide', scrollY < 700), { passive: true });
   addEventListener('offline', () => { const o = h('div', { class: 'offline', id: 'offl' }, t('offline')); document.body.append(o); });
   addEventListener('online', () => $('#offl') && $('#offl').remove());

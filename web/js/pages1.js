@@ -1,5 +1,5 @@
 import { BOOT, h, $, $$, clear, icon, t, tr, lang, bus, api, money, cart, wish, me, ls, toast, modal, nav, route, setTitle, reveal, recentlyViewed, sid, debounce } from './core.js';
-import { productCard, skeletons, stars, addToCart, openCart } from './ui.js';
+import { pctBadge, productCard, skeletons, stars, addToCart, openCart } from './ui.js';
 
 const sec = (title, link, body, cls = '') => h('section', { class: 'section rev ' + cls }, h('div', { class: 'wrap' }, h('div', { class: 'sec-head' }, h('h2', null, title), link), body));
 
@@ -119,15 +119,13 @@ route(/^\/p\/([^/]+)$/, async (view, m) => {
   const cur = () => { const v = curV(); return { price: v ? v.price : p.price, mrp: v ? v.mrp : p.mrp, in_stock: v ? v.in_stock : p.stock_state !== 'out', left: v ? v.stock_left : p.stock_left }; };
   function paint() {
     const c = cur(), pct = c.mrp ? Math.round((1 - c.price / c.mrp) * 100) : 0;
-    clear(priceEl).append(h('b', null, money(c.price)), c.mrp ? h('s', null, `${t('mrp')} ${money(c.mrp)}`) : null, c.mrp ? h('em', null, `${pct}% ${t('off')}`) : null);
+    const pk = c.price + '|' + c.mrp; if (priceEl.dataset.k !== pk) { priceEl.dataset.k = pk; clear(priceEl).append(h('b', null, money(c.price)), c.mrp ? h('s', null, `${t('mrp')} ${money(c.mrp)}`) : null, c.mrp ? pctBadge('', pct, v => `${v}% ${t('off')}`) : null); }
     clear(stockEl).append(c.in_stock ? (c.left && c.left <= 5 ? h('span', { class: 'small', style: { color: 'var(--warn)', fontWeight: 600 } }, t('low', { n: c.left })) : h('span', { class: 'small', style: { color: 'var(--ok)', fontWeight: 600 } }, p.preorder ? 'Pre-order' : 'In stock')) : h('span', { class: 'small', style: { color: 'var(--err)', fontWeight: 600 } }, t('oos')));
     qtyEl.textContent = S.qty;
     const v = curV(); if (v && v.image_id) { const k = p.images.findIndex(i => i.id === v.image_id); if (k >= 0 && k !== S.img && S.mode === 'photo') { S.img = k; gallery(); } }
     clear(atcRow);
     if (!c.in_stock) atcRow.append(notifyForm());
-    else atcRow.append(h('div', { class: 'row', style: { flexWrap: 'nowrap' } }, h('div', { class: 'qty' }, h('button', { 'aria-label': '-', onclick: () => { S.qty = Math.max(1, S.qty - 1); qtyEl.textContent = S.qty; } }, '−'), qtyEl, h('button', { 'aria-label': '+', onclick: () => { S.qty = Math.min(p.max_per_order || 10, S.qty + 1); qtyEl.textContent = S.qty; } }, '+')),
-      h('button', { class: 'btn alt grow gl-add', id: 'atc', onclick: e => addToCart(p, S.vid, S.qty, e.currentTarget) }, t('add'))), h('button', { class: 'btn block gl-buy', onclick: () => { cart.add(p.id, S.vid, S.qty); nav('/checkout'); } }, t('buy')));
-    stickyBtn && (stickyBtn.disabled = !c.in_stock); stickyPrice && (stickyPrice.textContent = money(c.price));
+    paintBar(c);
   }
   function notifyForm() {
     const inp = h('input', { class: 'inp', placeholder: 'Email or mobile number', 'aria-label': 'Email or mobile number', value: me.customer ? me.customer.email : '' });
@@ -149,13 +147,26 @@ route(/^\/p\/([^/]+)$/, async (view, m) => {
     p.has_battery ? h('div', { class: 'box-note warn' }, icon('warn'), h('span', null, BOOT.shipping.battery_notice)) : null,
     h('div', { class: 'ret-chip' }, icon('refresh'), h('span', null, `Easy ${BOOT.returns.window_days || 7}-day replacement`))));
   view.append(h('div', { class: 'wrap' }, h('div', { class: 'crumbs' }, h('a', { href: '/' }, t('home')), ' / ', h('a', { href: '/shop' }, t('shop')), ' / ', tr(p, 'name')), h('div', { class: 'pd' }, h('div', null, galBox), info)));
-  gallery(); paint();
-  // sticky bar (mobile)
-  stickyPrice = h('b', { style: { fontSize: '1.15rem' } }); stickyBtn = h('button', { class: 'btn grow', onclick: e => addToCart(p, S.vid, S.qty, e.currentTarget) }, t('add'));
-  const sticky = h('div', { class: 'sticky-atc glass' }, h('div', { style: { minWidth: 0 } }, h('div', { class: 'small muted', style: { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '38vw' } }, tr(p, 'name')), stickyPrice), stickyBtn);
+  gallery();
+  // bottom glass bar (qty, total, delivery, Add to cart, Buy now)
+  const SH = BOOT.shipping || {};
+  const qtyN = h('span', null, '1');
+  const totalEl = h('b', { class: 'pb-total' }), delEl = h('small', { class: 'pb-del' });
+  const setQ = d => { S.qty = Math.max(1, Math.min(p.max_per_order || 10, S.qty + d)); paint(); };
+  const sticky = h('div', { class: 'buybar on' }, h('div', { class: 'buybar-top' }, h('div', { class: 'qty' }, h('button', { 'aria-label': '-', onclick: () => setQ(-1) }, '−'), qtyN, h('button', { 'aria-label': '+', onclick: () => setQ(1) }, '+')), h('div', { class: 'pb-sum' }, totalEl, delEl)),
+    h('div', { class: 'buybar-btns' }, h('button', { class: 'btn alt gl-add', id: 'atc', onclick: e => addToCart(p, S.vid, S.qty, e.currentTarget) }, icon('bag'), t('add')), h('button', { class: 'btn gl-buy', onclick: () => { cart.add(p.id, S.vid, S.qty); nav('/checkout'); } }, t('buy'))));
+  function paintBar(c) {
+    sticky.classList.toggle('hide', !c.in_stock);
+    document.body.classList.toggle('has-buybar', c.in_stock);
+    qtyN.textContent = S.qty;
+    const total = c.price * S.qty;
+    totalEl.textContent = money(total);
+    const free = !SH.flat || (SH.free_above && total >= SH.free_above);
+    delEl.textContent = free ? 'Free delivery' : `+ ${money(SH.flat)} delivery` + (SH.free_above ? ` · free above ${money(SH.free_above)}` : '');
+    delEl.classList.toggle('ok', !!free);
+  }
   document.body.append(sticky); paint();
-  const atcEl = () => $('#atc'); const io = new IntersectionObserver(es => sticky.classList.toggle('on', BOOT.ui.sticky_atc && !es[0].isIntersecting && es[0].boundingClientRect.top < 0)); setTimeout(() => atcEl() && io.observe(atcEl()), 50);
-  const gone = new MutationObserver(() => { if (!view.isConnected) { sticky.remove(); io.disconnect(); gone.disconnect(); } }); gone.observe(document.body, { childList: true, subtree: true });
+  const gone = new MutationObserver(() => { if (!view.isConnected) { sticky.remove(); document.body.classList.remove('has-buybar'); gone.disconnect(); } }); gone.observe(document.body, { childList: true, subtree: true });
 
   /* details tabs */
   const tabsData = [];

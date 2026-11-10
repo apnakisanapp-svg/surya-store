@@ -373,7 +373,7 @@ function contactForm(kind, q) {
 route(/^\/contact$/, async (view, m, q) => {
   setTitle(t('support')); const B = BOOT.brand;
   view.append(wrap(h('div', { class: 'co' }, h('div', null, h('h1', { style: { fontSize: 'clamp(1.8rem,5vw,2.6rem)', marginBottom: '16px' } }, t('support')), contactForm('contact', q)),
-    h('aside', { class: 'card stack' }, h('h3', null, 'Talk to us'), B.phone ? h('p', null, h('a', { href: 'tel:' + B.phone }, B.phone)) : null, B.whatsapp ? h('a', { class: 'btn', style: { background: '#25a244', color: '#fff' }, href: `https://wa.me/91${B.whatsapp.replace(/\D/g, '').slice(-10)}`, target: '_blank', rel: 'noopener' }, 'WhatsApp') : null, B.email ? h('p', null, h('a', { href: 'mailto:' + B.email }, B.email)) : null,
+    h('aside', { class: 'card stack' }, h('h3', null, 'Talk to us'), B.phone ? h('p', null, h('a', { href: 'tel:' + B.phone }, B.phone)) : null, (B.whatsapp || B.phone) ? h('a', { class: 'btn', style: { background: '#25a244', color: '#fff' }, href: `https://wa.me/91${String(B.whatsapp || B.phone).replace(/\D/g, '').slice(-10)}`, target: '_blank', rel: 'noopener' }, 'WhatsApp') : null, B.email ? h('p', null, h('a', { href: 'mailto:' + B.email }, B.email)) : null,
       B.support_hours ? h('p', { class: 'muted small' }, B.support_hours) : null, B.holiday_notice ? h('p', { class: 'box-note warn' }, B.holiday_notice) : null, h('p', { class: 'small muted' }, [B.legal_name, B.address, B.city, B.state, B.pincode].filter(Boolean).join(', '))))));
 });
 route(/^\/grievance$/, async (view, m, q) => {
