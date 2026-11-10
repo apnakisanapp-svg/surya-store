@@ -1,0 +1,41 @@
+/* SURYA opening animation (dark, gold sun, zoom-through exit). Pure CSS so it never gets stuck. */
+#splash{position:fixed;inset:0;z-index:9999;display:grid;place-items:center;background:radial-gradient(90% 70% at 50% 42%,#21190a 0%,#0b0905 55%,#050504 100%);overflow:hidden;
+  animation:spOut .85s cubic-bezier(.7,0,.2,1) 2.35s forwards}
+body:has(#splash){overflow:hidden}
+.sp-in{position:relative;display:flex;flex-direction:column;align-items:center;gap:22px;animation:spZoom .85s cubic-bezier(.7,0,.2,1) 2.35s forwards}
+.sp-glow{position:absolute;left:50%;top:44%;width:120vmin;height:120vmin;margin:-60vmin 0 0 -60vmin;border-radius:50%;pointer-events:none;
+  background:radial-gradient(circle,rgba(255,196,70,.55) 0%,rgba(255,170,40,.18) 32%,transparent 62%);opacity:0;transform:scale(.15);animation:spGlow 2.2s cubic-bezier(.2,.8,.2,1) .15s forwards}
+.sp-mark{width:clamp(110px,26vmin,190px);height:auto;overflow:visible;filter:drop-shadow(0 0 22px rgba(255,190,60,.45))}
+.sp-mark .disc{transform-box:fill-box;transform-origin:center;opacity:0;transform:scale(.35);filter:blur(10px);animation:spDisc .95s cubic-bezier(.2,.95,.25,1) .2s forwards}
+.sp-mark .gloss{opacity:0;animation:spFade .6s ease .9s forwards}
+.sp-mark .ray{stroke-dasharray:1;stroke-dashoffset:1;opacity:0;animation:spRay .7s cubic-bezier(.3,.8,.2,1) forwards;animation-delay:calc(.55s + var(--i)*.05s)}
+.sp-mark g{transform-box:fill-box;transform-origin:center;animation:spSpin 2.3s cubic-bezier(.2,.7,.2,1) .35s both}
+.sp-word{display:flex;gap:.34em;font:600 clamp(1.4rem,5.2vmin,2.2rem)/1 "Inter Tight",system-ui,sans-serif;letter-spacing:.2em;padding-left:.2em}
+.sp-word span{display:inline-block;opacity:0;transform:translateY(16px);filter:blur(8px);
+  background:linear-gradient(100deg,#b9801a 0%,#ffe9a8 35%,#fffbe8 50%,#ffc84a 65%,#b9801a 100%);background-size:300% 100%;background-position:100% 0;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:#e8b64a;
+  animation:spLetter .7s cubic-bezier(.2,.9,.2,1) forwards,spShine 1.3s ease forwards;animation-delay:calc(1.05s + var(--i)*.08s),calc(1.5s + var(--i)*.1s)}
+@keyframes spDisc{to{opacity:1;transform:scale(1);filter:blur(0)}}
+@keyframes spRay{0%{opacity:1;stroke-dashoffset:1}100%{opacity:1;stroke-dashoffset:0}}
+@keyframes spSpin{from{transform:rotate(-40deg) scale(.82)}to{transform:rotate(0) scale(1)}}
+@keyframes spFade{to{opacity:.42}}
+@keyframes spLetter{to{opacity:1;transform:none;filter:blur(0)}}
+@keyframes spShine{from{background-position:100% 0}to{background-position:0 0}}
+@keyframes spGlow{0%{opacity:0;transform:scale(.15)}45%{opacity:1}100%{opacity:.55;transform:scale(1)}}
+@keyframes spZoom{to{transform:scale(1.55);opacity:0;filter:blur(6px)}}
+@keyframes spOut{to{opacity:0;visibility:hidden;pointer-events:none}}
+
+/* header / footer sun mark */
+.logo .sunmark{width:30px;height:30px;overflow:visible;transition:transform .6s cubic-bezier(.3,1.4,.5,1);filter:drop-shadow(0 1px 3px rgba(214,150,20,.35))}
+.logo:hover .sunmark{transform:rotate(45deg) scale(1.06)}
+
+/* phones: shorter and lighter (no heavy blur animations) */
+@media(max-width:720px),(pointer:coarse){
+  #splash{animation-delay:1.55s!important;animation-duration:.4s!important}
+  .sp-in{animation-delay:1.55s!important;animation-duration:.4s!important}
+  #splash *{filter:none!important}
+  .sp-glow{animation-duration:1.4s!important}
+  .sp-mark .disc{animation-duration:.55s!important;animation-delay:.1s!important}
+  .sp-mark g{animation-duration:1.4s!important;animation-delay:.15s!important}
+  .sp-mark .ray{animation-delay:calc(.3s + var(--i)*.03s)!important;animation-duration:.45s!important}
+  .sp-word span{animation-duration:.45s,.8s!important;animation-delay:calc(.45s + var(--i)*.07s),calc(.75s + var(--i)*.07s)!important}
+}
