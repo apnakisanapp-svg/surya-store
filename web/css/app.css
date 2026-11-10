@@ -461,3 +461,22 @@ em.pop,span.pop,b.pop{display:inline-block;animation:popin .45s cubic-bezier(.2,
 @keyframes stepin{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:none}}
 @media(prefers-color-scheme:dark){.btn.gl-next{background:rgba(255,255,255,.1);color:#fff}}
 @media(prefers-reduced-motion:reduce){body:not(:has(#splash)) em.pop,body:not(:has(#splash)) span.pop,body:not(:has(#splash)) b.pop{animation-duration:.45s!important}body:not(:has(#splash)) .price s::after{animation-duration:.6s!important;animation-delay:.35s!important}body:not(:has(#splash)) .step-in{animation-duration:.4s!important}}
+/* price animation: MRP -> cut -> falls to price -> % off pops */
+.price s::after{animation:none;transform:none}
+.price.pa-init s,.price.pa-init em{opacity:0}
+.price s{transition:opacity .35s}.price s.pa-in{opacity:1}
+.price b{position:relative;font-variant-numeric:tabular-nums}
+.price.pa-strike b::after{content:'';position:absolute;left:0;right:0;top:56%;height:2.5px;border-radius:2px;background:var(--err,#d33);transform-origin:left;animation:strike .45s cubic-bezier(.4,0,.2,1) both}
+.price.pa-init:not(.pa-strike) b{color:var(--mute)}
+@media(prefers-reduced-motion:reduce){body:not(:has(#splash)) .price.pa-strike b::after{animation-duration:.45s!important}}
+
+/* trust strip: 3 compact glass tiles per row (like the category tiles) */
+.trust{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+@media(min-width:700px){.trust{gap:16px}}
+.trust>div{--t:255,214,140;padding:12px 8px;border-radius:18px;text-align:center;background:linear-gradient(145deg,rgba(255,255,255,.88),rgba(var(--t),.38));border:1px solid rgba(255,255,255,.8);box-shadow:0 8px 22px -12px rgba(60,40,0,.35),inset 0 1px 0 #fff;-webkit-backdrop-filter:blur(14px) saturate(170%);backdrop-filter:blur(14px) saturate(170%)}
+.trust>div:nth-child(2){--t:170,210,255}.trust>div:nth-child(3){--t:190,235,200}
+.trust svg{width:22px;height:22px;margin:0 auto 6px;display:block}
+.trust h3{font-size:.8rem;line-height:1.2;margin-bottom:2px}
+.trust p{font-size:.68rem;line-height:1.3}
+@media(min-width:700px){.trust>div{padding:20px 16px;border-radius:22px}.trust svg{width:28px;height:28px;margin-bottom:10px}.trust h3{font-size:1.05rem;margin-bottom:4px}.trust p{font-size:.9rem}}
+@media(prefers-color-scheme:dark){.trust>div{background:linear-gradient(150deg,rgba(60,52,38,.7),rgba(30,26,18,.6));border-color:rgba(255,255,255,.1)}}

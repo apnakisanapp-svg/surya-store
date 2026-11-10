@@ -21,8 +21,22 @@ export function tweenNum(el, from, to, text, ms = 600) {
 export function pctBadge(cls, n, text, tag) {
   const el = h(tag || (cls ? 'span' : 'em'), cls ? { class: cls } : null, text(0));
   const run = () => { el.classList.add('pop'); tweenNum(el, 0, n, text, 700); };
-  if ('IntersectionObserver' in window) { const io = new IntersectionObserver(es => { if (es[0].isIntersecting) { io.disconnect(); run(); } }, { threshold: 0.2 }); io.observe(el); setTimeout(() => { if (el.textContent === text(0) && n) { io.disconnect(); run(); } }, 2500); } else el.textContent = text(n);
+  if ('IntersectionObserver' in window) { const io = new IntersectionObserver(es => { if (es[0].isIntersecting) { io.disconnect(); run(); } }, { threshold: 0.35 }); io.observe(el); } else el.textContent = text(n);
   return el;
+}
+/* Price row, played once when it scrolls into view: MRP shows -> a line cuts it -> price falls from MRP to the real price -> "% off" pops. */
+export function fillPrice(root, { price, mrp, pct, mrpText }) {
+  const b = h('b', null, money(price));
+  if (!mrp || mrp <= price || !('IntersectionObserver' in window)) { root.append(b, mrp ? h('s', null, mrpText || money(mrp)) : null, mrp && pct ? h('em', null, `${pct}% ${t('off')}`) : null); return; }
+  const s = h('s', null, mrpText || money(mrp)), em = h('em', null, `${pct}% ${t('off')}`);
+  root.classList.add('pa-init'); b.textContent = money(mrp); root.append(b, s, em);
+  const io = new IntersectionObserver(es => {
+    if (!es[0].isIntersecting) return; io.disconnect();
+    root.classList.add('pa-strike');
+    setTimeout(() => { root.classList.remove('pa-strike'); tweenNum(b, mrp, price, v => money(v), 600); s.classList.add('pa-in'); }, 520);
+    setTimeout(() => { root.classList.remove('pa-init'); em.classList.add('pop'); tweenNum(em, 0, pct, v => `${v}% ${t('off')}`, 500); }, 1150);
+  }, { threshold: 0.5 });
+  io.observe(root);
 }
 export function productCard(p, { priority = false } = {}) {
   const img = p.images[0], out = p.stock_state === 'out';
@@ -35,7 +49,7 @@ export function productCard(p, { priority = false } = {}) {
     h('div', { class: 'pc-body' },
       h('div', { class: 'pc-name' }, tr(p, 'name')),
       p.rating.count ? h('div', { class: 'row', style: { gap: '6px' } }, stars(p.rating.avg), h('span', { class: 'muted small' }, `(${p.rating.count})`)) : null,
-      h('div', { class: 'price' }, h('b', null, money(p.price)), p.mrp ? h('s', null, money(p.mrp)) : null, p.mrp ? pctBadge('', p.discount_pct, v => `${v}% ${t('off')}`) : null),
+      (() => { const r = h('div', { class: 'price' }); fillPrice(r, { price: p.price, mrp: p.mrp, pct: p.discount_pct }); return r; })(),
       p.stock_state === 'low' && p.stock_left ? h('span', { class: 'small', style: { color: 'var(--warn)' } }, t('low', { n: p.stock_left })) : null));
   if (BOOT.ui.card_hover_tilt && matchMedia('(hover:hover) and (pointer:fine)').matches && !matchMedia('(prefers-reduced-motion:reduce)').matches) {
     a.addEventListener('pointermove', e => { const r = a.getBoundingClientRect(), x = (e.clientX - r.left) / r.width - .5, y = (e.clientY - r.top) / r.height - .5; a.style.transform = `perspective(900px) rotateY(${x * 6}deg) rotateX(${-y * 6}deg) translateY(-3px)`; });
