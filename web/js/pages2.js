@@ -51,6 +51,7 @@ route(/^\/checkout$/, async view => {
       price.pincode && !price.pincode.ok ? h('p', { class: 'err-text' }, price.pincode.message) : price.pincode && price.pincode.ok ? h('p', { class: 'small', style: { color: 'var(--ok)' } }, `${t('delivery_by')} ${price.pincode.eta.text}`) : null);
     if (step === 2) paintPay();
   }
+  const toTop = () => { const y = stepsEl.getBoundingClientRect().top + scrollY - 70; scrollTo({ top: Math.max(0, y), behavior: 'smooth' }); body.classList.remove('step-in'); void body.offsetWidth; body.classList.add('step-in'); };
   const paintSteps = () => { clear(stepsEl); ['contact', 'payment', 'review'].forEach((k, i) => stepsEl.append(h('div', { class: i + 1 === step ? 'on' : i + 1 < step ? 'done' : '' }, `${i + 1}. ${t(k === 'contact' ? 'delivery' : k)}`))); };
   const inp = (key, label, props = {}) => { const el = h('input', { class: 'inp' + (errs[key] ? ' bad' : ''), value: F[key], 'aria-label': label, oninput: e => { F[key] = e.target.value; }, ...props }); return field(label, el, errs[key] ? h('div', { class: 'err-text' }, errs[key]) : null); };
   function stepContact() {
@@ -61,7 +62,7 @@ route(/^\/checkout$/, async view => {
       h('div', { class: 'grid2' }, inp('name', t('name'), { autocomplete: 'name' }), inp('phone', t('phone'), { inputmode: 'numeric', maxlength: 10, autocomplete: 'tel-national' })), inp('email', t('email'), { type: 'email', autocomplete: 'email' }),
       h('h3', { style: { marginTop: '8px' } }, t('delivery')), inp('line1', t('addr1'), { autocomplete: 'address-line1' }), inp('line2', t('addr2')),
       h('div', { class: 'grid2' }, inp('pincode', t('pincode'), { inputmode: 'numeric', maxlength: 6, autocomplete: 'postal-code', onchange: async e => { F.pincode = e.target.value.trim(); await reprice(); if (/^\d{6}$/.test(F.pincode) && !F.city) lookupPin(); } }), inp('city', t('city'), { autocomplete: 'address-level2' })), inp('state', t('state'), { autocomplete: 'address-level1' }),
-      h('button', { class: 'btn block', onclick: () => { if (validate()) { step = 2; stepPay(); } } }, t('next'))));
+      h('button', { class: 'btn block gl-next', onclick: () => { if (validate()) { step = 2; stepPay(); toTop(); } else { const bad = $('.inp.bad'); if (bad) { bad.scrollIntoView({ behavior: 'smooth', block: 'center' }); bad.focus({ preventScroll: true }); } } } }, t('next'))));
   }
   async function lookupPin() { /* city/state are typed by the customer; no third-party lookup is used */ }
   function validate() {
@@ -87,7 +88,7 @@ route(/^\/checkout$/, async view => {
     const cin = h('input', { class: 'inp', placeholder: t('coupon'), value: coupon, 'aria-label': t('coupon') }), cmsg = h('div', { class: 'small' });
     const applyC = async () => { coupon = cin.value.trim(); ls.set('sy_coupon', coupon); await reprice(); if (coupon && price.coupon) { cmsg.style.color = price.coupon.ok ? 'var(--ok)' : 'var(--err)'; cmsg.textContent = price.coupon.ok ? `${price.coupon.code} applied` : price.coupon.message; } else cmsg.textContent = ''; };
     body.append(h('div', { class: 'card stack' }, h('h3', null, t('payment')), h('div', { class: 'stack', id: 'paybox' }), h('div', { class: 'row', style: { flexWrap: 'nowrap' } }, h('div', { class: 'grow' }, cin), h('button', { class: 'btn ghost', onclick: applyC }, t('apply'))), cmsg, gift, gm, field('Order note (optional)', h('input', { class: 'inp', maxlength: 300, value: F.note, oninput: e => { F.note = e.target.value; } })),
-      h('div', { class: 'row' }, h('button', { class: 'btn ghost', onclick: () => { step = 1; stepContact(); } }, t('back')), h('button', { class: 'btn grow', onclick: () => { if (!price || (price.errors && price.errors.length)) return toast((price && price.errors[0]) || '…', { err: true }); step = 3; stepReview(); } }, t('next')))));
+      h('div', { class: 'row' }, h('button', { class: 'btn ghost', onclick: () => { step = 1; stepContact(); toTop(); } }, t('back')), h('button', { class: 'btn grow gl-next', onclick: () => { if (!price || (price.errors && price.errors.length)) return toast((price && price.errors[0]) || '…', { err: true }); step = 3; stepReview(); toTop(); } }, t('next')))));
     paintPay();
   }
   function stepReview() {
@@ -110,7 +111,7 @@ route(/^\/checkout$/, async view => {
       price.needs_safety_ack || price.has_battery ? h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: F.safety, onchange: e => { F.safety = e.target.checked; } }), h('span', null, t('safety_ok'), ' (', pol('safety', 'Safety'), ').')) : null,
       h('p', { class: 'muted small' }, `Easy ${BOOT.returns.window_days || 7}-day replacement on damaged or defective items.`),
       h('p', { class: 'muted small co-fine' }, 'By placing the order you agree to our ', pol('terms', 'Terms'), ', ', pol('privacy', 'Privacy Policy'), ' and ', pol('returns', 'Return Policy'), '.'),
-      h('div', { class: 'row' }, h('button', { class: 'btn ghost', onclick: () => { step = 2; stepPay(); } }, t('back'))), btn));
+      h('div', { class: 'row' }, h('button', { class: 'btn ghost', onclick: () => { step = 2; stepPay(); toTop(); } }, t('back'))), btn));
   }
   // polyfill small helper: pol(slug) returns an <a> factory
   stepContact(); await reprice();

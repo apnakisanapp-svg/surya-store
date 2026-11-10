@@ -244,7 +244,11 @@ api.post('/auth/otp/send', lim(15, 12, 'Too many codes asked. Please wait a few 
   const code = String(require('crypto').randomInt(0, 1000000)).padStart(6, '0');
   db.prepare('UPDATE otp_codes SET used=1 WHERE email=? AND used=0').run(email);
   db.prepare('INSERT INTO otp_codes(email,code_hash,expires_at,created_at) VALUES(?,?,?,?)').run(email, otpHash(email, code), new Date(Date.now() + 10 * 60000).toISOString(), now());
-  if (!(await mail.sendOtp(email, code))) throw bad('We could not send the email right now. Please use your password, or try again later.');
+  // Do not make the customer wait for the mail server: answer fast, finish sending in the background.
+  const sending = mail.sendOtp(email, code).catch(e => { console.error('OTP mail failed:', e.message); return false; });
+  const early = await Promise.race([sending, new Promise(r => setTimeout(() => r('slow'), 350))]);
+  if (early === false) throw bad('We could not send the email right now. Please use your password, or try again later.');
+  if (early === 'slow') sending.then(ok => { if (!ok) console.error('OTP mail failed for ' + email); });
   res.json({ ok: true, message: 'We sent a 6-digit code to your email. It works for 10 minutes.' });
 }));
 api.post('/auth/otp/verify', authLim, asyncH((req, res) => {

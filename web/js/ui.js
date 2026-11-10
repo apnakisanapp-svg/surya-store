@@ -13,10 +13,15 @@ export function logo(dark) {
 
 /* ---------- product card ---------- */
 export function stars(avg) { const n = Math.round(avg); return h('span', { class: 'stars', 'aria-label': `${avg} out of 5` }, [1, 2, 3, 4, 5].map(i => h('i', { class: i <= n ? 'on' : '' }, '★'))); }
-export function pctBadge(cls, n, text) {
-  const el = h(cls ? 'span' : 'em', cls ? { class: cls } : null, text(0));
-  const run = () => { if (matchMedia('(prefers-reduced-motion:reduce)').matches) { el.textContent = text(n); return; } const t0 = performance.now(), D = 650; const step = now => { const k = Math.min(1, (now - t0) / D), e = 1 - Math.pow(1 - k, 3); el.textContent = text(Math.round(n * e)); if (k < 1) requestAnimationFrame(step); }; requestAnimationFrame(step); };
-  if ('IntersectionObserver' in window) { const io = new IntersectionObserver(es => { if (es[0].isIntersecting) { io.disconnect(); run(); } }); io.observe(el); } else el.textContent = text(n);
+export function tweenNum(el, from, to, text, ms = 600) {
+  if (from === to) { el.textContent = text(to); return; }
+  const t0 = performance.now(); const step = now => { const k = Math.min(1, (now - t0) / ms), e = 1 - Math.pow(1 - k, 3); el.textContent = text(k < 1 ? Math.round(from + (to - from) * e) : to); if (k < 1) requestAnimationFrame(step); }; requestAnimationFrame(step);
+}
+/* Counts up from 0 when it scrolls into view. Plays on every phone, even with "reduce motion" on, because it is short and small. */
+export function pctBadge(cls, n, text, tag) {
+  const el = h(tag || (cls ? 'span' : 'em'), cls ? { class: cls } : null, text(0));
+  const run = () => { el.classList.add('pop'); tweenNum(el, 0, n, text, 700); };
+  if ('IntersectionObserver' in window) { const io = new IntersectionObserver(es => { if (es[0].isIntersecting) { io.disconnect(); run(); } }, { threshold: 0.2 }); io.observe(el); setTimeout(() => { if (el.textContent === text(0) && n) { io.disconnect(); run(); } }, 2500); } else el.textContent = text(n);
   return el;
 }
 export function productCard(p, { priority = false } = {}) {
@@ -51,7 +56,8 @@ export function buildChrome(root) {
   const nv = h('nav', { class: 'nav', 'aria-label': 'Main' }, (BOOT.menu.header || []).map(menuLink));
   const langBtn = h('button', { class: 'ibtn lang hsm', 'aria-label': 'Language', onclick: () => { setLang(lang() === 'hi' ? 'en' : 'hi'); location.reload(); } }, t('lang'));
   const burger = h('button', { class: 'ibtn burger', 'aria-label': 'Menu', onclick: () => { const d = drawer(BOOT.brand.name, h('nav', { class: 'stack mnav' }, (BOOT.menu.header || []).map(it => h('a', { href: it.url, style: { display: 'block', padding: '10px 0', fontSize: '1.15rem', textDecoration: 'none' }, onclick: () => d.close() }, tr(it, 'label'))), h('hr', { style: { border: 0, borderTop: '1px solid var(--line)' } }), h('a', { href: '/orders#track', style: { display: 'block', padding: '10px 0', textDecoration: 'none' }, onclick: () => d.close() }, t('track')), h('a', { href: me.customer ? '/profile' : '/login', style: { display: 'block', padding: '10px 0', textDecoration: 'none' }, onclick: () => d.close() }, t('account')), BOOT.store.wishlist ? h('a', { href: '/wishlist', style: { display: 'block', padding: '10px 0', textDecoration: 'none' }, onclick: () => d.close() }, t('wishlist')) : null, BOOT.store.language_toggle ? h('a', { href: '#', style: { display: 'block', padding: '10px 0', textDecoration: 'none' }, onclick: e => { e.preventDefault(); setLang(lang() === 'hi' ? 'en' : 'hi'); location.reload(); } }, lang() === 'hi' ? 'English' : 'हिंदी') : null), null, { side: 'left', cls: 'menu-glass' }); } }, icon('menu'));
-  const hdr = h('header', { class: 'hdr glass' }, h('div', { class: 'wrap hdr-in' }, burger, logo(), nv, h('div', { class: 'grow' }),
+  const backB = h('button', { class: 'ibtn backb', 'aria-label': 'Back', onclick: () => { if (history.length > 1) history.back(); else nav('/shop'); } }, icon('chevl'));
+  const hdr = h('header', { class: 'hdr glass' }, h('div', { class: 'wrap hdr-in' }, backB, burger, logo(), nv, h('div', { class: 'grow' }),
     h('button', { class: 'ibtn', 'aria-label': t('search'), onclick: openSearch }, icon('search')),
     BOOT.store.language_toggle ? langBtn : null,
     acctMenu(),
@@ -105,6 +111,8 @@ export function buildChrome(root) {
     if (i >= 0) moveBubble(i);
     const o = links[2]; if (o && o.tagName === 'A') o.setAttribute('href', ordersUrl());
   };
+  const onProd = p => document.body.classList.toggle('on-product', /^\/p\/[^/]+/.test(p || location.pathname));
+  bus.on('route', p => onProd(p)); onProd(location.pathname);
   bus.on('route', mark); mark(location.pathname);
   root.append(bar);
 

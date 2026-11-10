@@ -439,3 +439,25 @@ body.has-buybar #view,body.has-buybar main{padding-bottom:170px}
 .pd-info .muted,.pd .muted{font-size:.9rem}
 @media(max-width:560px){.pd{gap:14px}.crumbs{font-size:.78rem}.pd .btn{font-size:.92rem}.pd .inp{height:42px}}
 body.has-buybar .fab{bottom:calc(210px + env(safe-area-inset-bottom))}@media(min-width:900px){body.has-buybar .fab{bottom:180px}}
+
+/* ===== 10 Nov (3): product page back button / no bottom nav, price animation, checkout next ===== */
+.backb{display:none}
+body.on-product .bbar{display:none!important}
+body.on-product .backb{display:inline-grid}
+@media(max-width:899px){body.on-product .burger{display:none}}
+body.on-product .backb{background:rgba(255,255,255,.6);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.85);box-shadow:0 4px 12px -6px rgba(0,0,0,.3)}
+body.on-product .buybar{bottom:calc(12px + env(safe-area-inset-bottom))}
+body.on-product.has-buybar .fab{bottom:calc(150px + env(safe-area-inset-bottom))}
+@media(min-width:900px){body.on-product .buybar{bottom:18px}body.on-product.has-buybar .fab{bottom:100px}}
+body.on-product.has-buybar main{padding-bottom:150px}
+em.pop,span.pop,b.pop{display:inline-block;animation:popin .45s cubic-bezier(.2,.9,.3,1.4)}
+@keyframes popin{0%{transform:scale(.8);opacity:.4}100%{transform:none;opacity:1}}
+.price s{position:relative;text-decoration:none}
+.price s::after{content:'';position:absolute;left:0;top:54%;height:1.5px;width:100%;background:currentColor;transform-origin:left;animation:strike .6s .35s cubic-bezier(.4,0,.2,1) both}
+@keyframes strike{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+.btn.gl-next{background:linear-gradient(145deg,rgba(255,255,255,.92),rgba(255,244,205,.7));color:#1a1405;border:1px solid rgba(201,162,75,.55);-webkit-backdrop-filter:blur(14px) saturate(180%);backdrop-filter:blur(14px) saturate(180%);box-shadow:0 10px 24px -12px rgba(169,128,31,.7),inset 0 1px 0 #fff;font-weight:700}
+.btn.gl-next:active{transform:scale(.98)}
+.step-in{animation:stepin .4s cubic-bezier(.2,.9,.3,1.1)}
+@keyframes stepin{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:none}}
+@media(prefers-color-scheme:dark){.btn.gl-next{background:rgba(255,255,255,.1);color:#fff}}
+@media(prefers-reduced-motion:reduce){body:not(:has(#splash)) em.pop,body:not(:has(#splash)) span.pop,body:not(:has(#splash)) b.pop{animation-duration:.45s!important}body:not(:has(#splash)) .price s::after{animation-duration:.6s!important;animation-delay:.35s!important}body:not(:has(#splash)) .step-in{animation-duration:.4s!important}}

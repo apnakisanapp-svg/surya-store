@@ -1,5 +1,5 @@
 import { BOOT, h, $, $$, clear, icon, t, tr, lang, bus, api, money, cart, wish, me, ls, toast, modal, nav, route, setTitle, reveal, recentlyViewed, sid, debounce } from './core.js';
-import { pctBadge, productCard, skeletons, stars, addToCart, openCart } from './ui.js';
+import { pctBadge, tweenNum, productCard, skeletons, stars, addToCart, openCart } from './ui.js';
 
 const sec = (title, link, body, cls = '') => h('section', { class: 'section rev ' + cls }, h('div', { class: 'wrap' }, h('div', { class: 'sec-head' }, h('h2', null, title), link), body));
 
@@ -119,7 +119,7 @@ route(/^\/p\/([^/]+)$/, async (view, m) => {
   const cur = () => { const v = curV(); return { price: v ? v.price : p.price, mrp: v ? v.mrp : p.mrp, in_stock: v ? v.in_stock : p.stock_state !== 'out', left: v ? v.stock_left : p.stock_left }; };
   function paint() {
     const c = cur(), pct = c.mrp ? Math.round((1 - c.price / c.mrp) * 100) : 0;
-    const pk = c.price + '|' + c.mrp; if (priceEl.dataset.k !== pk) { priceEl.dataset.k = pk; clear(priceEl).append(h('b', null, money(c.price)), c.mrp ? h('s', null, `${t('mrp')} ${money(c.mrp)}`) : null, c.mrp ? pctBadge('', pct, v => `${v}% ${t('off')}`) : null); }
+    const pk = c.price + '|' + c.mrp; if (priceEl.dataset.k !== pk) { priceEl.dataset.k = pk; clear(priceEl).append(pctBadge('', c.price, v => money(v), 'b'), c.mrp ? h('s', null, `${t('mrp')} ${money(c.mrp)}`) : null, c.mrp ? pctBadge('', pct, v => `${v}% ${t('off')}`) : null); }
     clear(stockEl).append(c.in_stock ? (c.left && c.left <= 5 ? h('span', { class: 'small', style: { color: 'var(--warn)', fontWeight: 600 } }, t('low', { n: c.left })) : h('span', { class: 'small', style: { color: 'var(--ok)', fontWeight: 600 } }, p.preorder ? 'Pre-order' : 'In stock')) : h('span', { class: 'small', style: { color: 'var(--err)', fontWeight: 600 } }, t('oos')));
     qtyEl.textContent = S.qty;
     const v = curV(); if (v && v.image_id) { const k = p.images.findIndex(i => i.id === v.image_id); if (k >= 0 && k !== S.img && S.mode === 'photo') { S.img = k; gallery(); } }
@@ -160,7 +160,7 @@ route(/^\/p\/([^/]+)$/, async (view, m) => {
     document.body.classList.toggle('has-buybar', c.in_stock);
     qtyN.textContent = S.qty;
     const total = c.price * S.qty;
-    totalEl.textContent = money(total);
+    const prevT = +totalEl.dataset.v || 0; totalEl.dataset.v = total; tweenNum(totalEl, prevT && prevT !== total ? prevT : total, total, v => money(v), 350);
     const free = !SH.flat || (SH.free_above && total >= SH.free_above);
     delEl.textContent = free ? 'Free delivery' : `+ ${money(SH.flat)} delivery` + (SH.free_above ? ` · free above ${money(SH.free_above)}` : '');
     delEl.classList.toggle('ok', !!free);
