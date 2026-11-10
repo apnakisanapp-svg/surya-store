@@ -79,11 +79,12 @@ function createApp() {
   app.use('/media', express.static(cfg.UPLOADS, { maxAge: '365d', immutable: true, index: false, dotfiles: 'deny', fallthrough: false,
     setHeaders: (res, p) => { if (!/\.(webp|glb|jpg|png)$/i.test(p)) res.statusCode = 403; } }));
 
+  app.use('/api', (req, res, next) => { res.set('X-Robots-Tag', 'noindex'); next(); });
   app.use('/api', api, notFoundApi);
 
   app.get('/robots.txt', (req, res) => {
     const idx = settings.get('seo').robots_index !== false;
-    res.type('text/plain').send(idx ? `User-agent: *\nDisallow: /api/\nDisallow: /cart\nDisallow: /checkout\nDisallow: /account\nDisallow: /orders\nDisallow: /profile\nDisallow: /wishlist\nDisallow: /order/\nSitemap: ${cfg.SITE_URL}/sitemap.xml\n` : 'User-agent: *\nDisallow: /\n');
+    res.type('text/plain').send(idx ? `User-agent: *\nDisallow: /cart\nDisallow: /checkout\nDisallow: /account\nDisallow: /orders\nDisallow: /profile\nDisallow: /wishlist\nDisallow: /order/\nSitemap: ${cfg.SITE_URL}/sitemap.xml\n` : 'User-agent: *\nDisallow: /\n');
   });
   app.get('/sitemap.xml', (req, res) => {
     const urls = ['/', '/shop', '/contact', '/faq', '/track'];
