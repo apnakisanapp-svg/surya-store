@@ -39,7 +39,11 @@ const SPEC = (cats) => [
   { k: 'tagline', l: 'One-line description', t: 'text', max: 160 }, { k: 'tagline_hi', l: 'One-line (Hindi, optional)', t: 'text' },
   { k: 'category_id', l: 'Category', t: 'select', num: true, opts: [['', '— choose —'], ...cats.map(c => [c.id, c.name])], w: 'half' }, { k: 'badge', l: 'Badge on photo (optional)', t: 'text', ph: 'New, Best seller…', w: 'half' },
   { k: 'description', l: 'Description', t: 'html', h: 'Plain text or simple HTML (<p>, <ul>, <b>). Scripts are removed.' }, { k: 'description_hi', l: 'Description (Hindi, optional)', t: 'html', rows: 4 },
-  { k: 'tags', l: 'Search tags', t: 'tags', ph: 'usb lighter, arc lighter, rechargeable', h: 'Customers find the product with these words.' },
+  { k: 'tags', l: 'Search words', t: 'tags', ph: 'diya, diye, deepak, दीया, diwali, led light …', h: 'Extra words customers may type (Hindi, English, Hinglish, spelling mistakes). Leave empty and the site still uses the name and category. Use “Copy prompt for AI” for a long list.', prompt: d => {
+    const cat = (cats.find(c => String(c.id) === String(d.category_id)) || {}).name || '';
+    const desc = String(d.description || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 300);
+    return `Mere online store ke ek product ke liye search keywords likho.\nProduct ka naam: ${d.name || '(naam yahan likho)'}\nCategory: ${cat || '(category)'}\nDetails: ${[d.tagline, desc].filter(Boolean).join('. ') || '(details)'}\n\nNiyam:\n- 40 se 60 keywords do, sab ek hi line me, comma se alag.\n- Wahi shabd do jo customer search me likhega: English, Hindi (Devanagari), Hinglish (Hindi shabd English letters me) aur 5-6 aam galat spellings.\n- Product ke doosre naam, use karne ke tareeke aur milti-julti cheezein bhi likho.\n- Sirf comma wali list do. Koi heading, number, explanation ya extra line mat likho.`;
+  } },
   { t: 'heading', l: 'Price & stock' },
   { k: 'price', l: 'Selling price (₹)', t: 'number', w: 'half' }, { k: 'mrp', l: 'MRP (₹) — must not be below price', t: 'number', w: 'half' },
   { k: 'stock', l: 'Stock (pieces)', t: 'number', w: 'half' }, { k: 'low_stock_limit', l: 'Warn me when stock is below', t: 'number', w: 'half' },

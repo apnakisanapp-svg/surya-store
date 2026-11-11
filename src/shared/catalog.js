@@ -87,6 +87,17 @@ const SORTS = {
   discount: '((p.mrp - p.price)*1.0/NULLIF(p.mrp,0)) DESC', relevance: 'p.sort ASC, p.id DESC',
 };
 
+const search = require('./search');
+let _idx = null, _idxAt = 0;
+function searchIndex() {
+  if (_idx && Date.now() - _idxAt < 15000) return _idx;
+  const rows = db.prepare(`SELECT p.id, p.name, p.name_hi, p.tagline, p.description, p.tags, p.sold_count, p.views, c.name category FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE ${LIVE_SQL}`).all(...liveArgs());
+  _idx = search.buildIndex(rows.map(r => ({ ...r, tags_text: (jparse(r.tags, []) || []).join(' ') })));
+  _idxAt = Date.now();
+  return _idx;
+}
+const dropSearchIndex = () => { _idx = null; };
+
 function ftsQuery(q) {
   const toks = String(q || '').toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(Boolean).slice(0, 6);
   if (!toks.length) return '';
@@ -97,17 +108,15 @@ function listPublic(opts = {}) {
   const { q, category, min, max, inStock, sort = 'trending', page = 1, limit = 12, ids, offers, tag, exclude } = opts;
   const where = [LIVE_SQL], args = [...liveArgs()];
   let joinOrder = '';
+  let fallbackKind = null;
   if (q) {
-    const fq = ftsQuery(q);
-    let hit = [];
-    if (fq) { try { hit = db.prepare('SELECT rowid id FROM products_fts WHERE products_fts MATCH ? ORDER BY rank LIMIT 200').all(fq).map(r => r.id); } catch { hit = []; } }
-    if (!hit.length) {
-      const like = '%' + String(q).replace(/[%_]/g, '') + '%';
-      hit = db.prepare('SELECT id FROM products WHERE name LIKE ? OR tags LIKE ? OR description LIKE ? OR name_hi LIKE ? LIMIT 100').all(like, like, like, like).map(r => r.id);
-    }
+    const idx = searchIndex();
+    let hit = search.rank(q, idx);
+    if (!hit.length && opts.fallback) { const rel = search.related(q, idx); hit = rel.ids; fallbackKind = rel.kind; }
     if (!hit.length) { return { items: [], total: 0, page, pages: 0 }; }
+    hit = hit.slice(0, 200);
     where.push(`p.id IN (${hit.map(() => '?').join(',')})`); args.push(...hit);
-    if (sort === 'relevance') joinOrder = `CASE p.id ${hit.map((id, i) => `WHEN ${Number(id)} THEN ${i}`).join(' ')} END`;
+    if (sort === 'relevance' || fallbackKind) joinOrder = `CASE p.id ${hit.map((id, i) => `WHEN ${Number(id)} THEN ${i}`).join(' ')} END`;
   }
   if (category) {
     const c = db.prepare('SELECT id FROM categories WHERE (slug=? OR id=?) AND deleted_at IS NULL').get(category, Number(category) || 0);
@@ -126,10 +135,10 @@ function listPublic(opts = {}) {
   if (!settings.get('store').show_sold_out) where.push('(p.sold_out=0)');
   const w = where.join(' AND ');
   const total = db.prepare(`SELECT COUNT(*) c FROM products p WHERE ${w}`).get(...args).c;
-  const order = (q && sort === 'relevance' && joinOrder) ? joinOrder : (SORTS[sort] || SORTS.trending);
+  const order = (q && (sort === 'relevance' || fallbackKind) && joinOrder) ? joinOrder : (SORTS[sort] || SORTS.trending);
   const lim = Math.min(Math.max(Number(limit) || 12, 1), 60), off = (Math.max(Number(page) || 1, 1) - 1) * lim;
   const rows = db.prepare(`SELECT p.* FROM products p WHERE ${w} ORDER BY ${order} LIMIT ? OFFSET ?`).all(...args, lim, off);
-  return { items: hydrate(rows), total, page: Number(page) || 1, pages: Math.ceil(total / lim) };
+  return { items: hydrate(rows), total, page: Number(page) || 1, pages: Math.ceil(total / lim), ...(fallbackKind ? { fallback: fallbackKind } : {}) };
 }
 
 function similar(prod, limit = 10) {
@@ -150,6 +159,7 @@ function similar(prod, limit = 10) {
 }
 
 function reindex(id) {
+  dropSearchIndex();
   const p = db.prepare('SELECT p.*, c.name cat FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.id=?').get(id);
   db.prepare('DELETE FROM products_fts WHERE rowid=?').run(id);
   if (!p || p.deleted_at) return;

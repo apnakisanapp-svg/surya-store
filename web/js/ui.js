@@ -200,10 +200,10 @@ export function openSearch() {
     const q = inp.value.trim(); if (q.length < 2) return;
     try {
       const r = await api('/suggest?q=' + encodeURIComponent(q)); clear(list);
+      if (r.fallback) list.append(h('p', { class: 'fb-sug muted small' }, `${t('fb_title')} “${q}” · ${t('fb_text')}`));
       for (const c of r.categories) list.append(h('a', { href: `/shop?category=${c.slug}`, onclick: close }, h('b', null, tr(c, 'name')), h('span', { class: 'muted small' }, 'Category')));
       for (const p of r.products) list.append(h('a', { href: `/p/${p.slug}`, onclick: close }, p.image ? h('img', { src: p.image, alt: '', width: 44, height: 44 }) : h('span', { style: { width: '44px' } }), h('span', { class: 'grow' }, tr(p, 'name')), h('b', null, money(p.price))));
-      if (!r.products.length && !r.categories.length) list.append(h('p', { class: 'muted', style: { padding: '12px 4px' } }, t('no_results')));
-      else list.append(h('a', { href: '/shop?q=' + encodeURIComponent(q), onclick: close }, h('span', { class: 'link' }, `${t('all')} → "${q}"`)));
+      if (r.products.length || r.categories.length) list.append(h('a', { href: '/shop?q=' + encodeURIComponent(q), onclick: close }, h('span', { class: 'link' }, `${t('all')} → "${q}"`)));
     } catch { /* ignore */ }
   }, 220);
   inp.addEventListener('input', run);

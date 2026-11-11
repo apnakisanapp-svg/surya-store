@@ -67,9 +67,10 @@ route(/^\/shop$/, async (view, m, q) => {
     const p = new URLSearchParams({ page: st.page, limit: 12 }); for (const [k, v] of Object.entries(st)) if (v && !['page'].includes(k)) p.set(k, v === true ? '1' : v);
     let r; try { r = await api('/products?' + p); } catch (e) { clear(grid).append(h('p', { class: 'muted' }, e.message)); return; }
     if (reset) clear(grid);
+    if (r.fallback && reset && st.q) grid.append(h('div', { class: 'fb-note' }, icon('search'), h('div', null, h('b', null, `${t('fb_title')} “${st.q}”`), h('p', { class: 'muted small' }, t('fb_text')))));
     let g = $('.pgrid', grid); if (!g) { g = h('div', { class: 'pgrid' }); grid.append(g); }
     r.items.forEach(x => g.append(productCard(x)));
-    count.textContent = `${r.total} ${r.total === 1 ? 'product' : 'products'}`;
+    count.textContent = r.fallback ? '' : `${r.total} ${r.total === 1 ? 'product' : 'products'}`;
     if (!r.items.length && reset) grid.append(h('div', { class: 'empty' }, icon('search'), h('h3', null, t('no_results')), h('p', { class: 'muted' }, t('try_other')), h('p', { style: { marginTop: '14px' } }, h('button', { class: 'btn', onclick: () => { Object.assign(st, { q: '', category: '', min: '', max: '', in_stock: false, offers: false }); sync(); load(true); } }, 'Clear filters'))));
     clear(more); if (st.page < r.pages) more.append(h('button', { class: 'btn ghost', onclick: () => { st.page++; load(false); } }, t('load_more')));
   }

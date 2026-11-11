@@ -74,7 +74,7 @@ api.get('/home', asyncH((req, res) => {
 api.get('/products', asyncH((req, res) => {
   const q = req.query, r = catalog.listPublic({
     q: q.q ? String(q.q).slice(0, 80) : undefined, category: q.category, min: q.min, max: q.max, inStock: q.in_stock === '1', sort: q.sort || (q.q ? 'relevance' : 'trending'),
-    page: q.page, limit: q.limit, offers: q.offers === '1', tag: q.tag,
+    page: q.page, limit: q.limit, offers: q.offers === '1', tag: q.tag, fallback: !!q.q,
     ids: q.ids ? String(q.ids).split(',').slice(0, 40).map(Number).filter(Boolean) : undefined,
   });
   if (q.q && int(q.page, 1) === 1) db.prepare('INSERT INTO search_log(term,results,created_at) VALUES(?,?,?)').run(String(q.q).toLowerCase().slice(0, 80), r.total, now());
@@ -83,10 +83,10 @@ api.get('/products', asyncH((req, res) => {
 api.get('/suggest', asyncH((req, res) => {
   const q = String(req.query.q || '').trim().slice(0, 60);
   if (q.length < 2) return res.json({ products: [], categories: [], popular: settings.get('search').popular || [] });
-  const products = catalog.listPublic({ q, limit: 6, sort: 'relevance' }).items.map(p => ({ slug: p.slug, name: p.name, name_hi: p.name_hi, price: p.price, image: p.images[0]?.thumb || null }));
+  const sg = catalog.listPublic({ q, limit: 6, sort: 'relevance', fallback: true }); const products = sg.items.map(p => ({ slug: p.slug, name: p.name, name_hi: p.name_hi, price: p.price, image: p.images[0]?.thumb || null }));
   const like = '%' + q.replace(/[%_]/g, '') + '%';
   const categories = db.prepare('SELECT slug,name,name_hi FROM categories WHERE active=1 AND deleted_at IS NULL AND (name LIKE ? OR name_hi LIKE ?) LIMIT 4').all(like, like);
-  res.json({ products, categories });
+  res.json({ products, categories, fallback: sg.fallback || null });
 }));
 api.get('/products/:slug', asyncH((req, res) => {
   const p = catalog.getBySlug(req.params.slug);

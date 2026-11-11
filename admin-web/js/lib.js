@@ -69,7 +69,19 @@ export function buildForm(spec, values, { onChange } = {}) {
     else if (f.t === 'number') { input = h('input', { class: 'inp', type: 'number', step: f.step || 'any', min: f.min, max: f.max, placeholder: f.ph || '', oninput: e => set(e.target.value === '' ? '' : Number(e.target.value)) }); input.value = cur == null ? '' : cur; }
     else if (f.t === 'color') { input = h('div', { class: 'row' }, h('input', { type: 'color', value: /^#[0-9a-f]{6}$/i.test(cur || '') ? cur : '#000000', oninput: e => { set(e.target.value); txt.value = e.target.value; } }), (() => { const txt = h('input', { class: 'inp', value: cur || '', placeholder: 'Leave empty for default', oninput: e => set(e.target.value) }); return txt; })()); const txt = input.querySelector('.inp'); }
     else if (f.t === 'date') { input = h('input', { class: 'inp', type: f.time ? 'datetime-local' : 'date', onchange: e => set(e.target.value) }); input.value = cur ? new Date(cur).toISOString().slice(0, f.time ? 16 : 10) : ''; }
-    else if (f.t === 'tags') { input = h('input', { class: 'inp', placeholder: f.ph || 'Separate with commas', oninput: e => set(e.target.value.split(',').map(s => s.trim()).filter(Boolean)) }); input.value = Array.isArray(cur) ? cur.join(', ') : ''; }
+    else if (f.t === 'tags') {
+      const inp = h('input', { class: 'inp', placeholder: f.ph || 'Separate with commas', oninput: e => set(e.target.value.split(',').map(s => s.trim()).filter(Boolean)) }); inp.value = Array.isArray(cur) ? cur.join(', ') : '';
+      if (f.prompt) {
+        const note = h('small', { class: 'muted' }, '');
+        const copy = async () => {
+          const text = f.prompt(data); let ok = false;
+          try { await navigator.clipboard.writeText(text); ok = true; } catch { const ta = h('textarea', { style: { position: 'fixed', opacity: 0 } }); ta.value = text; document.body.append(ta); ta.select(); try { ok = document.execCommand('copy'); } catch { ok = false; } ta.remove(); }
+          note.textContent = ok ? 'Copied. Paste it in any AI (ChatGPT, Gemini…), then paste the AI\'s answer in the box above.' : 'Could not copy. Select the text in the box that opened and copy it yourself.';
+          if (!ok) window.prompt('Copy this prompt:', text);
+        };
+        input = h('div', { class: 'stack', style: { gap: '6px' } }, inp, h('div', { class: 'row' }, h('button', { type: 'button', class: 'btn sm', onclick: copy }, 'Copy prompt for AI'), h('button', { type: 'button', class: 'btn sm ghost', onclick: () => { inp.value = ''; set([]); } }, 'Clear')), note);
+      } else input = inp;
+    }
     else if (f.t === 'image') { input = imageField(cur, v => set(v), f); }
     else if (f.t === 'list') { input = listField(f, Array.isArray(cur) ? cur : [], v => set(v)); }
     else { input = h('input', { class: 'inp', type: f.t === 'password' ? 'password' : f.t === 'email' ? 'email' : 'text', placeholder: f.ph || '', maxlength: f.max, autocomplete: 'off', oninput: e => set(e.target.value) }); input.value = cur == null ? '' : cur; }
