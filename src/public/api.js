@@ -101,7 +101,7 @@ api.get('/products/:slug/reviews', asyncH((req, res) => {
   const p = db.prepare('SELECT id FROM products WHERE slug=?').get(req.params.slug);
   if (!p) throw notFound();
   const page = Math.max(1, int(req.query.page, 1)), per = 8;
-  const rows = db.prepare("SELECT id,name,rating,title,body,verified,reply,created_at FROM reviews WHERE product_id=? AND status='approved' ORDER BY created_at DESC LIMIT ? OFFSET ?").all(p.id, per, (page - 1) * per);
+  const rows = db.prepare("SELECT id,name,rating,title,body,verified,reply,created_at FROM reviews WHERE product_id=? AND status='approved' AND body<>'' ORDER BY created_at DESC LIMIT ? OFFSET ?").all(p.id, per, (page - 1) * per);
   const dist = db.prepare("SELECT rating, COUNT(*) c FROM reviews WHERE product_id=? AND status='approved' GROUP BY rating").all(p.id);
   res.json({ items: rows, dist, page });
 }));
@@ -113,7 +113,7 @@ api.post('/products/:slug/reviews', lim(60, 8, 'Too many reviews from this devic
   if (rating < 1 || rating > 5) throw bad('Please choose 1 to 5 stars.');
   const name = String(b.name || req.customer?.name || '').trim().slice(0, 60) || 'Customer';
   const body = String(b.body || '').trim().slice(0, 1200);
-  if (body.length < 3) throw bad('Please write a few words about the product.');
+  if (body && body.length < 3) throw bad('Please write a few more words, or leave the text empty and send only stars.');
   let verified = 0, orderId = null;
   const num_ = String(b.order || '').trim(), phone = normPhone(b.phone || req.customer?.phone);
   if (num_) {
@@ -122,7 +122,7 @@ api.post('/products/:slug/reviews', lim(60, 8, 'Too many reviews from this devic
   }
   db.prepare('INSERT INTO reviews(product_id,customer_id,order_id,name,rating,title,body,verified,status,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)')
     .run(p.id, req.customer?.id || null, orderId, name, rating, String(b.title || '').slice(0, 100) || null, body, verified, 'pending', now());
-  res.json({ ok: true, message: 'Thank you! Your review will appear after we check it.' });
+  res.json({ ok: true, message: body ? 'Thank you! Your review will appear after we check it.' : 'Thank you for your rating!' });
 }));
 
 /* ---------- cart, pincode, coupons ---------- */
@@ -415,7 +415,10 @@ api.post('/events', lim(1, 120), (req, res) => {
 function fillPolicy(html) {
   const b = settings.get('brand'), R = settings.get('returns'), S = settings.get('shipping');
   const v = { brand: b.name, legal_name: b.legal_name || b.name, address: b.address || '(address)', city: b.city || '(city)', email: b.email || '(email)', phone: b.phone || '(phone)', return_days: R.window_days, eta_min: S.eta_min, eta_max: S.eta_max };
-  return String(html || '').replace(/\{\{\s*(\w+)\s*\}\}/g, (_, k) => U.esc(v[k] != null ? v[k] : ''));
+  let src = String(html || '');
+  if (/Write your story here/i.test(src)) src = require('../shared/policies-default').ABOUT_DEFAULT; // never show the setup placeholder to customers
+  src = src.replace(/<p class="draft-note">[\s\S]*?<\/p>/g, '');           // the "have a lawyer review this" note is for the owner, not for customers
+  return src.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, k) => U.esc(v[k] != null ? v[k] : ''));
 }
 api.get('/policies/:slug', asyncH((req, res) => {
   const p = db.prepare('SELECT slug,title,title_hi,body,body_hi,version,updated_at FROM policies WHERE slug=?').get(req.params.slug);

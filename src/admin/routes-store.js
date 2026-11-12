@@ -53,6 +53,11 @@ r.get('/reviews', asyncH((req, res) => {
   const st = req.query.status || 'pending';
   res.json(db.prepare(`SELECT r.*, p.name product_name FROM reviews r JOIN products p ON p.id=r.product_id ${st === 'all' ? '' : 'WHERE r.status=?'} ORDER BY r.id DESC LIMIT 300`).all(...(st === 'all' ? [] : [st])));
 }));
+r.post('/reviews/approve-star-only', asyncH((req, res) => {
+  const n = db.prepare("UPDATE reviews SET status='approved' WHERE status='pending' AND (body IS NULL OR body='') AND flagged IS NOT 1").run().changes;
+  auth.logActivity(req.admin.id, 'review_approve_stars', 'review', 0, String(n), req);
+  res.json({ ok: true, approved: n });
+}));
 r.patch('/reviews/:id', asyncH((req, res) => {
   const id = int(req.params.id), b = req.body || {};
   if (b.status && !['approved', 'rejected', 'pending'].includes(b.status)) throw bad('Bad status.');

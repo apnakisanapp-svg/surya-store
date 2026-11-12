@@ -14,7 +14,7 @@ const cache = new Map();
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const wrap = (text, max, lines) => { const out = []; let cur = ''; for (const w of String(text).split(/\s+/)) { if ((cur + ' ' + w).trim().length > max) { if (cur) out.push(cur); cur = w; } else cur = (cur + ' ' + w).trim(); } if (cur) out.push(cur); if (out.length > lines) { out.length = lines; out[lines - 1] = out[lines - 1].replace(/.{0,2}$/, '…'); } return out; };
 const bg = `<defs><linearGradient id="b" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff7e0"/><stop offset="1" stop-color="#f6d98a"/></linearGradient></defs><rect width="${W}" height="${H}" fill="url(#b)"/><circle cx="1080" cy="80" r="260" fill="#fff" opacity=".35"/>`;
-const logo = async size => sharp(Buffer.from(LOGO_SVG)).resize(size, size).png().toBuffer();
+const logo = async size => sharp(require('path').join(__dirname, '..', '..', 'web', 'img', 'logo.png')).resize(size, size, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer();
 const mediaFile = url => { const m = String(url || '').match(/^\/media\/([\w.-]+)$/); return m ? path.join(cfg.UPLOADS, m[1]) : null; };
 
 async function homeCard() {

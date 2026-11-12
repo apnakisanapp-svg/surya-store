@@ -524,3 +524,11 @@ em.pop,span.pop,b.pop{display:inline-block;animation:popin .45s cubic-bezier(.2,
 /* filter bar on the shop page */
 .pgrid .pc{animation:sugin .35s both}
 @media(prefers-color-scheme:dark){.search-pan{background:linear-gradient(170deg,rgba(44,38,28,.88),rgba(20,17,12,.76))}.search-pan .inp,.sug a,.fb-note{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.14)}}
+
+/* ---- brand logo (bag + S + sun) with gradient name ---- */
+.logo-img{gap:10px}
+.logo .lg-img{height:34px;width:auto;display:block;flex:none}
+.logo .lg-name{font-weight:700;letter-spacing:.2em;font-size:1.12rem;line-height:1;padding-right:.1em;color:#f26a0f;background:linear-gradient(100deg,#e8590c,#ff8a00 40%,#ffb300 70%,#ff8a00);-webkit-background-clip:text;background-clip:text}
+@supports ((-webkit-background-clip:text) or (background-clip:text)){.logo .lg-name{color:transparent;-webkit-text-fill-color:transparent}}
+@media(min-width:900px){.logo .lg-img{height:44px}.logo .lg-name{font-size:1.45rem}}
+@media(max-width:380px){.logo .lg-name{letter-spacing:.14em;font-size:1.02rem}}

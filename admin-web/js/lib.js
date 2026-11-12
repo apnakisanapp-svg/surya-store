@@ -1,4 +1,5 @@
 // Admin helpers: DOM, API, forms, modal, toast, formatters
+import { mdToHtml, htmlToMd, isSimple, previewHtml } from './rich.js';
 // make append() ignore null/false so conditional children never print "null"
 { const _a = Element.prototype.append; Element.prototype.append = function (...k) { return _a.apply(this, k.flat(Infinity).filter(x => x != null && x !== false)); }; }
 export function h(tag, attrs, ...kids) {
@@ -63,7 +64,8 @@ export function buildForm(spec, values, { onChange } = {}) {
     const cur = get(data, f.k);
     let input, wrapper;
     const set = v => { setp(data, f.k, v); ch(); };
-    if (f.t === 'textarea' || f.t === 'html') { input = h('textarea', { class: 'inp', rows: f.rows || (f.t === 'html' ? 10 : 3), placeholder: f.ph || '', oninput: e => set(e.target.value) }); input.value = cur == null ? '' : cur; }
+    if (f.t === 'rich') { input = richField(f, cur, set); }
+    else if (f.t === 'textarea' || f.t === 'html') { input = h('textarea', { class: 'inp', rows: f.rows || (f.t === 'html' ? 10 : 3), placeholder: f.ph || '', oninput: e => set(e.target.value) }); input.value = cur == null ? '' : cur; }
     else if (f.t === 'select') { input = h('select', { class: 'inp', onchange: e => set(f.num ? Number(e.target.value) : e.target.value) }, (f.opts || []).map(([v, l]) => h('option', { value: v, selected: String(v) === String(cur ?? '') }, l))); }
     else if (f.t === 'check') { input = h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: !!cur, onchange: e => set(e.target.checked) }), h('span', null, f.l)); wrapper = h('div', { class: 'fld' + (f.w === 'half' ? ' half' : '') }, input, f.h ? h('small', { class: 'muted' }, f.h) : null); root.append(wrapper); continue; }
     else if (f.t === 'number') { input = h('input', { class: 'inp', type: 'number', step: f.step || 'any', min: f.min, max: f.max, placeholder: f.ph || '', oninput: e => set(e.target.value === '' ? '' : Number(e.target.value)) }); input.value = cur == null ? '' : cur; }
@@ -98,6 +100,31 @@ function imageField(cur, set, f) {
   const file = h('input', { type: 'file', accept: 'image/*', class: 'hide', onchange: async e => { const fl = e.target.files[0]; if (!fl) return; const fd = new FormData(); fd.append('image', fl); if (f.maxw) fd.append('max_w', f.maxw); try { const r = await api('/upload', { method: 'POST', form: fd }); const v = f.url ? r.url : r.file; set(v); show(r.url); toast('Uploaded'); } catch (x) { toast(x.message, true); } } });
   box.append(prev, h('button', { type: 'button', class: 'btn sm', onclick: () => file.click() }, 'Choose image'), h('button', { type: 'button', class: 'btn sm', onclick: () => { set(''); show(''); } }, 'Remove'), file);
   return box;
+}
+/* Plain-text editor with a live preview. Stores HTML (so the website does not change). "Advanced" shows raw HTML. */
+function richField(f, cur, set) {
+  const keys = f.keys || ['brand', 'email', 'phone', 'address', 'return_days'];
+  let html = cur == null ? '' : String(cur), advanced = !isSimple(html);
+  const ta = h('textarea', { class: 'inp rich-ta', rows: f.rows || 12, spellcheck: 'true' });
+  const prev = h('div', { class: 'rte rich-prev' }), note = h('small', { class: 'muted' });
+  const adv = h('input', { type: 'checkbox', checked: advanced });
+  const refresh = () => { prev.innerHTML = previewHtml(html) || ''; if (!html) prev.append(h('span', { class: 'muted' }, 'Preview appears here as you type.')); };
+  const load = () => { ta.value = advanced ? html : htmlToMd(html); ta.placeholder = advanced ? '<p>HTML here</p>' : 'Write normally. Leave a blank line between paragraphs.'; adv.checked = advanced; note.textContent = advanced ? (isSimple(html) ? 'HTML mode. Untick "Advanced" to write in plain text.' : 'This page uses special formatting, so it opens in HTML mode to keep it safe.') : 'Tips: "# Heading", "- list item", "1. numbered", "**bold**", "[text](https://link)".'; };
+  const changed = () => { html = advanced ? ta.value : mdToHtml(ta.value); set(html); refresh(); };
+  ta.addEventListener('input', changed);
+  adv.addEventListener('change', () => {
+    if (adv.checked) { advanced = true; }
+    else if (isSimple(html)) { advanced = false; }
+    else { adv.checked = true; toast('This page has formatting plain text cannot keep, so it stays in HTML mode.', true); return; }
+    load();
+  });
+  const put = (before, after = '') => { const a = ta.selectionStart, b = ta.selectionEnd, sel = ta.value.slice(a, b); ta.setRangeText(before + sel + after, a, b, 'end'); ta.focus(); changed(); };
+  const linePrefix = pre => { const a = ta.selectionStart, st = ta.value.lastIndexOf('\n', a - 1) + 1; ta.setRangeText(pre, st, st, 'end'); ta.focus(); changed(); };
+  const btn = (label, title, fn) => h('button', { type: 'button', class: 'btn sm', title, onclick: () => { if (advanced) { toast('Untick "Advanced" to use these buttons.', true); return; } fn(); } }, label);
+  const ins = h('select', { class: 'inp rich-ins', onchange: e => { const k = e.target.value; e.target.value = ''; if (k) put('{{' + k + '}}'); } }, h('option', { value: '' }, 'Insert…'), keys.map(k => h('option', { value: k }, { brand: 'Brand name', email: 'Email', phone: 'Phone', address: 'Address', return_days: 'Return days' }[k] || k)));
+  const bar = h('div', { class: 'row rich-bar' }, btn('Heading', 'Big heading', () => linePrefix('# ')), btn('Bold', 'Bold', () => put('**', '**')), btn('• List', 'Bullet list', () => linePrefix('- ')), btn('Link', 'Link', () => put('[', '](https://)')), ins, h('label', { class: 'chk', style: { marginLeft: 'auto' } }, adv, h('span', null, 'Advanced (HTML)')));
+  load(); refresh();
+  return h('div', { class: 'rich stack', style: { gap: '8px' } }, bar, ta, note, h('div', { class: 'small muted' }, 'How it will look:'), prev);
 }
 function listField(f, items, set) {
   const box = h('div', { class: 'listf' });

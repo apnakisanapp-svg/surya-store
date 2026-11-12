@@ -2,6 +2,16 @@
 // Starter drafts. They are templates, NOT legal advice: a lawyer must review them before launch.
 // Placeholders like {{brand}} are filled from Admin > Settings when the page is shown.
 
+const ABOUT_DEFAULT = `<p><strong>{{brand}}</strong> is a small online store from India. We sell useful everyday gadgets for the home, kitchen and car, picked for being practical and fairly priced.</p>
+<h3>Why shop with us</h3>
+<ul>
+<li>Delivery across India</li>
+<li>Pay by UPI, or choose Cash on Delivery</li>
+<li>{{return_days}}-day replacement if an item arrives damaged</li>
+<li>Real people reply on WhatsApp and email</li>
+</ul>
+<p>We are a young store, so every order matters to us. We check each parcel before it goes out, and if something is not right, we will fix it.</p>
+<p>Questions? Email us at {{email}} or call/WhatsApp {{phone}}.</p>`;
 const NOTE = '<p class="draft-note"><strong>Draft:</strong> this text is a starting template. Please have it reviewed by a lawyer and edit it for your business before launch.</p>';
 
 module.exports = [
@@ -160,6 +170,8 @@ module.exports = [
   },
   {
     slug: 'about', title: 'About us', title_hi: 'Hamare baare mein', protected: 0, sort: 8, in_footer: 1,
-    body: `<p>{{brand}} is run by {{legal_name}}. Write your story here from Admin &gt; Policies &amp; pages: who you are, what you sell, why customers can trust you.</p>`,
+    body: ABOUT_DEFAULT,
   },
 ];
+
+module.exports.ABOUT_DEFAULT = ABOUT_DEFAULT;

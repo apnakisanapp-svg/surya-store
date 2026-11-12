@@ -1,4 +1,4 @@
-import { BOOT, h, $, $$, clear, icon, t, tr, lang, bus, api, money, cart, wish, me, ls, toast, modal, nav, route, setTitle, reveal, recentlyViewed, sid, debounce } from './core.js';
+import { BOOT, h, $, $$, clear, icon, t, tr, lang, bus, api, money, cart, wish, me, ls, toast, modal, nav, route, setTitle, reveal, recentlyViewed, sid, debounce, pushOverlay, releaseOverlay } from './core.js';
 import { pctBadge, fillPrice, tweenNum, productCard, skeletons, stars, addToCart, openCart } from './ui.js';
 
 const sec = (title, link, body, cls = '') => h('section', { class: 'section rev ' + cls }, h('div', { class: 'wrap' }, h('div', { class: 'sec-head' }, h('h2', null, title), link), body));
@@ -191,13 +191,13 @@ function reviewsSection(p) {
   async function load() {
     const r = await api(`/products/${p.slug}/reviews?page=${page}`).catch(() => ({ items: [], dist: [] }));
     if (page === 1) clear(list);
-    if (!r.items.length && page === 1) list.append(h('p', { class: 'muted' }, 'No reviews yet. Be the first.'));
+    if (!r.items.length && page === 1) list.append(h('p', { class: 'muted' }, p.rating && p.rating.count ? 'Rated by ' + p.rating.count + ' customer' + (p.rating.count > 1 ? 's' : '') + '. No written reviews yet.' : 'No reviews yet. Be the first.'));
     r.items.forEach(x => list.append(h('div', { class: 'rv' }, h('div', { class: 'row' }, stars(x.rating), h('b', null, x.title || ''), x.verified ? h('span', { class: 'badge soft' }, 'Verified buyer') : null), h('p', null, x.body), h('p', { class: 'muted small' }, `${x.name} · ${new Date(x.created_at).toLocaleDateString('en-IN')}`), x.reply ? h('p', { class: 'small', style: { background: 'var(--bg2)', padding: '10px 12px', borderRadius: '12px', marginTop: '6px' } }, h('b', null, BOOT.brand.name + ': '), x.reply) : null)));
     if (r.items.length === 8) { list.append(h('button', { class: 'btn ghost sm', onclick: e => { e.target.remove(); page++; load(); } }, t('load_more'))); }
   }
   load();
   const openForm = () => {
-    let rating = 5; const star = h('div', { class: 'row', style: { gap: '4px' } }), body = h('textarea', { class: 'inp', placeholder: 'Your review', maxlength: 1200 }), name = h('input', { class: 'inp', placeholder: t('name'), value: me.customer ? me.customer.name || '' : '' }), ord = h('input', { class: 'inp', placeholder: 'Order number (optional, shows "Verified buyer")' }), ph = h('input', { class: 'inp', inputmode: 'numeric', placeholder: 'Phone used for the order (optional)' });
+    let rating = 5; const star = h('div', { class: 'row', style: { gap: '4px' } }), body = h('textarea', { class: 'inp', placeholder: 'Write a few words (optional, you can send only stars)', maxlength: 1200 }), name = h('input', { class: 'inp', placeholder: t('name'), value: me.customer ? me.customer.name || '' : '' }), ord = h('input', { class: 'inp', placeholder: 'Order number (optional, shows "Verified buyer")' }), ph = h('input', { class: 'inp', inputmode: 'numeric', placeholder: 'Phone used for the order (optional)' });
     const paint = () => { clear(star); [1, 2, 3, 4, 5].forEach(i => star.append(h('button', { type: 'button', class: 'ibtn', style: { fontSize: '1.6rem', color: i <= rating ? '#e8a92b' : 'var(--line)' }, 'aria-label': i + ' star', onclick: () => { rating = i; paint(); } }, '★'))); }; paint();
     clear(formBox).append(h('div', { class: 'card stack' }, h('b', null, t('write_review')), star, name, body, h('div', { class: 'grid2' }, ord, ph), h('button', { class: 'btn', onclick: async e => { try { e.currentTarget.classList.add('is-busy'); const r = await api(`/products/${p.slug}/reviews`, { method: 'POST', body: { rating, body: body.value, name: name.value, order: ord.value, phone: ph.value } }); clear(formBox).append(h('p', { class: 'box-note' }, r.message)); } catch (x) { toast(x.message, { err: true }); e.target.classList.remove('is-busy'); } } }, t('send'))));
   };
@@ -208,7 +208,7 @@ function lightbox(imgs, start) {
   let i = start, z = 1;
   const im = h('img', { alt: '' }), wrap = h('div', { class: 'lightbox', role: 'dialog', 'aria-label': 'Photo viewer' }, h('button', { class: 'ibtn x', 'aria-label': t('close'), onclick: () => close() }, icon('x')), im);
   const set = () => { im.src = imgs[i].gal; z = 1; im.style.transform = ''; };
-  const close = () => { wrap.remove(); document.removeEventListener('keydown', key); }; const key = e => { if (e.key === 'Escape') close(); if (e.key === 'ArrowRight') { i = (i + 1) % imgs.length; set(); } if (e.key === 'ArrowLeft') { i = (i - 1 + imgs.length) % imgs.length; set(); } };
+  const vis = () => { wrap.remove(); document.removeEventListener('keydown', key); }; const ov = pushOverlay(vis); const close = () => { vis(); releaseOverlay(ov); }; const key = e => { if (e.key === 'Escape') close(); if (e.key === 'ArrowRight') { i = (i + 1) % imgs.length; set(); } if (e.key === 'ArrowLeft') { i = (i - 1 + imgs.length) % imgs.length; set(); } };
   document.addEventListener('keydown', key);
   im.addEventListener('dblclick', () => { z = z > 1 ? 1 : 2.4; im.style.transform = `scale(${z})`; });
   let sx = null; wrap.addEventListener('pointerdown', e => { sx = e.clientX; }); wrap.addEventListener('pointerup', e => { if (sx != null && z === 1 && Math.abs(e.clientX - sx) > 50) { i = (i + (e.clientX < sx ? 1 : -1) + imgs.length) % imgs.length; set(); } else if (e.target === wrap && Math.abs(e.clientX - sx) < 6) close(); sx = null; });

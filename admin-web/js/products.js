@@ -77,7 +77,7 @@ reg(/^\/products\/(new|\d+)$/, async (v, m) => {
   const form = buildForm(SPEC(cats), p, { onChange: () => { dirty = true; liveRisk(); } });
   let dirty = false, variants = JSON.parse(JSON.stringify(p.variants || []));
   const risk = h('div'), econ = h('div'), imgs = h('div'), vbox = h('div'), simBox = h('div');
-  const head = pageHead(isNew ? 'New product' : p.name, h('a', { class: 'btn', href: '#/products' }, '← All products'), !isNew ? h('a', { class: 'btn', href: `${location.origin.replace(/:\d+$/, '')}:3000/p/${p.slug}`, target: '_blank', id: 'viewlink' }, 'View on website') : null);
+  const head = pageHead(isNew ? 'New product' : p.name, h('a', { class: 'btn', href: '#/products' }, '← All products'), !isNew ? h('a', { class: 'btn', href: `${/^4\d{3}$/.test(location.port) ? location.origin.replace(/:\d+$/, '') + ':3000' : ''}/p/${p.slug}`, target: '_blank', id: 'viewlink' }, 'View on website') : null);
   const status = h('div', { class: 'row' });
   v.append(head, h('div', { class: 'grid g21' }, h('div', { class: 'stack-lg' }, card('', form.el), card('Photos', isNew ? h('p', { class: 'muted' }, 'Save the product first, then add photos.') : imgs), card('Options (size, colour…)', h('p', { class: 'muted small' }, 'Optional. Each option can have its own price and stock. Leave empty if the product has no options.'), vbox), card('Similar products shown at the bottom', simBox), isNew ? null : card('360° spin and 3D model (optional)', advanced())),
     h('div', { class: 'stack-lg' }, card('Save & publish', status, h('div', { class: 'row', style: { marginTop: '10px' } }, h('button', { class: 'btn primary', id: 'savebtn', onclick: save }, 'Save'))), card('Risk checker', risk), card('Profit calculator', econ))));

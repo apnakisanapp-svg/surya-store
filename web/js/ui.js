@@ -1,10 +1,11 @@
-import { BOOT, h, $, $$, clear, icon, t, tr, lang, setLang, bus, api, money, cart, wish, me, ls, toast, drawer, modal, nav, debounce, sid } from './core.js';
+import { BOOT, h, $, $$, clear, icon, t, tr, lang, setLang, bus, api, money, cart, wish, me, ls, toast, drawer, modal, nav, debounce, sid, pushOverlay, releaseOverlay } from './core.js';
 
 /* ---------- logo ---------- */
 let LOGO_N = 0;
 export function logo(dark) {
   const T = BOOT.theme || {}, src = dark && T.logo_dark ? T.logo_dark : T.logo;
   if (src) return h('a', { class: 'logo', href: '/', 'aria-label': BOOT.brand.name }, h('img', { src, alt: BOOT.brand.name, height: 30 }), T.show_logo_text ? h('span', null, BOOT.brand.name) : null);
+  if (!dark) return h('a', { class: 'logo logo-img', href: '/', 'aria-label': BOOT.brand.name }, h('img', { class: 'lg-img', src: '/img/logo.webp', alt: '', width: 58, height: 38 }), h('span', { class: 'lg-name' }, BOOT.brand.name));
   const gid = 'lg' + (++LOGO_N); // one id per logo instance (header + footer must not clash)
   const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 64 64'); s.setAttribute('aria-hidden', 'true'); s.setAttribute('class', 'sunmark');
   s.innerHTML = `<defs><linearGradient id="lg${gid}L" gradientUnits="userSpaceOnUse" x1="10" y1="4" x2="54" y2="60"><stop offset="0" stop-color="#FFF1BF"/><stop offset=".35" stop-color="#FFC84A"/><stop offset=".7" stop-color="#E59A1B"/><stop offset="1" stop-color="#A8670A"/></linearGradient><radialGradient id="lg${gid}D" gradientUnits="userSpaceOnUse" cx="27" cy="26" r="19"><stop offset="0" stop-color="#FFF6CC"/><stop offset=".45" stop-color="#FFCB4F"/><stop offset="1" stop-color="#D98E12"/></radialGradient></defs><g><line class="ray" style="--i:0" x1="32.00" y1="12.50" x2="32.00" y2="2.00" pathLength="1" stroke="url(#lg${gid}L)" stroke-width="3.4" stroke-linecap="round"/><line class="ray" style="--i:1" x1="41.75" y1="15.11" x2="44.75" y2="9.92" pathLength="1" stroke="url(#lg${gid}L)" stroke-width="2.6" stroke-linecap="round"/><line class="ray" style="--i:2" x1="48.89" y1="22.25" x2="57.98" y2="17.00" pathLength="1" stroke="url(#lg${gid}L)" stroke-width="3.4" stroke-linecap="round"/><line class="ray" style="--i:3" x1="51.50" y1="32.00" x2="57.50" y2="32.00" pathLength="1" stroke="url(#lg${gid}L)" stroke-width="2.6" stroke-linecap="round"/><line class="ray" style="--i:4" x1="48.89" y1="41.75" x2="57.98" y2="47.00" pathLength="1" stroke="url(#lg${gid}L)" stroke-width="3.4" stroke-linecap="round"/><line class="ray" style="--i:5" x1="41.75" y1="48.89" x2="44.75" y2="54.08" pathLength="1" stroke="url(#lg${gid}L)" stroke-width="2.6" stroke-linecap="round"/><line class="ray" style="--i:6" x1="32.00" y1="51.50" x2="32.00" y2="62.00" pathLength="1" stroke="url(#lg${gid}L)" stroke-width="3.4" stroke-linecap="round"/><line class="ray" style="--i:7" x1="22.25" y1="48.89" x2="19.25" y2="54.08" pathLength="1" stroke="url(#lg${gid}L)" stroke-width="2.6" stroke-linecap="round"/><line class="ray" style="--i:8" x1="15.11" y1="41.75" x2="6.02" y2="47.00" pathLength="1" stroke="url(#lg${gid}L)" stroke-width="3.4" stroke-linecap="round"/><line class="ray" style="--i:9" x1="12.50" y1="32.00" x2="6.50" y2="32.00" pathLength="1" stroke="url(#lg${gid}L)" stroke-width="2.6" stroke-linecap="round"/><line class="ray" style="--i:10" x1="15.11" y1="22.25" x2="6.02" y2="17.00" pathLength="1" stroke="url(#lg${gid}L)" stroke-width="3.4" stroke-linecap="round"/><line class="ray" style="--i:11" x1="22.25" y1="15.11" x2="19.25" y2="9.92" pathLength="1" stroke="url(#lg${gid}L)" stroke-width="2.6" stroke-linecap="round"/></g><circle class="disc" cx="32" cy="32" r="12.5" fill="url(#lg${gid}D)"/><ellipse class="gloss" cx="27.5" cy="27" rx="6.5" ry="4" transform="rotate(-35 27.5 27)" fill="#fff" opacity=".42"/>`;
@@ -189,7 +190,9 @@ function newsletterBox() {
 export function openSearch() {
   const scrim = h('div', { class: 'scrim on' }), list = h('div', { class: 'sug' });
   const inp = h('input', { class: 'inp', type: 'search', placeholder: t('search'), 'aria-label': t('search'), autocomplete: 'off', enterkeyhint: 'search' });
-  const close = () => { pan.remove(); scrim.remove(); document.removeEventListener('keydown', esc); };
+  const vis = () => { pan.remove(); scrim.remove(); document.removeEventListener('keydown', esc); };
+  const ov = pushOverlay(vis);
+  const close = () => { vis(); releaseOverlay(ov); };
   const esc = e => { if (e.key === 'Escape') close(); };
   const go = q => { close(); nav('/shop?q=' + encodeURIComponent(q)); };
   const pan = h('div', { class: 'search-pan', role: 'dialog', 'aria-label': t('search') }, h('div', { class: 'wrap' }, h('form', { class: 'row', style: { flexWrap: 'nowrap' }, onsubmit: e => { e.preventDefault(); if (inp.value.trim()) go(inp.value.trim()); } }, h('div', { class: 'grow' }, inp), h('button', { type: 'button', class: 'ibtn', 'aria-label': t('close'), onclick: close }, icon('x'))), list));
@@ -233,8 +236,7 @@ let drawerOpen = null;
 export async function openCart() {
   if (drawerOpen) return;
   const body = h('div'), foot = h('div');
-  const d = drawer(`${t('cart')}`, body, foot, { cls: 'cart-glass' }); drawerOpen = d;
-  const orig = d.close; d.close = () => { drawerOpen = null; bus.off('cart', refresh); orig(); };
+  const d = drawer(`${t('cart')}`, body, foot, { cls: 'cart-glass', onClose: () => { drawerOpen = null; bus.off('cart', refresh); } }); drawerOpen = d;
   async function refresh() {
     clear(body); clear(foot);
     if (!cart.items.length) {

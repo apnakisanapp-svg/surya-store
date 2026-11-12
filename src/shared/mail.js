@@ -73,7 +73,7 @@ async function sendEmail(id) {
 const esc = v => String(v == null ? '' : v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const LOGO_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 64 64"><defs><radialGradient id="g" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="#fff0b8"/><stop offset=".55" stop-color="#f0b43a"/><stop offset="1" stop-color="#c9801a"/></radialGradient></defs><g stroke="#f0b43a" stroke-width="4" stroke-linecap="round"><path d="M32 6v7M32 51v7M6 32h7M51 32h7M13.6 13.6l5 5M45.4 45.4l5 5M13.6 50.4l5-5M45.4 18.6l5-5"/></g><circle cx="32" cy="32" r="13" fill="url(#g)"/></svg>';
 let logoPng = null;
-async function logoBuf() { if (logoPng) return logoPng; try { logoPng = await require('sharp')(Buffer.from(LOGO_SVG)).resize(96, 96).png().toBuffer(); } catch { logoPng = false; } return logoPng; }
+async function logoBuf() { if (logoPng) return logoPng; try { logoPng = await require('sharp')(require('path').join(__dirname, '..', '..', 'web', 'img', 'logo.png')).resize({ width: 168 }).png().toBuffer(); } catch { logoPng = false; } return logoPng; }
 
 /** Branded HTML e-mail: dark gold header with the sun logo, a white card, and a quiet footer. */
 function layout({ brand, preheader, heading, bodyHtml, hasLogo }) {
@@ -82,7 +82,7 @@ function layout({ brand, preheader, heading, bodyHtml, hasLogo }) {
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3efe6"><tr><td align="center" style="padding:28px 14px">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:18px;overflow:hidden;box-shadow:0 8px 30px rgba(60,40,0,.12)">
 <tr><td align="center" style="background:#0f0d09;background-image:linear-gradient(135deg,#17120a,#2a1f0a);padding:28px 20px 22px">
-${hasLogo ? '<img src="cid:surya-logo" width="52" height="52" alt="" style="display:block;margin:0 auto 10px">' : ''}
+${hasLogo ? '<img src="cid:surya-logo" width="84" alt="" style="display:block;margin:0 auto 10px;height:auto">' : ''}
 <div style="font-size:22px;letter-spacing:.32em;font-weight:700;color:#f3d886;padding-left:.32em">${esc(String(brand).toUpperCase())}</div></td></tr>
 <tr><td style="height:3px;background:linear-gradient(90deg,#b98a2e,#f3d886,#b98a2e);font-size:0;line-height:0">&nbsp;</td></tr>
 <tr><td style="padding:30px 28px 8px"><h1 style="margin:0 0 10px;font-size:20px;line-height:1.3;color:#1c1a16">${esc(heading)}</h1>${bodyHtml}</td></tr>
