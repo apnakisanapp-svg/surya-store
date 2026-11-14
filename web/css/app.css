@@ -532,3 +532,7 @@ em.pop,span.pop,b.pop{display:inline-block;animation:popin .45s cubic-bezier(.2,
 @supports ((-webkit-background-clip:text) or (background-clip:text)){.logo .lg-name{color:transparent;-webkit-text-fill-color:transparent}}
 @media(min-width:900px){.logo .lg-img{height:44px}.logo .lg-name{font-size:1.45rem}}
 @media(max-width:380px){.logo .lg-name{letter-spacing:.14em;font-size:1.02rem}}
+
+/* per-product service chips */
+.svc-row{gap:6px;margin-top:2px}
+.svc-chip{font-size:.78rem;padding:4px 10px;cursor:default;pointer-events:none}

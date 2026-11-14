@@ -80,11 +80,17 @@ route(/^\/checkout$/, async view => {
     box.append(pm('upi', upiOk, t('upi'), upiOk ? 'GPay, PhonePe, Paytm or any UPI app. Order is confirmed after we check your payment.' : 'UPI is not available right now.'),
       pm('cod', cod.ok, t('cod'), cod.ok ? (cod.advance > 0 ? `Pay ${money(cod.advance)} now by UPI to confirm your order. The rest is paid when your parcel arrives.` : 'Pay when your parcel arrives.') : cod.message, cod.ok && price.cod.fee ? h('b', null, '+' + money(price.cod.fee)) : null));
     if (F.method === 'cod' && !cod.ok) F.method = upiOk ? 'upi' : 'cod';
+    const gb = $('#giftbox'), gmEl = $('#giftmsg');
+    if (gb) {
+      clear(gb);
+      if (price.gift && price.gift.ok) gb.append(h('label', { class: 'check sw' }, h('input', { type: 'checkbox', role: 'switch', checked: F.gift, onchange: e => { F.gift = e.target.checked; if (gmEl) gmEl.classList.toggle('hide', !F.gift); reprice(); } }), `${t('gift')} (+${money(price.gift.price)})`));
+      else { if (F.gift) { F.gift = false; reprice(); } if (gmEl) gmEl.classList.add('hide'); }
+    }
   }
   function stepPay() {
     paintSteps(); clear(body); reprice();
-    const gift = BOOT.shipping.gift_enabled ? h('div', { class: 'stack' }, h('label', { class: 'check sw' }, h('input', { type: 'checkbox', role: 'switch', checked: F.gift, onchange: e => { F.gift = e.target.checked; gm.classList.toggle('hide', !F.gift); reprice(); } }), `${t('gift')} (+${money(BOOT.shipping.gift_price)})`)) : null;
-    const gm = h('textarea', { class: 'inp' + (F.gift ? '' : ' hide'), maxlength: 200, placeholder: 'Gift message (optional)', value: F.gift_message, oninput: e => { F.gift_message = e.target.value; } }); gm.value = F.gift_message;
+    const gift = h('div', { class: 'stack', id: 'giftbox' });
+    const gm = h('textarea', { id: 'giftmsg', class: 'inp' + (F.gift ? '' : ' hide'), maxlength: 200, placeholder: 'Gift message (optional)', value: F.gift_message, oninput: e => { F.gift_message = e.target.value; } }); gm.value = F.gift_message;
     const cin = h('input', { class: 'inp', placeholder: t('coupon'), value: coupon, 'aria-label': t('coupon') }), cmsg = h('div', { class: 'small' });
     const applyC = async () => { coupon = cin.value.trim(); ls.set('sy_coupon', coupon); await reprice(); if (coupon && price.coupon) { cmsg.style.color = price.coupon.ok ? 'var(--ok)' : 'var(--err)'; cmsg.textContent = price.coupon.ok ? `${price.coupon.code} applied` : price.coupon.message; } else cmsg.textContent = ''; };
     body.append(h('div', { class: 'card stack' }, h('h3', null, t('payment')), h('div', { class: 'stack', id: 'paybox' }), h('div', { class: 'row', style: { flexWrap: 'nowrap' } }, h('div', { class: 'grow' }, cin), h('button', { class: 'btn ghost', onclick: applyC }, t('apply'))), cmsg, gift, gm, field('Order note (optional)', h('input', { class: 'inp', maxlength: 300, value: F.note, oninput: e => { F.note = e.target.value; } })),
@@ -167,11 +173,11 @@ route(/^\/order\/([A-Za-z0-9-]+)$/, async (view, m, q) => {
     if (['placed', 'payment_pending', 'cod_confirm', 'confirmed'].includes(o.status)) out.append(h('button', { class: 'btn ghost', onclick: async e => { if (!confirm('Cancel this order?')) return; try { await busy(e.currentTarget, () => api(`/orders/${o.number}/cancel?t=${token}`, { method: 'POST', body: { reason: 'Cancelled by customer' } })); toast('Order cancelled'); load(); } catch (x) { toast(x.message, { err: true }); } } }, t('cancel_order')));
     if (o.can_request) out.append(h('button', { class: 'btn', onclick: () => requestForm(o, token) }, t('request')));
     for (const r of o.requests || []) out.append(h('div', { class: 'card small' }, h('b', null, r.type === 'refund' ? 'Refund request' : 'Replacement request'), ` · ${r.status}`, h('div', { class: 'muted' }, r.reason)));
-    if (o.status === 'delivered') out.append(h('p', { class: 'muted small' }, `Damaged or defective? You can ask for a replacement or refund within ${o.return_window_days} days of delivery.`));
+    if (o.status === 'delivered') out.append(o.all_no_return ? h('p', { class: 'muted small' }, 'These items are sold without return. If something arrived damaged or wrong, please contact us.') : h('p', { class: 'muted small' }, `Damaged or defective? You can ask for ${(o.allowed_requests || []).length === 1 ? (o.allowed_requests[0] === 'refund' ? 'a refund' : 'a replacement') : 'a replacement or refund'} within ${o.return_window_days} days of delivery.`));
     return out;
   }
   function requestForm(o, token) {
-    const type = h('select', { class: 'inp' }, h('option', { value: 'replace' }, 'Replacement'), h('option', { value: 'refund' }, 'Refund')), reason = h('textarea', { class: 'inp', placeholder: 'What is wrong? (damaged, not working, wrong item…)', maxlength: 800 }), files = h('input', { type: 'file', accept: 'image/*', multiple: true, class: 'inp' });
+    const okT = o.allowed_requests && o.allowed_requests.length ? o.allowed_requests : ['replace', 'refund'], type = h('select', { class: 'inp' }, ...okT.map(x => h('option', { value: x }, x === 'refund' ? 'Refund' : 'Replacement'))), reason = h('textarea', { class: 'inp', placeholder: 'What is wrong? (damaged, not working, wrong item…)', maxlength: 800 }), files = h('input', { type: 'file', accept: 'image/*', multiple: true, class: 'inp' });
     const m = modal(h('div', { class: 'stack' }, h('h3', null, t('request')), h('p', { class: 'muted small' }, 'Add clear photos. An unboxing video link can be written in the message.'), type, reason, files, h('button', { class: 'btn', onclick: async e => { const f = new FormData(); f.append('type', type.value); f.append('reason', reason.value); [...files.files].slice(0, 3).forEach(x => f.append('photos', x)); try { const r = await busy(e.currentTarget, () => api(`/orders/${o.number}/request?t=${token}`, { method: 'POST', form: f })); m.close(); toast(r.message); load(); } catch (x) { toast(x.message, { err: true }); } } }, t('send'))));
   }
   async function upiPanel(o, token) {

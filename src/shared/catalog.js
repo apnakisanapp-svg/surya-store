@@ -1,4 +1,5 @@
 'use strict';
+const rules = require('./rules');
 const db = require('./db');
 const settings = require('./settings');
 const { jparse, now, round2 } = require('./util');
@@ -46,6 +47,7 @@ function shape(p, images, variants, rating, cat, admin) {
     badge: p.badge, featured: !!p.featured, preorder: !!p.preorder, stock_state: st.state, stock_left: st.state === 'low' || st.total <= showBelow ? st.total : null,
     max_per_order: p.max_per_order, specs: jparse(p.specs, []), safety: p.safety, safety_hi: p.safety_hi, safety_ack: !!p.safety_ack,
     warranty: p.warranty, warranty_hi: p.warranty_hi, origin_country: p.origin_country, manufacturer: p.manufacturer, importer: p.importer,
+    rules: (() => { const e = rules.effective(p), S = settings.get('shipping'); return { cod: e.cod, gift_ok: e.gift_ok, gift_price: e.gift_price != null ? e.gift_price : S.gift_price, ret_rule: e.ret_rule, ret_days: e.ret_days, ret_text: rules.returnText(e), ship: e.ship, adv_type: e.adv_type, adv_value: e.adv_value }; })(),
     has_battery: !!p.has_battery, video_url: p.video_url, model_glb: p.model_glb ? `/media/files/${p.model_glb}` : null,
     spin: jparse(p.spin_images, []).map(f => mediaUrl(f, 'gal')), faq: jparse(p.faq, []), weight_g: p.weight_g,
     seo_title: p.seo_title, seo_desc: p.seo_desc, created_at: p.created_at, views: p.views, sold_count: p.sold_count,

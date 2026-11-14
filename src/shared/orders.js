@@ -1,4 +1,5 @@
 'use strict';
+const rules = require('./rules');
 const db = require('./db');
 const settings = require('./settings');
 const pricing = require('./pricing');
@@ -82,7 +83,7 @@ function createOrder(body, ctx) {
     else if (priced.total > 3000) { risky = 1; riskReason = 'High-value COD order'; }
   }
 
-  const advance = pricing.advanceFor(P, { method, total: priced.total, phone: address.phone, risky, force: priced.force_advance });
+  const advance = pricing.cartAdvance(P, priced, { method, total: priced.total, phone: address.phone, risky });
   const run = db.transaction(() => {
     // duplicate guard: same phone + same total in last 2 minutes
     const dup = db.prepare("SELECT * FROM orders WHERE phone=? AND ABS(total+COALESCE(upi_adjust,0)-?)<0.001 AND placed_at > ? AND status NOT IN ('cancelled') ORDER BY id DESC LIMIT 1")
@@ -127,15 +128,15 @@ function createOrder(body, ctx) {
       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
       number, ctx.customer?.id || null, email || null, address.phone, address.name, jstr(address), status, method, payStatus, priced.subtotal, orderDiscount,
       priced.coupon?.ok ? priced.coupon.code : null, priced.shipping + priced.packaging, priced.cod_fee, priced.gift_fee, priced.gst.amount, orderTotal,
-      body.gift ? jstr({ wrap: true, message: String(body.gift_message || '').slice(0, 200) }) : null, String(body.note || '').slice(0, 300) || null, risky, riskReason || null,
+      (body.gift && priced.gift.ok) ? jstr({ wrap: true, message: String(body.gift_message || '').slice(0, 200) }) : null, String(body.note || '').slice(0, 300) || null, risky, riskReason || null,
       ts, expires, hashIp(ctx.ip), String(ctx.ua || '').slice(0, 200), body.lang === 'hi' ? 'hi' : 'en', token(16), priced.has_battery ? 1 : 0, ts);
     const orderId = info.lastInsertRowid;
     if (adj) db.prepare('UPDATE orders SET upi_adjust=? WHERE id=?').run(adj, orderId);
     if (advance > 0) db.prepare("UPDATE orders SET advance_amount=?, advance_pay=?, advance_status='pending' WHERE id=?").run(advance, advPay, orderId);
-    const ins = db.prepare('INSERT INTO order_items(order_id,product_id,variant_id,name,variant_name,sku,qty,price,mrp,cost,image,gst_rate,hsn) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)');
+    const ins = db.prepare('INSERT INTO order_items(order_id,product_id,variant_id,name,variant_name,sku,qty,price,mrp,cost,image,gst_rate,hsn,ret_rule,ret_days) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
     for (const l of priced.lines) if (l.ok) {
       const cost = unitCost(l.product_id, l.variant_id, l.cost);
-      ins.run(orderId, l.product_id, l.variant_id, l.name, l.variant_name, l.sku, l.qty, l.price, l.mrp, cost, l.image, l.gst_rate, l.hsn);
+      ins.run(orderId, l.product_id, l.variant_id, l.name, l.variant_name, l.sku, l.qty, l.price, l.mrp, cost, l.image, l.gst_rate, l.hsn, l.ret_rule, l.ret_days);
       db.prepare('UPDATE products SET sold_count=sold_count+? WHERE id=?').run(l.qty, l.product_id);
     }
     if (priced.coupon?.ok) db.prepare('UPDATE coupons SET used_count=used_count+1 WHERE UPPER(code)=UPPER(?)').run(priced.coupon.code);
@@ -294,23 +295,28 @@ function trackingLink(courier, no) {
 }
 
 function serializeForCustomer(o) {
-  const items = db.prepare('SELECT name, variant_name, qty, price, image, product_id FROM order_items WHERE order_id=?').all(o.id).map(i => {
+  const items = db.prepare('SELECT name, variant_name, qty, price, image, product_id, ret_rule, ret_days FROM order_items WHERE order_id=?').all(o.id).map(i => {
     // photo + link to the product page (link only while the product is still on sale)
     const pr = i.product_id ? db.prepare("SELECT slug FROM products WHERE id=? AND deleted_at IS NULL AND status='published'").get(i.product_id) : null;
-    return { ...i, image_url: itemImage(i.image), slug: pr ? pr.slug : null };
+    const e = rules.effective({ ret_rule: i.ret_rule, ret_days: i.ret_days });
+    return { name: i.name, variant_name: i.variant_name, qty: i.qty, price: i.price, image: i.image, product_id: i.product_id, image_url: itemImage(i.image), slug: pr ? pr.slug : null,
+      ret_rule: e.ret_rule, ret_days: e.ret_days, ret_text: rules.returnText(e), remedies: rules.remedies(e) };
   });
   const events = db.prepare('SELECT status, note, actor, created_at FROM order_events WHERE order_id=? ORDER BY id').all(o.id).filter(e => e.actor !== 'admin-note');
   const reqs = db.prepare('SELECT id, type, reason, status, created_at FROM order_requests WHERE order_id=? ORDER BY id DESC').all(o.id);
   const R = settings.get('returns');
-  let canRequest = false;
+  let canRequest = false, allowed = [], windowDays = R.window_days;
   if (o.status === 'delivered' && o.delivered_at) {
-    canRequest = (Date.now() - new Date(o.delivered_at).getTime()) <= R.window_days * 86400000 && !reqs.some(r => ['open', 'approved'].includes(r.status));
+    const age = (Date.now() - new Date(o.delivered_at).getTime()) / 86400000;
+    for (const i of items) if (age <= i.ret_days) for (const r of i.remedies) if (!allowed.includes(r)) allowed.push(r);
+    windowDays = items.length ? Math.max(...items.map(i => i.ret_days)) : R.window_days;
+    canRequest = allowed.length > 0 && !reqs.some(r => ['open', 'approved'].includes(r.status));
   }
   return {
     number: o.number, status: o.status, payment_method: o.payment_method, payment_status: o.payment_status, name: o.name, phone_last4: String(o.phone).slice(-4),
     address: jparse(o.address, {}), subtotal: o.subtotal, discount: o.discount, coupon_code: o.coupon_code, shipping: o.shipping, cod_fee: o.cod_fee, gift_fee: o.gift_fee, advance: Number(o.advance_amount) || 0, advance_status: o.advance_status || null, pay_now: payAmount(o), due_on_delivery: o.payment_method === 'cod' ? dueOnDelivery(o) : 0, total: o.total,
     gst_amount: o.gst_amount, utr: o.utr, courier: o.courier, tracking_no: o.tracking_no, tracking_url: o.tracking_url, placed_at: o.placed_at, expires_at: o.expires_at,
-    delivered_at: o.delivered_at, cancel_reason: o.cancel_reason, items, events, requests: reqs, can_request: canRequest, return_window_days: R.window_days,
+    delivered_at: o.delivered_at, cancel_reason: o.cancel_reason, items, events, requests: reqs, can_request: canRequest, allowed_requests: allowed, return_window_days: windowDays, all_no_return: items.length > 0 && items.every(i => i.ret_rule === 'none'),
     invoice_no: o.invoice_no, cod_confirmed: !!o.cod_confirmed,
   };
 }

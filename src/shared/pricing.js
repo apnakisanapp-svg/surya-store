@@ -1,6 +1,7 @@
 'use strict';
 const db = require('./db');
 const settings = require('./settings');
+const rules = require('./rules');
 const catalog = require('./catalog');
 const { jparse, round2, isPin, normPhone, int, now } = require('./util');
 
@@ -77,6 +78,8 @@ function priceCart(items, opts = {}) {
     const p = db.prepare(`SELECT p.* FROM products p WHERE p.id=? AND ${catalog.LIVE_SQL}`).get(it.product_id, ...catalog.liveArgs());
     const line = { key: `${it.product_id}:${it.variant_id || 0}`, product_id: it.product_id, variant_id: it.variant_id, qty: it.qty, ok: false, issue: null };
     line.pay_rule = p ? (p.pay_rule || '') : '';
+    const E = p ? rules.effective(p) : null;
+    if (E) Object.assign(line, { adv_type: E.adv_type, adv_value: E.adv_value, gift_ok: E.gift_ok, gift_price: E.gift_price, ship_rule: E.ship, ret_rule: E.ret_rule, ret_days: E.ret_days, ret_custom: E.ret_custom });
     if (!p) { line.issue = 'unavailable'; line.name = 'Unavailable product'; lines.push(line); continue; }
     const variants = db.prepare('SELECT * FROM variants WHERE product_id=? AND active=1 ORDER BY sort,id').all(p.id);
     let v = null;
@@ -116,9 +119,20 @@ function priceCart(items, opts = {}) {
   }
   const afterDiscount = round2(subtotal - discount);
   const freeAbove = S.free_above > 0 ? S.free_above : null;
-  let shipping = okLines.length ? ((freeAbove && afterDiscount >= freeAbove) || freeShipCoupon ? 0 : S.flat) : 0;
+  const allFree = okLines.length > 0 && okLines.every(l => l.ship_rule === 'free'), anyPaid = okLines.some(l => l.ship_rule === 'paid');
+  let shipping = okLines.length ? (freeShipCoupon || allFree ? 0 : anyPaid ? S.flat : (freeAbove && afterDiscount >= freeAbove) ? 0 : S.flat) : 0;
   const packaging = okLines.length ? (S.packaging_fee || 0) : 0;
-  const giftFee = opts.gift && S.gift_enabled && okLines.length ? S.gift_price : 0;
+  const giftAllowed = okLines.length > 0 && okLines.every(l => l.gift_ok);
+  const giftPrices = okLines.map(l => (l.gift_price != null ? l.gift_price : S.gift_price));
+  const giftPrice = giftPrices.length ? Math.max(...giftPrices) : S.gift_price;
+  const giftFee = opts.gift && giftAllowed ? giftPrice : 0;
+  // advance asked by the products themselves (fixed / percent), summed across lines
+  let prodAdv = 0;
+  for (const l of okLines) {
+    if (l.adv_type === 'fixed') prodAdv += Math.round(l.adv_value || 0);
+    else if (l.adv_type === 'percent') prodAdv += Math.round(l.line_total * (l.adv_value || 0) / 100);
+  }
+  const advAllNone = okLines.length > 0 && okLines.every(l => l.adv_type === 'none');
 
   let pin = null;
   if (opts.pincode) pin = checkPincode(opts.pincode, { battery: hasBattery });
@@ -153,8 +167,8 @@ function priceCart(items, opts = {}) {
     lines, count: okLines.reduce((s, l) => s + l.qty, 0), subtotal, mrp_total: mrpTotal, savings: round2(Math.max(0, mrpTotal - subtotal) + discount),
     discount, coupon, shipping, packaging, gift_fee: giftFee, cod_fee: codFee, total, gst: { enabled: !!B.gst_enabled, amount: gstAmount, inclusive: true },
     free_above: freeAbove, free_shipping_remaining: freeAbove && !freeShipCoupon ? Math.max(0, round2(freeAbove - afterDiscount)) : 0,
-    pincode: pin, cod: { ok: codOk, message: codMsg, fee: P.cod_fee || 0, advance: codOk ? advanceFor(P, { method: 'cod', total: method === 'cod' ? total : round2(total + (P.cod_fee || 0)), phone: opts.identity && opts.identity.phone, risky: false, force: forceAdvance }) : 0, advance_note: P.cod_advance_note || '' }, upi_ok: !!P.upi_enabled && !!P.upi_id,
-    force_advance: forceAdvance, upi_only: upiOnly, has_battery: hasBattery, battery_notice: hasBattery ? S.battery_notice : '', needs_safety_ack: needsSafety, method, errors,
+    pincode: pin, cod: { ok: codOk, message: codMsg, fee: P.cod_fee || 0, advance: codOk ? cartAdvance(P, { prod_adv: prodAdv, all_none: advAllNone, force_advance: forceAdvance }, { method: 'cod', total: method === 'cod' ? total : round2(total + (P.cod_fee || 0)), phone: opts.identity && opts.identity.phone, risky: false }) : 0, advance_note: P.cod_advance_note || '' }, upi_ok: !!P.upi_enabled && !!P.upi_id,
+    force_advance: forceAdvance, prod_adv: prodAdv, adv_all_none: advAllNone, gift: { ok: giftAllowed, price: giftPrice }, upi_only: upiOnly, has_battery: hasBattery, battery_notice: hasBattery ? S.battery_notice : '', needs_safety_ack: needsSafety, method, errors,
   };
 }
 
@@ -168,4 +182,12 @@ function advanceFor(P, { method, total, phone, risky, force }) {
   return Math.max(0, Math.min(a, Math.floor(total) - 1));
 }
 
-module.exports = { advanceFor, priceCart, checkPincode, couponFor, validateCoupon, eta };
+/** COD advance for a priced cart: product-level amounts win, then 'none' on every item, then global Settings. */
+function cartAdvance(P, priced, { method, total, phone, risky }) {
+  if (method !== 'cod' || !P.upi_enabled || !P.upi_id) return 0;
+  if (priced.prod_adv > 0) return Math.max(0, Math.min(priced.prod_adv, Math.floor(total) - 1));
+  if (priced.all_none) return 0;
+  return advanceFor(P, { method, total, phone, risky, force: priced.force_advance });
+}
+
+module.exports = { cartAdvance, advanceFor, priceCart, checkPincode, couponFor, validateCoupon, eta };

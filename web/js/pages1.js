@@ -140,13 +140,21 @@ route(/^\/p\/([^/]+)$/, async (view, m) => {
   if (wish.has(p.id)) heartB.style.color = '#d6336c';
   const shareB = h('button', { class: 'ibtn', style: { border: '1px solid var(--line)' }, 'aria-label': t('share'), onclick: async () => { const url = location.href; if (navigator.share) { try { await navigator.share({ title: tr(p, 'name'), url }); } catch { /* cancelled */ } } else { try { await navigator.clipboard.writeText(url); toast(t('copied')); } catch { /* */ } } } }, icon('share'));
   let stickyBtn, stickyPrice;
+  const RU = p.rules || {};
+  const retShort = RU.ret_rule === 'none' ? 'No return (damaged items still handled)' : ({ replacement: 'replacement', refund: 'refund', either: 'replacement or refund', exchange: 'exchange' }[RU.ret_rule] ? `${RU.ret_days}-day ${({ replacement: 'replacement', refund: 'refund', either: 'replacement or refund', exchange: 'exchange' })[RU.ret_rule]}` : `Easy ${BOOT.returns.window_days || 7}-day replacement`);
+  const svc = [];
+  if (RU.cod === 'no') svc.push('Online payment only'); else if (RU.cod === 'advance') svc.push('Cash on delivery with advance');
+  if (RU.ship === 'free') svc.push('Free delivery');
+  if (RU.gift_ok) svc.push('Gift wrap available');
+  const svcRow = svc.length ? h('div', { class: 'row svc-row' }, ...svc.map(x => h('span', { class: 'chip svc-chip' }, x))) : null;
   info.append(h('div', { class: 'stack' }, h('div', { class: 'row between', style: { alignItems: 'start', flexWrap: 'nowrap' } }, h('h1', null, tr(p, 'name')), h('div', { class: 'row', style: { flexWrap: 'nowrap', gap: '6px' } }, BOOT.store.wishlist ? heartB : null, shareB)),
     p.tagline ? h('p', { class: 'muted' }, tr(p, 'tagline')) : null,
     p.rating.count ? h('a', { href: '#reviews', class: 'row', style: { gap: '8px', textDecoration: 'none' } }, stars(p.rating.avg), h('span', { class: 'small' }, `${p.rating.avg} (${p.rating.count})`)) : null,
     priceEl, stockEl, varEl, atcRow,
     h('div', { class: 'stack' }, h('div', { class: 'row', style: { flexWrap: 'nowrap' } }, h('div', { class: 'grow' }, pinInp), h('button', { class: 'btn ghost', onclick: checkPin }, t('check'))), pinOut),
     p.has_battery ? h('div', { class: 'box-note warn' }, icon('warn'), h('span', null, BOOT.shipping.battery_notice)) : null,
-    h('div', { class: 'ret-chip' }, icon('refresh'), h('span', null, `Easy ${BOOT.returns.window_days || 7}-day replacement`))));
+    h('div', { class: 'ret-chip' }, icon('refresh'), h('span', null, retShort)),
+    svcRow));
   view.append(h('div', { class: 'wrap' }, h('div', { class: 'crumbs' }, h('a', { href: '/' }, t('home')), ' / ', h('a', { href: '/shop' }, t('shop')), ' / ', tr(p, 'name')), h('div', { class: 'pd' }, h('div', null, galBox), info)));
   gallery();
   // bottom glass bar (qty, total, delivery, Add to cart, Buy now)
@@ -162,8 +170,8 @@ route(/^\/p\/([^/]+)$/, async (view, m) => {
     qtyN.textContent = S.qty;
     const total = c.price * S.qty;
     const prevT = +totalEl.dataset.v || 0; totalEl.dataset.v = total; tweenNum(totalEl, prevT && prevT !== total ? prevT : total, total, v => money(v), 350);
-    const free = !SH.flat || (SH.free_above && total >= SH.free_above);
-    delEl.textContent = free ? 'Free delivery' : `+ ${money(SH.flat)} delivery` + (SH.free_above ? ` · free above ${money(SH.free_above)}` : '');
+    const free = !SH.flat || RU.ship === 'free' || (RU.ship !== 'paid' && SH.free_above && total >= SH.free_above);
+    delEl.textContent = free ? 'Free delivery' : `+ ${money(SH.flat)} delivery` + (SH.free_above && RU.ship !== 'paid' ? ` · free above ${money(SH.free_above)}` : '');
     delEl.classList.toggle('ok', !!free);
   }
   document.body.append(sticky); paint();
@@ -175,7 +183,7 @@ route(/^\/p\/([^/]+)$/, async (view, m) => {
   const rows = [...(p.specs || []).map(s => [s.k || s.label || s.name, s.v || s.value]), ['Country of origin', p.origin_country], ['Manufacturer', p.manufacturer], ['Imported by', p.importer], ['Warranty', tr(p, 'warranty')], ['Weight', p.weight_g ? p.weight_g + ' g' : ''], ['SKU', p.sku]].filter(r => r[0] && r[1]);
   if (rows.length) tabsData.push([t('specs'), () => h('table', { class: 'specs' }, rows.map(r => h('tr', null, h('td', null, r[0]), h('td', null, r[1]))))]);
   if (p.safety) tabsData.push(['Safety', () => h('div', { class: 'box-note warn' }, icon('warn'), h('div', { class: 'rte', style: { whiteSpace: 'pre-line' } }, tr(p, 'safety')))]);
-  tabsData.push(['Returns & replacement', () => h('div', { class: 'ret-box' }, h('b', null, `Easy ${BOOT.returns.window_days || 7}-day replacement`), h('p', { class: 'muted' }, 'If something arrives damaged or does not work, tell us within ' + (BOOT.returns.window_days || 7) + ' days of delivery and we will make it right with a replacement or refund.'), h('p', { class: 'muted small' }, 'Tip: a short unboxing video helps us sort it out faster.'))]);
+  tabsData.push(['Returns & replacement', () => h('div', { class: 'ret-box' }, h('b', null, retShort), h('p', { class: 'muted' }, RU.ret_text || ('If something arrives damaged or does not work, tell us within ' + (BOOT.returns.window_days || 7) + ' days of delivery and we will make it right with a replacement or refund.')), h('p', { class: 'muted small' }, 'Tip: a short unboxing video helps us sort it out faster.'))]);
   if (p.faq && p.faq.length) tabsData.push(['FAQ', () => faqList(p.faq.map(f => ({ q: f.q, a: f.a })))]);
   if (tabsData.length) { const body = h('div', { style: { padding: '20px 0' } }); const bar = h('div', { class: 'tabs', role: 'tablist' }); const pick = k => { $$('button', bar).forEach((b, j) => b.classList.toggle('on', j === k)); clear(body).append(tabsData[k][1]()); }; tabsData.forEach((d, k) => bar.append(h('button', { role: 'tab', onclick: () => pick(k) }, d[0]))); pick(0); view.append(h('section', { class: 'section rev', style: { paddingBottom: 0 } }, h('div', { class: 'wrap' }, bar, body))); }
   /* reviews */

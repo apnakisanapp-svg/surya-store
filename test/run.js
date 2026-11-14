@@ -90,6 +90,36 @@ const order = (pid, qty, method = 'upi') => pj('/orders', { method: 'POST', body
   const oA = await order(bpl.id, 1, 'cod'); ok(oA[0] === 200 && oA[1].status === 'payment_pending' && oA[1].advance === 99, 'its COD order waits for the advance');
   await pj(`/orders/${oA[1].number}/cancel?t=${oA[1].token}`, { method: 'POST', body: { reason: 'test' } });
   await aj('/products/' + bpl.id, { method: 'PUT', body: { pay_rule: '' } });
+  // ---- per-product services & rules ----
+  const p2 = prods.find(x => x.id !== bpl.id) || p; await aj('/products/' + p2.id, { method: 'PUT', body: { stock: 10 } });
+  const cp = (items, extra = {}) => pj('/cart/price', { method: 'POST', body: { items, method: 'cod', pincode: '110001', ...extra } }).then(r => r[1]);
+  const L = [{ product_id: bpl.id, qty: 1 }], L2 = [{ product_id: bpl.id, qty: 1 }, { product_id: p2.id, qty: 1 }];
+  await aj('/products/' + bpl.id, { method: 'PUT', body: { adv_type: 'fixed', adv_value: 99 } });
+  ok((await cp(L)).cod.advance === 99, 'product advance: fixed 99 asked even when the global rule is off');
+  await aj('/products/' + p2.id, { method: 'PUT', body: { adv_type: 'fixed', adv_value: 49 } });
+  ok((await cp(L2)).cod.advance === 148, 'advances of two products are added (99 + 49)');
+  await aj('/products/' + p2.id, { method: 'PUT', body: { adv_type: 'percent', adv_value: 10 } });
+  const pp = await cp([{ product_id: p2.id, qty: 1 }]); ok(pp.cod.advance === Math.round(pp.subtotal * 0.1), 'percent advance is a share of that product');
+  await aj('/products/' + bpl.id, { method: 'PUT', body: { adv_type: 'none' } }); await aj('/products/' + p2.id, { method: 'PUT', body: { adv_type: 'none' } });
+  ok((await cp(L2)).cod.advance === 0, 'advance "none" on every product asks nothing');
+  const bad1 = await aj('/products/' + bpl.id, { method: 'PUT', body: { adv_type: 'percent', adv_value: 95 } }); ok(bad1[0] >= 400, 'advance over 90% is refused');
+  await aj('/products/' + bpl.id, { method: 'PUT', body: { adv_type: '', adv_value: '' } }); await aj('/products/' + p2.id, { method: 'PUT', body: { adv_type: '', adv_value: '' } });
+  await aj('/products/' + bpl.id, { method: 'PUT', body: { ship_rule: 'free' } });
+  ok((await cp(L)).shipping === 0, 'free-delivery product has no delivery charge');
+  await aj('/products/' + bpl.id, { method: 'PUT', body: { ship_rule: 'paid' } });
+  const shp = await cp([{ product_id: bpl.id, qty: 9 }]); ok(shp.subtotal > 0 && shp.shipping > 0, 'always-charged product pays delivery even above the free limit');
+  await aj('/products/' + bpl.id, { method: 'PUT', body: { ship_rule: '' } });
+  await aj('/products/' + bpl.id, { method: 'PUT', body: { gift_rule: 'no' } });
+  const gq = await cp(L, { gift: true }); ok(gq.gift.ok === false && gq.gift_fee === 0, 'gift wrap off for a product removes the gift charge');
+  await aj('/products/' + bpl.id, { method: 'PUT', body: { gift_rule: 'yes', gift_price: 77 } });
+  const gq2 = await cp(L, { gift: true }); ok(gq2.gift.ok === true && gq2.gift_fee === 77, 'own gift price is used');
+  await aj('/products/' + bpl.id, { method: 'PUT', body: { gift_rule: '', gift_price: '' } });
+  await aj('/products/' + bpl.id, { method: 'PUT', body: { ret_rule: 'none', ret_days: 3 } });
+  const pd = (await pj('/products/' + (await aj('/products/' + bpl.id))[1].slug))[1]; const rr = (pd.product || pd).rules;
+  ok(rr && rr.ret_rule === 'none' && /No return/.test(rr.ret_text), 'product page data carries the return rule');
+  await aj('/products/' + bpl.id, { method: 'PUT', body: { ret_rule: 'refund', ret_days: 10 } });
+  const pd2 = (await pj('/products/' + (await aj('/products/' + bpl.id))[1].slug))[1]; const rr2 = (pd2.product || pd2).rules; ok(rr2.ret_rule === 'refund' && rr2.ret_days === 10, 'refund-only rule for 10 days saved');
+  await aj('/products/' + bpl.id, { method: 'PUT', body: { ret_rule: '', ret_days: '' } });
   // ---- unpaid UPI order is not counted as a real order ----
   const un = await order(bpl.id, 1, 'upi'); const dsh = (await aj('/dashboard'))[1];
   const actList = JSON.stringify((await aj('/orders?status=action'))[1]); ok(!actList.includes(un[1].number), 'unpaid UPI order is not in "Needs action"');

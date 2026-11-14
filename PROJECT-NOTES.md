@@ -106,3 +106,9 @@ GST/BIS advice, final policy wording, real photos and logo, payment gateway KYC.
 - About default text no longer says "Write your story here" (ABOUT_DEFAULT in policies-default.js).
 - Admin pages (About/policies) use a plain-text editor (# heading, - list, **bold**, [Insert] placeholders) with "Advanced (HTML)" toggle; old HTML pages still work.
 - Admin "View" links use the same host on the live site (no :3000).
+
+## 14 Nov — per-product services & rules
+- products table: adv_type (none/fixed/percent), adv_value, gift_rule (yes/no), gift_price, ret_rule (replacement/refund/either/exchange/none), ret_days, ship_rule (free/paid), plus existing pay_rule. Blank = follow Settings. order_items snapshots ret_rule/ret_days.
+- src/shared/rules.js turns a product row into effective rules. pricing.priceCart: advances of products are SUMMED (pricing.cartAdvance); "none" on every item = no advance; else global rule. ship_rule free (all items) = free, paid = never free. Gift off if any item says no; price = highest own price.
+- Return requests (orders.serializeForCustomer + /orders/:n/request) follow each item's rule and days; "No return" still handled by chat for damaged/wrong items.
+- Admin: Product edit > "Services & rules for this product". Tests added in test/run.js (use ORDER_RATE_MAX=500 and a seeded fresh DATA_DIR).

@@ -191,8 +191,9 @@ api.post('/orders/:number/cancel', lim(15, 10), asyncH((req, res) => {
 api.post('/orders/:number/request', lim(60, 6), upload.array('photos', 3), asyncH(async (req, res) => {
   const o = orderAccess(req);
   const s = orders.serializeForCustomer(o);
-  if (!s.can_request) throw bad(`Replacement or refund can be requested within ${s.return_window_days} days of delivery, once at a time.`);
+  if (!s.can_request) throw bad(s.all_no_return ? 'The items in this order are sold without return. If something arrived damaged or wrong, please contact us.' : `Replacement or refund can be requested within ${s.return_window_days} days of delivery, once at a time.`);
   const type = req.body.type === 'refund' ? 'refund' : 'replace';
+  if (!s.allowed_requests.includes(type)) throw bad(type === 'refund' ? 'A refund is not offered for the items in this order. You can ask for a replacement.' : 'A replacement is not offered for the items in this order. You can ask for a refund.');
   const reason = String(req.body.reason || '').trim().slice(0, 800);
   if (reason.length < 5) throw bad('Please tell us what is wrong with the product.');
   const photos = [];

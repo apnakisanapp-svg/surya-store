@@ -19,9 +19,9 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 
 const glbUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024, files: 1 } });
 
 const TEXT = ['sku', 'name', 'name_hi', 'tagline', 'tagline_hi', 'description', 'description_hi', 'safety', 'safety_hi', 'warranty', 'warranty_hi', 'origin_country', 'manufacturer', 'importer', 'hsn', 'brand_used',
-  'seo_title', 'seo_desc', 'video_url', 'badge', 'dims', 'similar_mode', 'publish_at', 'pay_rule'];
-const NUMS = ['price', 'mrp', 'cost', 'gst_rate', 'packaging_cost', 'ad_cost', 'shipping_cost'];
-const INTS = ['category_id', 'stock', 'low_stock_limit', 'max_per_order', 'weight_g', 'sort'];
+  'seo_title', 'seo_desc', 'video_url', 'badge', 'dims', 'similar_mode', 'publish_at', 'pay_rule', 'adv_type', 'gift_rule', 'ret_rule', 'ship_rule'];
+const NUMS = ['price', 'mrp', 'cost', 'gst_rate', 'packaging_cost', 'ad_cost', 'shipping_cost', 'adv_value', 'gift_price'];
+const INTS = ['category_id', 'stock', 'low_stock_limit', 'max_per_order', 'weight_g', 'sort', 'ret_days'];
 const BOOLS = ['preorder', 'sold_out', 'safety_ack', 'has_battery', 'is_electronic', 'has_blade', 'is_liquid', 'is_cosmetic_food', 'featured'];
 const JSONS = ['tags', 'specs', 'faq', 'similar_ids', 'risk_ack'];
 
@@ -36,6 +36,12 @@ function pickFields(b) {
   if (o.price != null && o.price < 0) throw bad('Price cannot be negative.');
   if (o.stock != null && o.stock < 0) throw bad('Stock cannot be negative.');
   if (o.similar_mode && !['auto', 'manual'].includes(o.similar_mode)) o.similar_mode = 'auto';
+  const oneOf = (k, list) => { if (o[k] != null && !list.includes(o[k])) o[k] = null; };
+  oneOf('pay_rule', ['upi_only', 'cod_advance']); oneOf('adv_type', ['none', 'fixed', 'percent']); oneOf('gift_rule', ['yes', 'no']);
+  oneOf('ret_rule', require('../shared/rules').RET_RULES); oneOf('ship_rule', ['free', 'paid']);
+  for (const k of ['adv_value', 'gift_price']) if (o[k] != null && o[k] < 0) throw bad('Amounts cannot be negative.');
+  if (o.adv_type === 'percent' && o.adv_value != null && o.adv_value > 90) throw bad('An advance of more than 90% is not allowed.');
+  if (o.ret_days != null && (o.ret_days < 0 || o.ret_days > 90)) throw bad('Return days must be between 0 and 90.');
   if (o.publish_at) o.publish_at = new Date(o.publish_at).toISOString();
   if (o.description) o.description = require('../shared/util').cleanHtml(o.description);
   if (o.description_hi) o.description_hi = require('../shared/util').cleanHtml(o.description_hi);
