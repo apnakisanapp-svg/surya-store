@@ -57,13 +57,13 @@ const EN = {
   upi: 'Pay by UPI', cod: 'Cash on delivery', place: 'Place order', next: 'Next', back: 'Back', name: 'Full name', phone: 'Mobile number', email: 'Email (optional)', addr1: 'House, street, area', addr2: 'Landmark (optional)', city: 'City', state: 'State',
   contact: 'Contact details', delivery: 'Delivery address', payment: 'Payment', review: 'Review', terms_ok: 'I agree to the Terms, Privacy Policy and Return Policy', marketing_ok: 'Send me offers on WhatsApp and email (optional)', safety_ok: 'I have read the safety instructions',
   notify: 'Notify me', share: 'Share', copied: 'Link copied', mrp: 'MRP', off: 'off', save: 'Save', send: 'Send', msg: 'Message', order_no: 'Order number', find: 'Find order', logout: 'Log out', register: 'Create account', password: 'Password',
-  orders: 'My orders', wishlist: 'Wishlist', addresses: 'Addresses', profile: 'Profile', no_results: 'Nothing found', try_other: 'Try another word or clear the filters.', load_more: 'Show more', gift: 'Gift wrap', delivery_by: 'Delivery by', pay_now: 'Pay now',
+  orders: 'My orders', wishlist: 'Wishlist', addresses: 'Addresses', profile: 'Profile', no_results: 'Nothing found', fb_title: 'No exact match for', fb_text: 'These similar and popular products might help.', try_other: 'Try another word or clear the filters.', load_more: 'Show more', gift: 'Gift wrap', delivery_by: 'Delivery by', pay_now: 'Pay now',
   have_paid: 'I have paid', utr: 'UPI transaction ID (UTR)', cancel_order: 'Cancel order', request: 'Replacement or refund', free_ship_left: 'Add {n} more for free shipping', free_ship_got: 'You get free shipping', size: 'Details', grievance: 'Grievance officer',
   cookies_text: 'We use cookies to keep your cart and improve the site.', accept: 'Accept', reject: 'Reject', lang: 'हिं', yes: 'Yes', no: 'No', close: 'Close', retry: 'Try again', offline: 'You are offline. Some things may not work.',
 };
 const HI = {
   empty_cart: 'Cart khaali hai', continue: 'Shopping jaari rakho', added: 'Cart mein add ho gaya', oos: 'Stock khatam', low: 'Sirf {n} bache hain', free: 'Free', remove: 'Hatao', undo: 'Wapas', removed: 'Cart se hata diya',
-  pincode: 'Pincode', cod: 'Cash on delivery', upi: 'UPI se pay karo', place: 'Order karo', name: 'Poora naam', phone: 'Mobile number', addr1: 'Ghar, gali, area', city: 'Sheher', state: 'Rajya', no_results: 'Kuch nahi mila', try_other: 'Dusra shabd try karo ya filter hatao.',
+  pincode: 'Pincode', cod: 'Cash on delivery', upi: 'UPI se pay karo', place: 'Order karo', name: 'Poora naam', phone: 'Mobile number', addr1: 'Ghar, gali, area', city: 'Sheher', state: 'Rajya', fb_title: 'Bilkul wahi nahi mila:', fb_text: 'Par ye milte-julte aur popular products aapko pasand aa sakte hain.', no_results: 'Kuch nahi mila', try_other: 'Dusra shabd try karo ya filter hatao.',
   free_ship_left: 'Free shipping ke liye {n} aur jodo', free_ship_got: 'Aapko free shipping mil gayi', terms_ok: 'Mujhe Terms, Privacy aur Return Policy manzoor hai', safety_ok: 'Maine safety instructions padh li hain', notify: 'Wapas aane par batao', copied: 'Link copy ho gaya',
   offline: 'Aap offline hain.', total: 'Total', subtotal: 'Subtotal', shipping: 'Shipping', delivery_by: 'Delivery', have_paid: 'Maine pay kar diya', cancel_order: 'Order cancel karo', lang: 'EN', similar: 'Ye bhi pasand aayenge', recent: 'Aapne dekha', reviews: 'Reviews',
 };
@@ -94,6 +94,8 @@ export const cart = {
   save() { ls.set('sy_cart', this.items); bus.emit('cart'); },
   count() { return this.items.reduce((s, i) => s + i.q, 0); },
   add(p, v, q = 1, info) { const it = this.items.find(i => i.p === p && (i.v || 0) === (v || 0)); if (it) it.q = Math.min(99, it.q + q); else this.items.push({ p, v: v || 0, q, info }); if (info && it) it.info = info; this.save(); },
+  /** Buy now: this product gets exactly this quantity (it does not add to what is already in the cart). */
+  buyNow(p, v, q = 1, info) { const it = this.items.find(i => i.p === p && (i.v || 0) === (v || 0)); if (it) { it.q = Math.max(1, Math.min(99, q)); if (info) it.info = info; } else this.items.push({ p, v: v || 0, q, info }); this.save(); },
   setQty(p, v, q) { const it = this.items.find(i => i.p === p && (i.v || 0) === (v || 0)); if (!it) return; it.q = Math.max(1, Math.min(99, q)); this.save(); },
   remove(p, v) { const i = this.items.findIndex(x => x.p === p && (x.v || 0) === (v || 0)); if (i < 0) return null; const [g] = this.items.splice(i, 1); this.save(); return { g, i }; },
   restore(r) { if (r) { this.items.splice(r.i, 0, r.g); this.save(); } },
@@ -123,23 +125,46 @@ export function toast(msg, { err = false, action, onAction, ms = 3200 } = {}) {
   const el = h('div', { class: 'toast' + (err ? ' err' : '') }, h('span', null, msg), action && h('button', { onclick: () => { onAction && onAction(); el.remove(); } }, action));
   toastBox.append(el); setTimeout(() => el.remove(), action ? Math.max(ms, 5000) : ms);
 }
+/* ---------- overlays + phone back button ----------
+   Every drawer / modal / search panel / photo viewer adds ONE history entry (same URL). The phone's back button then
+   closes the top overlay instead of leaving the page. Closing by X / outside tap / Esc removes its entry again. */
+const ovStack = []; let pendingBack = 0, queuedNav = null;
+export function pushOverlay(onPop) { const o = { onPop }; ovStack.push(o); try { history.pushState({ ov: 1 }, '', location.href); } catch { /* */ } return o; }
+export function releaseOverlay(o) {
+  const i = ovStack.indexOf(o); if (i < 0) return;
+  ovStack.splice(i, 1);
+  if (i === ovStack.length) { pendingBack++; history.back(); }
+}
+export function overlayPopped(e) {
+  if (pendingBack > 0) { pendingBack--; if (!pendingBack && queuedNav) { const f = queuedNav; queuedNav = null; f(); } return true; }
+  if (ovStack.length) { ovStack.pop().onPop(); return true; }
+  if (e && e.state && e.state.ov) { pendingBack++; history.back(); return true; } // stale entry (forward button / reload): step over it
+  return false;
+}
+try { if (history.state && history.state.ov) history.replaceState({}, '', location.href); } catch { /* */ }
 export function modal(content, { onClose } = {}) {
   const scrim = h('div', { class: 'scrim' }), wrap = h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true' });
   const box = h('div', { class: 'box' }, content); wrap.append(box);
-  const close = () => { scrim.classList.remove('on'); setTimeout(() => { scrim.remove(); wrap.remove(); }, 200); document.removeEventListener('keydown', esc); onClose && onClose(); };
+  let done = false;
+  const vis = () => { if (done) return; done = true; scrim.classList.remove('on'); setTimeout(() => { scrim.remove(); wrap.remove(); }, 200); document.removeEventListener('keydown', esc); onClose && onClose(); };
+  const ov = pushOverlay(vis);
+  const close = () => { vis(); releaseOverlay(ov); };
   const esc = e => { if (e.key === 'Escape') close(); };
   scrim.addEventListener('click', close); document.addEventListener('keydown', esc);
   document.body.append(scrim, wrap); requestAnimationFrame(() => scrim.classList.add('on'));
   return { close, box };
 }
-export function drawer(title, body, footer, { side = 'right', cls = '' } = {}) {
+export function drawer(title, body, footer, { side = 'right', cls = '', onClose } = {}) {
   const scrim = h('div', { class: 'scrim' });
   const d = h('aside', { class: 'drawer ' + side + (cls ? ' ' + cls : ''), role: 'dialog', 'aria-modal': 'true', 'aria-label': title });
   const head = h('div', { class: 'drawer-h' }, h('b', null, title), h('button', { class: 'ibtn', 'aria-label': t('close'), onclick: () => api_.close() }, icon('x')));
   const b = h('div', { class: 'drawer-b' }, body), f = footer ? h('div', { class: 'drawer-f' }, footer) : null;
   d.append(head, b); if (f) d.append(f);
   const esc = e => { if (e.key === 'Escape') api_.close(); };
-  const api_ = { el: d, body: b, footer: f, close() { scrim.classList.remove('on'); d.classList.remove('on'); document.removeEventListener('keydown', esc); document.body.style.overflow = ''; setTimeout(() => { scrim.remove(); d.remove(); }, 320); } };
+  let done = false;
+  const vis = () => { if (done) return; done = true; scrim.classList.remove('on'); d.classList.remove('on'); document.removeEventListener('keydown', esc); document.body.style.overflow = ''; setTimeout(() => { scrim.remove(); d.remove(); }, 320); onClose && onClose(); };
+  const ov = pushOverlay(vis);
+  const api_ = { el: d, body: b, footer: f, close() { vis(); releaseOverlay(ov); } };
   scrim.addEventListener('click', () => api_.close()); document.addEventListener('keydown', esc);
   document.body.append(scrim, d); document.body.style.overflow = 'hidden';
   requestAnimationFrame(() => { scrim.classList.add('on'); d.classList.add('on'); });
@@ -149,7 +174,13 @@ export function drawer(title, body, footer, { side = 'right', cls = '' } = {}) {
 /* ---------- router ---------- */
 const routes = [];
 export const route = (re, fn) => routes.push([re, fn]);
-export const nav = (url, replace) => { if (url === location.pathname + location.search) { window.scrollTo(0, 0); return; } history[replace ? 'replaceState' : 'pushState']({}, '', url); render(); };
+export const nav = (url, replace) => {
+  if (pendingBack > 0) { queuedNav = () => nav(url, replace); return; } // an overlay is still stepping back: go after it
+  let open = 0;
+  if (ovStack.length) { const o = ovStack.splice(0); open = o.length; o.reverse().forEach(x => x.onPop()); replace = true; } // reuse the overlay's history entry
+  if (url === location.pathname + location.search) { if (open) { pendingBack++; history.go(-open); } window.scrollTo(0, 0); return; }
+  history[replace ? 'replaceState' : 'pushState']({}, '', url); render();
+};
 let mount;
 export function startRouter(el) {
   mount = el;
@@ -160,7 +191,7 @@ export function startRouter(el) {
     if (u.origin !== location.origin || /^\/(api|media|sitemap|robots)/.test(u.pathname) || u.hash && u.pathname === location.pathname) return;
     e.preventDefault(); nav(u.pathname + u.search + u.hash);
   });
-  window.addEventListener('popstate', render);
+  window.addEventListener('popstate', e => { if (overlayPopped(e)) return; render(); });
   render();
 }
 let token = 0;
@@ -181,7 +212,11 @@ export async function render() {
   }
   clear(mount).append(notFoundView());
 }
-export function setTitle(s) { document.title = s ? `${s} | ${BOOT.brand.name}` : BOOT.brand.name; }
+/* The server already sends the right <title> for the page that was opened. Keep it there (Google reads the rendered title),
+   and only compute a title for pages reached by tapping inside the app. */
+const T0 = document.title, P0 = location.pathname + location.search;
+const FULL_NAME = /\b(store|shop)\b/i.test(BOOT.brand.name) ? BOOT.brand.name : BOOT.brand.name + ' Store';
+export function setTitle(s) { if (T0 && location.pathname + location.search === P0) { document.title = T0; return; } document.title = s ? `${s} | ${FULL_NAME}` : FULL_NAME; }
 export function reveal(root) {
   const io = 'IntersectionObserver' in window ? new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { rootMargin: '0px 0px -8% 0px' }) : null;
   $$('.rev', root).forEach(el => io ? io.observe(el) : el.classList.add('in'));

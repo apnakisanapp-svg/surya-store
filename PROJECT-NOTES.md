@@ -120,3 +120,4 @@ GST/BIS advice, final policy wording, real photos and logo, payment gateway KYC.
 - COD advance: review step shows "Now by UPI (advance) / On delivery / Total"; side panel and order page show the same split.
 - Account page: "Set a password" card removed (login is by email code only). Resend code shows a highlighted Spam/Promotions box. Login email: single selectable code, subject "123456 is your SURYA login code".
 - Back-to-top button is glass (`.gl-top`).
+- 15 Nov (later): "Buy now" used cart.add (+qty) so a product already in the cart ended up with a higher quantity; now `cart.buyNow` sets the exact quantity. Address step is 2 columns on phone (pincode+city, district+state). Review box lists Items / Discount / Delivery / Gift / COD charge / Total, then "Pay now by UPI" and "Pay on delivery". MRP-cut-off issue parked by owner.
