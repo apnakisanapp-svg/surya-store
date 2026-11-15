@@ -536,3 +536,41 @@ em.pop,span.pop,b.pop{display:inline-block;animation:popin .45s cubic-bezier(.2,
 /* per-product service chips */
 .svc-row{gap:6px;margin-top:2px}
 .svc-chip{font-size:.78rem;padding:4px 10px;cursor:default;pointer-events:none}
+
+/* ===== checkout progress bar (4 steps) ===== */
+.stp{position:relative;display:grid;grid-template-columns:repeat(4,1fr);margin:0 0 22px;padding-top:2px}
+.stp-track{position:absolute;left:12.5%;right:12.5%;top:20px;height:4px;border-radius:4px;background:var(--line);overflow:hidden}
+.stp-fill{display:block;height:100%;border-radius:4px;background:linear-gradient(90deg,#e9c25a,#c9a24b);transition:width .5s cubic-bezier(.4,0,.2,1)}
+.stp-i{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:8px;background:none;border:0;padding:0;font:inherit;color:var(--mute);cursor:default}
+.stp-i.done{cursor:pointer;color:var(--ink)}
+.stp-i:disabled{opacity:1}
+.stp-dot{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:.95rem;background:var(--bg,#fff);border:2px solid var(--line);color:var(--mute);transition:all .35s ease}
+.stp-dot svg{width:18px;height:18px;stroke-width:3}
+.stp-i.done .stp-dot{background:linear-gradient(145deg,#f4d77a,#c9a24b);border-color:#c9a24b;color:#1a1405;box-shadow:0 6px 14px -8px rgba(169,128,31,.8)}
+.stp-i.on .stp-dot{background:#1a1405;border-color:#1a1405;color:#fff;transform:scale(1.14);box-shadow:0 0 0 5px rgba(201,162,75,.28),0 8px 18px -8px rgba(26,20,5,.6);animation:stpPulse 2.2s ease-in-out infinite}
+.stp-lb{font-size:.78rem;font-weight:600;line-height:1.1;text-align:center}
+.stp-i.on .stp-lb{color:var(--ink)}
+@keyframes stpPulse{0%,100%{box-shadow:0 0 0 5px rgba(201,162,75,.28),0 8px 18px -8px rgba(26,20,5,.6)}50%{box-shadow:0 0 0 8px rgba(201,162,75,.12),0 8px 18px -8px rgba(26,20,5,.6)}}
+@media(prefers-reduced-motion:reduce){.stp-i.on .stp-dot{animation:none}.stp-fill,.stp-dot{transition:none}}
+@media(prefers-color-scheme:dark){.stp-i.on .stp-dot{background:#f4d77a;border-color:#f4d77a;color:#1a1405}.stp-dot{background:#16130c}}
+
+/* ===== advance split ===== */
+.adv-split{display:grid;gap:6px;margin-top:8px;padding:10px 12px;border-radius:12px;background:rgba(201,162,75,.12);border:1px solid rgba(201,162,75,.35)}
+.adv-split div{display:flex;justify-content:space-between;gap:10px;font-size:.88rem}
+.adv-box{display:grid;gap:8px;padding:14px;border-radius:14px;background:linear-gradient(145deg,rgba(255,255,255,.7),rgba(255,244,205,.55));border:1px solid rgba(201,162,75,.45)}
+.adv-box .adv-total{border-top:1px dashed rgba(201,162,75,.55);padding-top:8px}
+@media(prefers-color-scheme:dark){.adv-box{background:rgba(255,255,255,.06)}}
+
+/* ===== resend notice ===== */
+.spam-note{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:14px;background:rgba(255,226,140,.35);border:1px solid rgba(201,162,75,.6);font-size:.95rem;line-height:1.4;text-align:left;animation:spamIn .35s ease}
+.spam-note svg{flex:none;width:22px;height:22px;margin-top:1px}
+.spam-note u{text-decoration-thickness:2px;text-underline-offset:3px}
+.spam-note.hide{display:none}
+@keyframes spamIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+
+/* ===== glass back-to-top ===== */
+.fab .btn.gl-top{background:linear-gradient(145deg,rgba(255,255,255,.85),rgba(255,255,255,.45));color:#1a1405;border:1px solid rgba(255,255,255,.85);-webkit-backdrop-filter:blur(14px) saturate(180%);backdrop-filter:blur(14px) saturate(180%);box-shadow:0 10px 24px -10px rgba(60,40,0,.45),inset 0 1px 0 #fff}
+.fab .btn.gl-top:active{transform:scale(.94)}
+@media(prefers-color-scheme:dark){.fab .btn.gl-top{background:rgba(255,255,255,.12);color:#fff;border-color:rgba(255,255,255,.22);box-shadow:0 10px 24px -10px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.18)}}
+.tot .adv-split{display:grid;gap:6px}.tot .adv-split div{display:flex;justify-content:space-between;gap:10px;font-size:.88rem}
+.tot .adv-split>div{width:100%;display:flex;justify-content:space-between}.tot .adv-split>div>b{margin-left:auto}

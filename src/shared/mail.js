@@ -107,7 +107,7 @@ async function sendOtp(to, code) {
   const t = getTransport(); const bs = settings.get('brand'), brand = bs.name || 'SURYA';
   if (!t) { if (!cfg.PRODUCTION) { if (process.env.OTP_LOG_FILE) { try { require('fs').appendFileSync(process.env.OTP_LOG_FILE, `${to} ${code}\n`); } catch { /* ignore */ } } console.log(`  [OTP for ${to}] ${code}  (email is not set up, so the code is shown here)`); return true; } return false; }
   const text = `Your ${brand} login code is ${code}\n\nIt works for 10 minutes. Never share it with anyone. If you did not ask for it, ignore this email.`;
-  const boxes = String(code).split('').map(d => `<td style="width:42px;height:54px;text-align:center;font-size:28px;font-weight:700;color:#1c1a16;background:#fbf6e8;border:1px solid #ead9a8;border-radius:10px">${esc(d)}</td><td style="width:6px"></td>`).join('');
+  const boxes = `<td style="padding:12px 22px;text-align:center;font-size:34px;font-weight:700;letter-spacing:10px;color:#1c1a16;background:#fbf6e8;border:1px solid #ead9a8;border-radius:12px">${esc(code)}</td>`; // one selectable string: easy to copy
   const bodyHtml = `<p style="margin:0 0 18px;font-size:15px;line-height:1.6;color:#4a4436">Use this code to log in or create your account. It works for <b>10 minutes</b>.</p>
 <table role="presentation" align="center" cellpadding="0" cellspacing="0" style="margin:6px auto 20px"><tr>${boxes}</tr></table>
 <p style="margin:0 0 6px;font-size:13px;line-height:1.6;color:#8a8170">Never share this code with anyone. ${esc(brand)} will never ask for it on a call or chat.</p>`;

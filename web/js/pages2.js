@@ -30,7 +30,7 @@ function totals(p, method) {
   return h('div', { class: 'tot' }, h('div', null, h('span', null, t('subtotal')), h('span', null, money(p.subtotal))), p.discount ? h('div', { class: 'g' }, h('span', null, `${t('coupon')} ${p.coupon && p.coupon.code || ''}`), h('span', null, '−' + money(p.discount))) : null,
     h('div', null, h('span', null, t('shipping')), h('span', null, p.shipping + p.packaging ? money(p.shipping + p.packaging) : t('free'))), p.gift_fee ? h('div', null, h('span', null, t('gift')), h('span', null, money(p.gift_fee))) : null, p.cod_fee ? h('div', null, h('span', null, 'COD fee'), h('span', null, money(p.cod_fee))) : null,
     p.gst && p.gst.enabled && p.gst.amount ? h('div', { class: 'muted small' }, h('span', null, 'GST included'), h('span', null, money(p.gst.amount))) : null,
-    h('div', { class: 'big' }, h('span', null, t('total')), h('span', null, money(p.total))), p.savings > 0 ? h('div', { class: 'g small' }, h('span', null, 'You save'), h('span', null, money(p.savings))) : null);
+    h('div', { class: 'big' }, h('span', null, t('total')), h('span', null, money(p.total))), p.adv_now > 0 ? h('div', { class: 'adv-split' }, h('div', null, h('span', null, 'Pay now by UPI (advance)'), h('b', null, money(p.adv_now))), h('div', null, h('span', null, 'Pay on delivery'), h('b', null, money(p.due != null ? p.due : Math.max(0, p.total - p.adv_now))))) : null, p.savings > 0 ? h('div', { class: 'g small' }, h('span', null, 'You save'), h('span', null, money(p.savings))) : null);
 }
 
 /* ================= CHECKOUT ================= */
@@ -38,7 +38,7 @@ route(/^\/checkout$/, async view => {
   setTitle(t('checkout'));
   if (!cart.items.length) { view.append(wrap(h('div', { class: 'empty' }, icon('bag'), h('h3', null, t('empty_cart')), h('p', { style: { marginTop: '16px' } }, h('a', { class: 'btn', href: '/shop' }, t('continue')))))); return; }
   const saved = ls.get('sy_addr', {});
-  const F = { name: saved.name || (me.customer && me.customer.name) || '', phone: saved.phone || (me.customer && me.customer.phone) || '', email: saved.email || (me.customer && me.customer.email) || '', line1: saved.line1 || '', line2: saved.line2 || '', pincode: saved.pincode || ls.get('sy_pin', ''), city: saved.city || '', state: saved.state || '', method: BOOT.payments.upi ? 'upi' : 'cod', gift: false, gift_message: '', note: '', terms: false, safety: false, marketing: false, save_address: true };
+  const F = { name: saved.name || (me.customer && me.customer.name) || '', phone: saved.phone || (me.customer && me.customer.phone) || '', email: saved.email || (me.customer && me.customer.email) || '', line1: saved.line1 || '', line2: saved.line2 || '', pincode: saved.pincode || ls.get('sy_pin', ''), city: saved.city || '', district: saved.district || '', state: saved.state || '', method: BOOT.payments.upi ? 'upi' : 'cod', gift: false, gift_message: '', note: '', terms: false, safety: false, marketing: false, save_address: true };
   let step = 1, price = null, coupon = ls.get('sy_coupon', '');
   const body = h('div'), side = h('aside', { class: 'card stack' }), stepsEl = h('div', { class: 'steps' });
   view.append(wrap(h('h1', { class: 'h1', style: { fontSize: 'clamp(1.8rem,5vw,2.8rem)', marginBottom: '20px' } }, t('checkout')), stepsEl, h('div', { class: 'co' }, body, side)));
@@ -47,31 +47,64 @@ route(/^\/checkout$/, async view => {
     try { price = await priceNow({ coupon, pincode: /^\d{6}$/.test(F.pincode) ? F.pincode : undefined, method: F.method, gift: F.gift, email: F.email, phone: F.phone }); } catch (e) { toast(e.message, { err: true }); return; }
     syncFromPrice(price);
     if (!cart.items.length) return nav('/cart');
-    clear(side).append(h('b', null, t('review')), ...price.lines.map(l => h('div', { class: 'row', style: { flexWrap: 'nowrap', gap: '10px' } }, l.image ? h('img', { src: l.image, alt: '', width: 48, height: 48, style: { width: '48px', height: '48px', borderRadius: '10px', objectFit: 'cover' } }) : null, h('div', { class: 'grow small' }, (lang() === 'hi' && l.name_hi) || l.name, h('span', { class: 'muted' }, ` × ${l.qty}`)), h('b', { class: 'small' }, money(l.line_total)))), totals(price),
+    clear(side).append(h('b', null, t('review')), ...price.lines.map(l => h('div', { class: 'row', style: { flexWrap: 'nowrap', gap: '10px' } }, l.image ? h('img', { src: l.image, alt: '', width: 48, height: 48, style: { width: '48px', height: '48px', borderRadius: '10px', objectFit: 'cover' } }) : null, h('div', { class: 'grow small' }, (lang() === 'hi' && l.name_hi) || l.name, h('span', { class: 'muted' }, ` × ${l.qty}`)), h('b', { class: 'small' }, money(l.line_total)))), totals({ ...price, adv_now: F.method === 'cod' && price.cod && price.cod.ok ? price.cod.advance : 0 }),
       price.pincode && !price.pincode.ok ? h('p', { class: 'err-text' }, price.pincode.message) : price.pincode && price.pincode.ok ? h('p', { class: 'small', style: { color: 'var(--ok)' } }, `${t('delivery_by')} ${price.pincode.eta.text}`) : null);
-    if (step === 2) paintPay();
+    if (step === 3) paintPay();
   }
   const toTop = () => { const y = stepsEl.getBoundingClientRect().top + scrollY - 70; scrollTo({ top: Math.max(0, y), behavior: 'smooth' }); body.classList.remove('step-in'); void body.offsetWidth; body.classList.add('step-in'); };
-  const paintSteps = () => { clear(stepsEl); ['contact', 'payment', 'review'].forEach((k, i) => stepsEl.append(h('div', { class: i + 1 === step ? 'on' : i + 1 < step ? 'done' : '' }, `${i + 1}. ${t(k === 'contact' ? 'delivery' : k)}`))); };
+  const STEP_LABELS = [['1', t('contact').replace(/ details$/i, '')], ['2', 'Address'], ['3', t('payment')], ['4', t('review')]];
+  const goStep = n => { if (n >= step) return; step = n; ({ 1: stepContact, 2: stepAddress, 3: stepPay, 4: stepReview })[n](); toTop(); };
+  const paintSteps = () => {
+    clear(stepsEl); stepsEl.className = 'stp';
+    const pct = (step - 1) / (STEP_LABELS.length - 1) * 100;
+    stepsEl.append(h('div', { class: 'stp-track' }, h('i', { class: 'stp-fill', style: { width: pct + '%' } })),
+      ...STEP_LABELS.map(([n, lb], k) => h('button', { type: 'button', class: 'stp-i' + (k + 1 === step ? ' on' : k + 1 < step ? ' done' : ''), disabled: k + 1 >= step, 'aria-current': k + 1 === step ? 'step' : null, 'aria-label': `Step ${n}: ${lb}`, onclick: () => goStep(k + 1) },
+        h('span', { class: 'stp-dot' }, k + 1 < step ? icon('check') : n), h('span', { class: 'stp-lb' }, lb))));
+  };
   const inp = (key, label, props = {}) => { const el = h('input', { class: 'inp' + (errs[key] ? ' bad' : ''), value: F[key], 'aria-label': label, oninput: e => { F[key] = e.target.value; }, ...props }); return field(label, el, errs[key] ? h('div', { class: 'err-text' }, errs[key]) : null); };
   function stepContact() {
     paintSteps(); clear(body);
-    const addrBtns = h('div', { class: 'row' });
-    if (me.customer) api('/account/addresses').then(list => { list.slice(0, 3).forEach(a => addrBtns.append(h('button', { class: 'chip', onclick: () => { Object.assign(F, { name: a.name, phone: a.phone, line1: a.line1, line2: a.landmark || '', pincode: a.pincode, city: a.city, state: a.state }); stepContact(); reprice(); } }, `${a.label || a.name}, ${a.pincode}`))); }).catch(() => {});
-    body.append(h('div', { class: 'card stack' }, h('h3', null, t('contact')), addrBtns,
-      h('div', { class: 'grid2' }, inp('name', t('name'), { autocomplete: 'name' }), inp('phone', t('phone'), { inputmode: 'numeric', maxlength: 10, autocomplete: 'tel-national' })), inp('email', t('email'), { type: 'email', autocomplete: 'email' }),
-      h('h3', { style: { marginTop: '8px' } }, t('delivery')), inp('line1', t('addr1'), { autocomplete: 'address-line1' }), inp('line2', t('addr2')),
-      h('div', { class: 'grid2' }, inp('pincode', t('pincode'), { inputmode: 'numeric', maxlength: 6, autocomplete: 'postal-code', onchange: async e => { F.pincode = e.target.value.trim(); await reprice(); if (/^\d{6}$/.test(F.pincode) && !F.city) lookupPin(); } }), inp('city', t('city'), { autocomplete: 'address-level2' })), inp('state', t('state'), { autocomplete: 'address-level1' }),
-      h('div', { class: 'co-nav' }, h('button', { class: 'btn gl-next', onclick: () => { if (validate()) { step = 2; stepPay(); toTop(); } else { const bad = $('.inp.bad'); if (bad) { bad.scrollIntoView({ behavior: 'smooth', block: 'center' }); bad.focus({ preventScroll: true }); } } } }, t('next'), icon('chev')))));
+    body.append(h('div', { class: 'card stack' }, h('h3', null, t('contact')), h('p', { class: 'muted small' }, 'We use these to confirm your order and send updates.'),
+      inp('name', t('name'), { autocomplete: 'name' }), inp('phone', t('phone'), { inputmode: 'numeric', maxlength: 10, autocomplete: 'tel-national' }), inp('email', t('email'), { type: 'email', autocomplete: 'email' }),
+      h('div', { class: 'co-nav' }, h('button', { class: 'btn gl-next', onclick: () => { if (validate(1)) { step = 2; stepAddress(); toTop(); } else focusBad(); } }, t('next'), icon('chev')))));
   }
-  async function lookupPin() { /* city/state are typed by the customer; no third-party lookup is used */ }
-  function validate() {
+  const focusBad = () => { const bad = $('.inp.bad'); if (bad) { bad.scrollIntoView({ behavior: 'smooth', block: 'center' }); bad.focus({ preventScroll: true }); } };
+  function stepAddress() {
+    paintSteps(); clear(body);
+    const addrBtns = h('div', { class: 'row' });
+    if (me.customer) api('/account/addresses').then(list => { list.slice(0, 3).forEach(a => addrBtns.append(h('button', { class: 'chip', onclick: () => { Object.assign(F, { line1: a.line1, line2: a.landmark || a.line2 || '', pincode: a.pincode, city: a.city, district: a.district || '', state: a.state }); stepAddress(); reprice(); } }, `${a.label || a.name}, ${a.pincode}`))); }).catch(() => {});
+    const pinNote = h('div', { class: 'small muted', id: 'pinnote' });
+    body.append(h('div', { class: 'card stack' }, h('h3', null, t('delivery')), addrBtns,
+      inp('line1', t('addr1'), { autocomplete: 'address-line1' }), inp('line2', t('addr2')),
+      inp('pincode', t('pincode'), { inputmode: 'numeric', maxlength: 6, autocomplete: 'postal-code', oninput: e => { F.pincode = e.target.value.replace(/\D/g, '').slice(0, 6); e.target.value = F.pincode; if (F.pincode.length === 6) { reprice(); lookupPin(); } else pinNote.textContent = ''; } }), pinNote,
+      h('div', { class: 'grid2' }, inp('city', t('city'), { autocomplete: 'address-level2' }), inp('district', 'District', { autocomplete: 'off' })), inp('state', t('state'), { autocomplete: 'address-level1' }),
+      h('div', { class: 'co-nav' }, h('button', { class: 'btn gl-back', onclick: () => goStep(1) }, icon('chevl'), t('back')), h('button', { class: 'btn gl-next', onclick: () => { if (validate(2)) { step = 3; stepPay(); toTop(); } else focusBad(); } }, t('next'), icon('chev')))));
+    if (/^\d{6}$/.test(F.pincode) && (!F.district || !F.state)) lookupPin();
+  }
+  let pinSeq = 0;
+  async function lookupPin() {
+    const pin = F.pincode, my = ++pinSeq, note = $('#pinnote');
+    try {
+      const r = await api('/pincode-info/' + pin);
+      if (my !== pinSeq || F.pincode !== pin) return;
+      if (r.found) {
+        // fill only what the customer has not already typed
+        for (const [k, v] of [['district', r.district], ['state', r.state], ['city', r.city]]) if (v && !F[k]) { F[k] = v; const el = $(`[aria-label="${{ district: 'District', state: t('state'), city: t('city') }[k]}"]`); if (el) el.value = v; }
+        if (note) note.textContent = `${r.district}, ${r.state}`;
+      } else if (note) note.textContent = 'Could not find this pincode. Please fill city, district and state yourself.';
+    } catch { if (note) note.textContent = ''; }
+  }
+  function validate(which) {
     for (const k of Object.keys(errs)) delete errs[k];
     const ph = F.phone.replace(/\D/g, '').slice(-10);
-    if (F.name.trim().length < 2) errs.name = 'Enter your full name'; if (!/^[6-9]\d{9}$/.test(ph)) errs.phone = 'Enter a valid 10-digit mobile number'; if (F.email && !/^\S+@\S+\.\S+$/.test(F.email)) errs.email = 'Enter a valid email';
-    if (F.line1.trim().length < 5) errs.line1 = 'Enter your house / street address'; if (!/^[1-9]\d{5}$/.test(F.pincode)) errs.pincode = 'Enter a valid 6-digit pincode'; if (F.city.trim().length < 2) errs.city = 'Enter your city'; if (F.state.trim().length < 2) errs.state = 'Enter your state';
-    if (Object.keys(errs).length) { stepContact(); const first = $('.inp.bad'); first && first.focus(); return false; }
-    F.phone = ph; ls.set('sy_addr', { name: F.name, phone: F.phone, email: F.email, line1: F.line1, line2: F.line2, pincode: F.pincode, city: F.city, state: F.state }); ls.set('sy_pin', F.pincode); return true;
+    if (which === 1) {
+      if (F.name.trim().length < 2) errs.name = 'Enter your full name'; if (!/^[6-9]\d{9}$/.test(ph)) errs.phone = 'Enter a valid 10-digit mobile number'; if (F.email && !/^\S+@\S+\.\S+$/.test(F.email)) errs.email = 'Enter a valid email';
+      if (Object.keys(errs).length) { stepContact(); const first = $('.inp.bad'); first && first.focus(); return false; }
+      F.phone = ph; return true;
+    }
+    if (F.line1.trim().length < 5) errs.line1 = 'Enter your house / street address'; if (!/^[1-9]\d{5}$/.test(F.pincode)) errs.pincode = 'Enter a valid 6-digit pincode'; if (F.city.trim().length < 2) errs.city = 'Enter your city'; if (F.district.trim().length < 2) errs.district = 'Enter your district'; if (F.state.trim().length < 2) errs.state = 'Enter your state';
+    if (Object.keys(errs).length) { stepAddress(); const first = $('.inp.bad'); first && first.focus(); return false; }
+    ls.set('sy_addr', { name: F.name, phone: F.phone, email: F.email, line1: F.line1, line2: F.line2, pincode: F.pincode, city: F.city, district: F.district, state: F.state }); ls.set('sy_pin', F.pincode); return true;
   }
   function paintPay() {
     const box = $('#paybox'); if (!box || !price) return; clear(box);
@@ -94,7 +127,7 @@ route(/^\/checkout$/, async view => {
     const cin = h('input', { class: 'inp', placeholder: t('coupon'), value: coupon, 'aria-label': t('coupon') }), cmsg = h('div', { class: 'small' });
     const applyC = async () => { coupon = cin.value.trim(); ls.set('sy_coupon', coupon); await reprice(); if (coupon && price.coupon) { cmsg.style.color = price.coupon.ok ? 'var(--ok)' : 'var(--err)'; cmsg.textContent = price.coupon.ok ? `${price.coupon.code} applied` : price.coupon.message; } else cmsg.textContent = ''; };
     body.append(h('div', { class: 'card stack' }, h('h3', null, t('payment')), h('div', { class: 'stack', id: 'paybox' }), h('div', { class: 'row', style: { flexWrap: 'nowrap' } }, h('div', { class: 'grow' }, cin), h('button', { class: 'btn ghost', onclick: applyC }, t('apply'))), cmsg, gift, gm, field('Order note (optional)', h('input', { class: 'inp', maxlength: 300, value: F.note, oninput: e => { F.note = e.target.value; } })),
-      h('div', { class: 'co-nav' }, h('button', { class: 'btn gl-back', onclick: () => { step = 1; stepContact(); toTop(); } }, icon('chevl'), t('back')), h('button', { class: 'btn gl-next', onclick: () => { if (!price || (price.errors && price.errors.length)) return toast((price && price.errors[0]) || '…', { err: true }); step = 3; stepReview(); toTop(); } }, t('next')))));
+      h('div', { class: 'co-nav' }, h('button', { class: 'btn gl-back', onclick: () => goStep(2) }, icon('chevl'), t('back')), h('button', { class: 'btn gl-next', onclick: () => { if (!price || (price.errors && price.errors.length)) return toast((price && price.errors[0]) || '…', { err: true }); step = 4; stepReview(); toTop(); } }, t('next')))));
     paintPay();
   }
   function stepReview() {
@@ -104,20 +137,21 @@ route(/^\/checkout$/, async view => {
       F.terms = true;
       if (price.needs_safety_ack && !F.safety) { toast('Please confirm the safety instructions.', { err: true }); return; }
       try { await busy(btn, async () => {
-        const r = await api('/orders', { method: 'POST', body: { items: cart.payload(), coupon, method: F.method, gift: F.gift, gift_message: F.gift_message, note: F.note, lang: lang(), email: F.email || undefined, save_address: !!me.customer, address: { name: F.name, phone: F.phone, line1: F.line1, line2: F.line2, landmark: F.line2, pincode: F.pincode, city: F.city, state: F.state }, consents: { terms: true, safety: F.safety, marketing: !!(me.customer && me.customer.marketing_optin) } } });
+        const r = await api('/orders', { method: 'POST', body: { items: cart.payload(), coupon, method: F.method, gift: F.gift, gift_message: F.gift_message, note: F.note, lang: lang(), email: F.email || undefined, save_address: !!me.customer, address: { name: F.name, phone: F.phone, line1: F.line1, line2: F.line2, landmark: F.line2, pincode: F.pincode, city: F.city, district: F.district, state: F.state }, consents: { terms: true, safety: F.safety, marketing: !!(me.customer && me.customer.marketing_optin) } } });
         cart.clear(); ls.del('sy_coupon'); ls.set('sy_last_order', { n: r.number, t: r.token });
         nav(`/order/${r.number}?t=${r.token}&new=1`);
-      }); } catch (e) { toast(e.message, { err: true }); if (e.data && e.data.out_of_stock) { step = 1; reprice(); } }
+      }); } catch (e) { toast(e.message, { err: true }); if (e.data && e.data.out_of_stock) { step = 3; stepPay(); } }
     } }, `${t('place')} · ${money(price.total)}`);
     const a = F;
     body.append(h('div', { class: 'card stack' }, h('h3', null, t('review')),
-      h('div', { class: 'row between', style: { alignItems: 'start' } }, h('div', { class: 'small' }, h('b', null, a.name), h('br'), a.line1, a.line2 ? ', ' + a.line2 : '', h('br'), `${a.city}, ${a.state} - ${a.pincode}`, h('br'), a.phone), h('button', { class: 'link', style: { background: 'none', border: 0, cursor: 'pointer' }, onclick: () => { step = 1; stepContact(); } }, 'Edit')),
-      h('div', { class: 'row between' }, h('span', null, F.method === 'cod' ? t('cod') : t('upi')), h('button', { class: 'link', style: { background: 'none', border: 0, cursor: 'pointer' }, onclick: () => { step = 2; stepPay(); } }, 'Edit')),
+      h('div', { class: 'row between', style: { alignItems: 'start' } }, h('div', { class: 'small' }, h('b', null, a.name), h('br'), a.line1, a.line2 ? ', ' + a.line2 : '', h('br'), `${a.city}${a.district && a.district !== a.city ? ', ' + a.district : ''}, ${a.state} - ${a.pincode}`, h('br'), a.phone, a.email ? h('span', null, h('br'), a.email) : null), h('button', { class: 'link', style: { background: 'none', border: 0, cursor: 'pointer' }, onclick: () => { step = 2; stepAddress(); toTop(); } }, 'Edit')),
+      h('div', { class: 'row between' }, h('span', null, F.method === 'cod' ? t('cod') : t('upi')), h('button', { class: 'link', style: { background: 'none', border: 0, cursor: 'pointer' }, onclick: () => { step = 3; stepPay(); toTop(); } }, 'Edit')),
+      F.method === 'cod' && price.cod && price.cod.advance > 0 ? h('div', { class: 'adv-box' }, h('b', null, 'How you will pay'), h('div', { class: 'row between' }, h('span', null, 'Now, by UPI (advance)'), h('b', null, money(price.cod.advance))), h('div', { class: 'row between' }, h('span', null, 'On delivery'), h('b', null, money(Math.max(0, price.total - price.cod.advance)))), h('div', { class: 'row between adv-total' }, h('span', null, t('total')), h('b', null, money(price.total)))) : null,
       price.has_battery ? h('div', { class: 'box-note warn' }, icon('warn'), h('span', null, price.battery_notice)) : null,
       price.needs_safety_ack || price.has_battery ? h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: F.safety, onchange: e => { F.safety = e.target.checked; } }), h('span', null, t('safety_ok'), ' (', pol('safety', 'Safety'), ').')) : null,
       h('p', { class: 'muted small' }, `Easy ${BOOT.returns.window_days || 7}-day replacement on damaged or defective items.`),
       h('p', { class: 'muted small co-fine' }, 'By placing the order you agree to our ', pol('terms', 'Terms'), ', ', pol('privacy', 'Privacy Policy'), ' and ', pol('returns', 'Return Policy'), '.'),
-      h('div', { class: 'co-nav' }, h('button', { class: 'btn gl-back', onclick: () => { step = 2; stepPay(); toTop(); } }, icon('chevl'), t('back')), btn)));
+      h('div', { class: 'co-nav' }, h('button', { class: 'btn gl-back', onclick: () => goStep(3) }, icon('chevl'), t('back')), btn)));
   }
   // polyfill small helper: pol(slug) returns an <a> factory
   stepContact(); await reprice();
@@ -163,8 +197,8 @@ route(/^\/order\/([A-Za-z0-9-]+)$/, async (view, m, q) => {
       o.advance > 0 && o.advance_status === 'refund_due' ? h('div', { class: 'card box-note' }, icon('info'), h('span', null, `This order was cancelled. Your advance of ${money(o.advance)} will be sent back to you.`)) : null,
       actions(o, token)),
       h('aside', { class: 'card stack' }, h('b', null, 'Items'), ...o.items.map(itemRow),
-        totals({ subtotal: o.subtotal, discount: o.discount, coupon: { code: o.coupon_code }, shipping: o.shipping, packaging: 0, gift_fee: o.gift_fee, cod_fee: o.cod_fee, total: o.total, gst: { enabled: false } }),
-        h('div', { class: 'small muted' }, h('b', null, 'Delivering to'), h('br'), o.address.name, h('br'), `${o.address.line1}, ${o.address.city}, ${o.address.state} - ${o.address.pincode}`), h('div', { class: 'small muted' }, `Payment: ${o.payment_method === 'cod' ? t('cod') : t('upi')}`),
+        totals({ subtotal: o.subtotal, discount: o.discount, coupon: { code: o.coupon_code }, shipping: o.shipping, packaging: 0, gift_fee: o.gift_fee, cod_fee: o.cod_fee, total: o.total, gst: { enabled: false }, adv_now: o.advance || 0, due: o.advance > 0 ? o.due_on_delivery : null }),
+        h('div', { class: 'small muted' }, h('b', null, 'Delivering to'), h('br'), o.address.name, h('br'), `${o.address.line1}, ${o.address.city}${o.address.district && o.address.district !== o.address.city ? ', ' + o.address.district : ''}, ${o.address.state} - ${o.address.pincode}`), h('div', { class: 'small muted' }, `Payment: ${o.payment_method === 'cod' ? t('cod') : t('upi')}`),
         h('a', { class: 'btn ghost sm', href: '/contact?order=' + o.number }, 'Need help?'))));
     if (!['cancelled', 'delivered'].includes(o.status) && !needsPay) setTimeout(() => view.isConnected && load(), 60000);
   }
@@ -273,7 +307,6 @@ route(/^\/profile$/, async view => {
     const bar = h('div', { class: 'savebar' }, hint, h('div', { class: 'row', style: { gap: '8px' } }, cancelBtn, saveBtn));
     swap(body, h('div', { class: 'co' }, h('div', { class: 'stack-lg' },
       h('div', { class: 'card stack glass-card' }, h('h3', null, t('profile')), h('div', { class: 'fl-two' }, field('First name', fn), field('Last name', ln)), field(t('phone'), phone), h('p', { class: 'muted small' }, 'Email: ' + c.email), h('label', { class: 'check sw' }, mk, h('span', null, t('marketing_ok')))),
-      h('div', { class: 'card stack glass-card' }, h('h3', null, c.has_password ? 'Change password' : 'Set a password (optional)'), h('p', { class: 'muted small' }, c.has_password ? 'We will email you a confirmation when it changes.' : 'You can log in with an email code anyway. A password is optional.'), c.has_password ? field('Current password', old) : null, field('New password (8+ characters)', np), h('button', { class: 'btn ghost', onclick: async e => { try { await busy(e.currentTarget, () => api('/account/password', { method: 'POST', body: { old: old.value, password: np.value } })); toast('Password changed. We emailed you a confirmation.'); me.customer.has_password = true; old.value = np.value = ''; } catch (x) { toast(x.message, { err: true }); } } }, 'Change password')),
       h('div', { class: 'card stack glass-card' }, h('h3', null, 'Your data'), h('p', { class: 'muted small' }, 'Download what we hold about you, or delete your account. Order records needed for tax and law are kept without your login.'), h('a', { class: 'btn ghost', href: '/api/account/export', download: 'my-data.json' }, 'Download my data'), h('button', { class: 'btn ghost', style: { color: 'var(--err)' }, onclick: () => { const pw = h('input', { class: 'inp', type: c.has_password ? 'password' : 'text', placeholder: c.has_password ? 'Your password' : 'Type DELETE to confirm' }); const m = modal(h('div', { class: 'stack' }, h('h3', null, 'Delete account?'), h('p', { class: 'muted' }, c.has_password ? 'This cannot be undone. Enter your password to confirm.' : 'This cannot be undone. Type the word DELETE below to confirm.'), pw, h('button', { class: 'btn', onclick: async () => { try { const r = await api('/account/delete', { method: 'POST', body: { password: pw.value } }); me.customer = null; m.close(); toast(r.message); nav('/'); } catch (x) { toast(x.message, { err: true }); } } }, 'Delete my account'))); } }, 'Delete account')),
       bar)));
   }
@@ -285,12 +318,12 @@ route(/^\/profile$/, async view => {
       let m; const save = async btn => { const payload = {}; Object.keys(f).forEach(k => { payload[k] = f[k].value; });
         try { await busy(btn, () => api(a ? '/account/addresses/' + a.id : '/account/addresses', { method: a ? 'PUT' : 'POST', body: payload })); m.close(); toast('Address saved'); addresses(); } catch (x) { toast(x.message, { err: true }); } };
       m = modal(h('div', { class: 'stack' }, h('h3', null, a ? 'Edit address' : 'Add a new address'), mk('name', 'Full name', { autocomplete: 'name', value: v.name || [me.customer.first_name, me.customer.last_name].filter(Boolean).join(' ') }), mk('phone', 'Mobile number', { inputmode: 'numeric', maxlength: 10, value: v.phone || me.customer.phone || '' }), mk('line1', 'House no., street, area'), mk('line2', 'Landmark (optional)'),
-        h('div', { class: 'fl-two' }, mk('pincode', 'Pincode', { inputmode: 'numeric', maxlength: 6 }), mk('city', 'City')), mk('state', 'State'), h('button', { class: 'btn', onclick: e => save(e.currentTarget) }, 'Save address')));
+        h('div', { class: 'fl-two' }, mk('pincode', 'Pincode', { inputmode: 'numeric', maxlength: 6 }), mk('city', 'City')), mk('district', 'District'), mk('state', 'State'), h('button', { class: 'btn', onclick: e => save(e.currentTarget) }, 'Save address')));
     };
     try {
       const list = await api('/account/addresses');
       swap(body, h('div', { class: 'stack' }, h('div', { class: 'row between' }, h('p', { class: 'muted small', style: { margin: 0 } }, list.length ? `${list.length} saved address${list.length > 1 ? 'es' : ''}` : 'No saved address yet'), h('button', { class: 'btn sm', onclick: () => openForm(null) }, '+ Add new address')),
-        list.map(a => h('div', { class: 'card glass-card addr' }, h('div', { class: 'small' }, h('div', { class: 'row', style: { gap: '8px' } }, h('b', null, a.name), a.is_default ? h('span', { class: 'badge soft' }, 'Default') : null), h('div', null, `${a.line1}${a.line2 ? ', ' + a.line2 : ''}, ${a.city}, ${a.state} - ${a.pincode}`), h('div', { class: 'muted' }, a.phone)),
+        list.map(a => h('div', { class: 'card glass-card addr' }, h('div', { class: 'small' }, h('div', { class: 'row', style: { gap: '8px' } }, h('b', null, a.name), a.is_default ? h('span', { class: 'badge soft' }, 'Default') : null), h('div', null, `${a.line1}${a.line2 ? ', ' + a.line2 : ''}, ${a.city}${a.district && a.district !== a.city ? ', ' + a.district : ''}, ${a.state} - ${a.pincode}`), h('div', { class: 'muted' }, a.phone)),
           h('div', { class: 'row', style: { gap: '8px', marginTop: '10px', flexWrap: 'wrap' } }, h('button', { class: 'btn ghost sm', onclick: () => openForm(a) }, 'Edit'), a.is_default ? null : h('button', { class: 'btn ghost sm', onclick: async () => { await api('/account/addresses/' + a.id + '/default', { method: 'POST' }); addresses(); } }, 'Make default'), h('button', { class: 'btn ghost sm', style: { color: 'var(--err)' }, onclick: async () => { await api('/account/addresses/' + a.id, { method: 'DELETE' }); addresses(); } }, t('remove')))))));
     } catch (e) { swap(body, h('p', { class: 'muted' }, e.message)); }
   }
@@ -332,8 +365,10 @@ function loginView(view) {
       const resend = h('button', { class: 'link auth-link', disabled: true }, 'Resend code'); let left = 45;
       const upd = () => { resend.disabled = left > 0; resend.textContent = left > 0 ? `Resend code in ${left}s` : 'Resend code'; }; upd();
       tick = setInterval(() => { if (!card.isConnected) { clearInterval(tick); return; } left = Math.max(0, left - 1); upd(); }, 1000);
-      resend.addEventListener('click', async () => { try { await api('/auth/otp/send', { method: 'POST', body: { email: keep.email } }); left = 45; upd(); toast('A new code is on its way.'); } catch (x) { toast(x.message, { err: true }); } });
-      card.append(head('Check your email', `We sent a 6-digit code to ${keep.email}. It works for 10 minutes. Check Spam if you do not see it.`), row,
+      const spamBox = h('div', { class: 'spam-note hide', role: 'status' });
+      const showSpam = () => { clear(spamBox).append(icon('info'), h('div', null, h('b', null, 'A new code was sent to ', h('u', null, keep.email), '.'), h('div', null, 'Not in your Inbox? Check your ', h('b', null, 'Spam'), ' or ', h('b', null, 'Promotions'), ' folder.'))); spamBox.classList.remove('hide'); };
+      resend.addEventListener('click', async () => { try { await api('/auth/otp/send', { method: 'POST', body: { email: keep.email } }); left = 45; upd(); showSpam(); toast('A new code is on its way.'); } catch (x) { toast(x.message, { err: true }); } });
+      card.append(head('Check your email', `We sent a 6-digit code to ${keep.email}. It works for 10 minutes. Check Spam if you do not see it.`), row, spamBox,
         h('button', { class: 'btn auth-btn', onclick: verify }, 'Verify'), h('div', { class: 'row between' }, resend, h('button', { class: 'link auth-link', onclick: () => { step = 1; paint(); } }, 'Change email')));
       setTimeout(() => boxes[0].focus(), 60);
     } else if (step === 3) {

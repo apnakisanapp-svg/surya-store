@@ -139,6 +139,22 @@ api.get('/coupons', (req, res) => res.json(db.prepare("SELECT code,type,value,mi
 
 /* ---------- checkout ---------- */
 const ctxOf = req => ({ customer: req.customer, ip: ipOf(req), ua: req.headers['user-agent'] });
+/* pincode -> district/state helper. Only the 6-digit pincode leaves our server (India Post's free public data); answers are cached. */
+api.get('/pincode-info/:pin', lim(1, 30), asyncH(async (req, res) => {
+  const pin = String(req.params.pin || '');
+  if (!/^[1-9]\d{5}$/.test(pin)) throw bad('Enter a valid 6-digit pincode.');
+  const hit = db.prepare('SELECT * FROM pin_cache WHERE pin=?').get(pin);
+  if (hit && (hit.found || Date.now() - new Date(hit.at).getTime() < 86400000)) return res.json(hit.found ? { found: true, district: hit.district, state: hit.state, city: hit.city } : { found: false });
+  let out = { found: false };
+  try {
+    const r = await fetch(`https://api.postalpincode.in/pincode/${pin}`, { signal: AbortSignal.timeout(4000) });
+    const j = await r.json();
+    const po = j && j[0] && j[0].Status === 'Success' && Array.isArray(j[0].PostOffice) ? j[0].PostOffice : [];
+    if (po.length) out = { found: true, district: String(po[0].District || '').slice(0, 60), state: String(po[0].State || '').slice(0, 60), city: String(po[0].Block && po[0].Block !== 'NA' ? po[0].Block : po[0].District || '').slice(0, 60) };
+  } catch { /* the service may be down; the customer simply types it */ return res.json({ found: false }); }
+  db.prepare('INSERT OR REPLACE INTO pin_cache(pin,district,state,city,found,at) VALUES(?,?,?,?,?,?)').run(pin, out.district || '', out.state || '', out.city || '', out.found ? 1 : 0, new Date().toISOString());
+  res.json(out);
+}));
 api.post('/orders', lim(10, +process.env.ORDER_RATE_MAX || 12, 'Too many orders from this device. Please wait a few minutes.'), asyncH((req, res) => {
   if (process.env.CATALOGUE_ONLY === '1') { const B = settings.get('brand'); const wa = String(B.whatsapp || B.phone || '').replace(/\D/g, '').slice(-10); throw bad('Orders are not taken on this preview website. Please order on WhatsApp' + (wa ? ': +91 ' + wa : '') + '.'); }
   const r = orders.createOrder(req.body || {}, ctxOf(req));
@@ -340,7 +356,7 @@ acct.put('/addresses/:id', asyncH((req, res) => {
   const id = int(req.params.id), row = db.prepare('SELECT id FROM addresses WHERE id=? AND customer_id=?').get(id, req.customer.id);
   if (!row) throw bad('Address not found.');
   const a = orders.validateAddress(req.body);
-  db.prepare('UPDATE addresses SET name=?, phone=?, line1=?, line2=?, landmark=?, pincode=?, city=?, state=? WHERE id=?').run(a.name, a.phone, a.line1, a.line2, a.landmark, a.pincode, a.city, a.state, id);
+  db.prepare('UPDATE addresses SET name=?, phone=?, line1=?, line2=?, landmark=?, pincode=?, city=?, state=?, district=? WHERE id=?').run(a.name, a.phone, a.line1, a.line2, a.landmark, a.pincode, a.city, a.state, a.district || '', id);
   res.json({ ok: true });
 }));
 acct.post('/addresses/:id/default', (req, res) => {

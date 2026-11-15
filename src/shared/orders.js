@@ -27,7 +27,7 @@ function validateAddress(a) {
   if (!a || typeof a !== 'object') throw bad('Please enter your address.');
   const out = {
     name: String(a.name || '').trim().slice(0, 80), phone: normPhone(a.phone), line1: String(a.line1 || '').trim().slice(0, 160), line2: String(a.line2 || '').trim().slice(0, 160),
-    landmark: String(a.landmark || '').trim().slice(0, 100), pincode: String(a.pincode || '').trim(), city: String(a.city || '').trim().slice(0, 60), state: String(a.state || '').trim().slice(0, 60),
+    landmark: String(a.landmark || '').trim().slice(0, 100), pincode: String(a.pincode || '').trim(), district: String(a.district || '').trim().slice(0, 60), city: String(a.city || '').trim().slice(0, 60), state: String(a.state || '').trim().slice(0, 60),
   };
   if (out.name.length < 2) throw bad('Please enter your full name.', { field: 'name' });
   if (!isPhone(out.phone)) throw bad('Enter a valid 10-digit mobile number.', { field: 'phone' });
@@ -173,8 +173,8 @@ function saveAddress(customerId, a) {
   const exists = db.prepare('SELECT id FROM addresses WHERE customer_id=? AND line1=? AND pincode=?').get(customerId, a.line1, a.pincode);
   if (exists) return exists.id;
   const first = !db.prepare('SELECT 1 FROM addresses WHERE customer_id=?').get(customerId);
-  return db.prepare('INSERT INTO addresses(customer_id,label,name,phone,line1,line2,landmark,pincode,city,state,is_default) VALUES(?,?,?,?,?,?,?,?,?,?,?)')
-    .run(customerId, 'Home', a.name, a.phone, a.line1, a.line2, a.landmark, a.pincode, a.city, a.state, first ? 1 : 0).lastInsertRowid;
+  return db.prepare('INSERT INTO addresses(customer_id,label,name,phone,line1,line2,landmark,pincode,city,state,district,is_default) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)')
+    .run(customerId, 'Home', a.name, a.phone, a.line1, a.line2, a.landmark, a.pincode, a.city, a.state, a.district || '', first ? 1 : 0).lastInsertRowid;
 }
 
 // cost used for profit: FIFO from purchase batches if present, else product/variant cost

@@ -112,3 +112,11 @@ GST/BIS advice, final policy wording, real photos and logo, payment gateway KYC.
 - src/shared/rules.js turns a product row into effective rules. pricing.priceCart: advances of products are SUMMED (pricing.cartAdvance); "none" on every item = no advance; else global rule. ship_rule free (all items) = free, paid = never free. Gift off if any item says no; price = highest own price.
 - Return requests (orders.serializeForCustomer + /orders/:n/request) follow each item's rule and days; "No return" still handled by chat for damaged/wrong items.
 - Admin: Product edit > "Services & rules for this product". Tests added in test/run.js (use ORDER_RATE_MAX=500 and a seeded fresh DATA_DIR).
+
+## 15 Nov — checkout in 4 steps, district, advance split, small fixes
+- Checkout steps: Contact > Address > Payment > Review (web/js/pages2.js, stepper CSS `.stp*` at end of app.css). Completed steps are tappable.
+- District: new field (optional on the server, required in the checkout form). `addresses.district` column; order address JSON carries `district`; shown in admin order, packing slip, customer order page, account addresses.
+- Pincode helper: `GET /api/pincode-info/:pin` asks India Post's free public API (only the 6-digit pincode leaves the server), cached in table `pin_cache`. If it fails the customer types city/district/state. (The old `/api/pincode/:pin` is the delivery check.)
+- COD advance: review step shows "Now by UPI (advance) / On delivery / Total"; side panel and order page show the same split.
+- Account page: "Set a password" card removed (login is by email code only). Resend code shows a highlighted Spam/Promotions box. Login email: single selectable code, subject "123456 is your SURYA login code".
+- Back-to-top button is glass (`.gl-top`).

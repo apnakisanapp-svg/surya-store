@@ -120,6 +120,13 @@ const order = (pid, qty, method = 'upi') => pj('/orders', { method: 'POST', body
   await aj('/products/' + bpl.id, { method: 'PUT', body: { ret_rule: 'refund', ret_days: 10 } });
   const pd2 = (await pj('/products/' + (await aj('/products/' + bpl.id))[1].slug))[1]; const rr2 = (pd2.product || pd2).rules; ok(rr2.ret_rule === 'refund' && rr2.ret_days === 10, 'refund-only rule for 10 days saved');
   await aj('/products/' + bpl.id, { method: 'PUT', body: { ret_rule: '', ret_days: '' } });
+  // ---- district + pincode helper ----
+  const pinR = await pj('/pincode-info/110001'); ok(pinR[0] === 200 && typeof pinR[1].found === 'boolean', 'pincode helper answers (found or not)');
+  const pinBad = await pj('/pincode-info/12'); ok(pinBad[0] >= 400, 'pincode helper refuses a bad pincode');
+  const dOrd = await pj('/orders', { method: 'POST', body: { items: [{ product_id: bpl.id, qty: 1 }], method: 'upi', consents: { terms: true, safety: true }, address: { ...addr, phone: phone(), district: 'Central Delhi' } } });
+  ok(dOrd[0] === 200, 'order with district is placed');
+  const dView = await pj(`/orders/${dOrd[1].number}?t=${dOrd[1].token}`); ok(dView[1].order.address.district === 'Central Delhi', 'district is saved with the order');
+  await pj(`/orders/${dOrd[1].number}/cancel?t=${dOrd[1].token}`, { method: 'POST', body: { reason: 'test' } });
   // ---- unpaid UPI order is not counted as a real order ----
   const un = await order(bpl.id, 1, 'upi'); const dsh = (await aj('/dashboard'))[1];
   const actList = JSON.stringify((await aj('/orders?status=action'))[1]); ok(!actList.includes(un[1].number), 'unpaid UPI order is not in "Needs action"');

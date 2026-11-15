@@ -175,6 +175,8 @@ db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS products_fts USING fts5(name, name_h
 
 try { db.exec('ALTER TABLE orders ADD COLUMN upi_adjust REAL DEFAULT 0'); } catch { /* already there */ }
 try { db.exec("ALTER TABLE products ADD COLUMN pay_rule TEXT DEFAULT ''"); } catch { /* already there */ }
+try { db.exec("ALTER TABLE addresses ADD COLUMN district TEXT DEFAULT ''"); } catch { /* already there */ }
+db.exec('CREATE TABLE IF NOT EXISTS pin_cache(pin TEXT PRIMARY KEY, district TEXT, state TEXT, city TEXT, found INTEGER DEFAULT 1, at TEXT)');
 /* per-product services & rules (blank = follow Settings) */
 for (const c of ["adv_type TEXT DEFAULT ''", 'adv_value REAL', "gift_rule TEXT DEFAULT ''", 'gift_price REAL', "ret_rule TEXT DEFAULT ''", 'ret_days INTEGER', "ship_rule TEXT DEFAULT ''"]) { try { db.exec('ALTER TABLE products ADD COLUMN ' + c); } catch { /* already there */ } }
 for (const c of ["ret_rule TEXT DEFAULT ''", 'ret_days INTEGER']) { try { db.exec('ALTER TABLE order_items ADD COLUMN ' + c); } catch { /* already there */ } }

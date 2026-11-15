@@ -146,7 +146,7 @@ export function buildChrome(root) {
   bus.on('route', fmark); fmark(location.pathname);
   root.append(ftr, slim);
   // floating buttons
-  const top = h('button', { class: 'btn alt hide', 'aria-label': 'Back to top', onclick: () => scrollTo({ top: 0, behavior: 'smooth' }) }, icon('up'));
+  const top = h('button', { class: 'btn alt gl-top hide', 'aria-label': 'Back to top', onclick: () => scrollTo({ top: 0, behavior: 'smooth' }) }, icon('up'));
   const waIcon = () => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 64 64'); s.setAttribute('aria-hidden', 'true'); s.innerHTML = '<defs><linearGradient id="waG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6BF58A"/><stop offset=".55" stop-color="#25C45A"/><stop offset="1" stop-color="#0E8F3C"/></linearGradient><radialGradient id="waS" cx=".3" cy=".18" r=".8"><stop offset="0" stop-color="#fff" stop-opacity=".75"/><stop offset=".5" stop-color="#fff" stop-opacity=".05"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient></defs><circle cx="32" cy="32" r="30" fill="url(#waG)"/><path d="M32 12c-11 0-20 8.5-20 19 0 4 1.3 7.7 3.5 10.8L13 51l9.6-2.4c2.7 1.4 5.700 2.200 9.400 2.200 11 0 20-8.500 20-19S43 12 32 12z" fill="#fff"/><path d="M25 22.500c-1 0-2 .9-2.300 2-.8 3.200 1.200 8 5.200 12 4 4 8.900 5.900 12 5.200 1.100-.3 2-1.300 2-2.300l-.1-1.900-4.500-2-1.900 2c-2.700-.9-5.500-3.700-6.400-6.500l1.900-1.900-2-4.500-1.900-.1z" fill="#1DAE4E"/><circle cx="32" cy="32" r="30" fill="url(#waS)"/>'; return s; };
   root.append(h('div', { class: 'fab' }, BOOT.ui.back_to_top ? top : null));
   addEventListener('scroll', () => top.classList.toggle('hide', scrollY < 700), { passive: true });
