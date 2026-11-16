@@ -237,18 +237,21 @@ export async function openCart() {
   if (drawerOpen) return;
   const body = h('div'), foot = h('div');
   const d = drawer(`${t('cart')}`, body, foot, { cls: 'cart-glass', onClose: () => { drawerOpen = null; bus.off('cart', refresh); } }); drawerOpen = d;
+  let seq = 0, shown = false;
   async function refresh() {
-    clear(body); clear(foot);
+    const my = ++seq; // only the newest refresh may draw; older ones are dropped
     if (!cart.items.length) {
+      clear(body); clear(foot);
       const sug = h('div', { class: 'cart-sug' });
       body.append(h('div', { class: 'cart-empty' }, h('div', { class: 'ce-art' }, h('i', { class: 'ce-ring' }), h('i', { class: 'ce-ring r2' }), icon('bag')), h('h3', null, 'Your cart is empty'), h('p', { class: 'muted' }, 'Add something you like and it will wait for you here.'), h('a', { class: 'btn ce-btn', href: '/shop', onclick: () => d.close() }, 'Start shopping')), sug);
       api('/products?sort=trending&limit=4').then(r => { const list = (r.items || r || []).slice(0, 4); if (!list.length) return; sug.append(h('div', { class: 'ce-title' }, 'Popular right now'), h('div', { class: 'pgrid ce-grid' }, list.map(p => { const a = productCard(p); a.addEventListener('click', () => d.close()); return a; }))); }).catch(() => { /* suggestions are optional */ });
       return;
     }
-    body.append(skeletons(1));
-    let p; try { p = await priceNow(); } catch (e) { clear(body).append(h('p', { class: 'muted' }, e.message)); return; }
-    syncFromPrice(p); clear(body);
-    body.append(shipBar(p), ...p.lines.map(l => lineEl(l, refresh)));
+    if (!shown) { clear(body); clear(foot); body.append(skeletons(1)); } // first load only; later updates happen quietly in the background
+    let p; try { p = await priceNow(); } catch (e) { if (my === seq) { shown = false; clear(foot); clear(body).append(h('p', { class: 'muted' }, e.message)); } return; }
+    if (my !== seq) return;
+    syncFromPrice(p); shown = true; clear(body); clear(foot);
+    body.append(shipBar(p), ...p.lines.map(l => lineEl(l, () => {}))); // the cart event already triggers refresh
     foot.append(h('div', { class: 'tot', style: { marginBottom: '12px' } }, h('div', null, h('span', null, t('subtotal')), h('span', null, money(p.subtotal))), p.discount ? h('div', { class: 'g' }, h('span', null, t('coupon')), h('span', null, '−' + money(p.discount))) : null), h('p', { class: 'muted small', style: { marginBottom: '12px' } }, 'Shipping and COD fee are shown at checkout.'),
       h('a', { class: 'btn block', href: '/checkout', onclick: () => d.close() }, `${t('checkout')} · ${money(p.subtotal - p.discount)}`), h('a', { class: 'btn ghost block', style: { marginTop: '8px' }, href: '/cart', onclick: () => d.close() }, t('cart')));
   }
