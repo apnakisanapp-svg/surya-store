@@ -163,7 +163,7 @@ route(/^\/p\/([^/]+)$/, async (view, m) => {
   const totalEl = h('b', { class: 'pb-total' }), delEl = h('small', { class: 'pb-del' });
   const setQ = d => { S.qty = Math.max(1, Math.min(p.max_per_order || 10, S.qty + d)); paint(); };
   const sticky = h('div', { class: 'buybar on' }, h('div', { class: 'buybar-top' }, h('div', { class: 'qty' }, h('button', { 'aria-label': '-', onclick: () => setQ(-1) }, '−'), qtyN, h('button', { 'aria-label': '+', onclick: () => setQ(1) }, '+')), h('div', { class: 'pb-sum' }, totalEl, delEl)),
-    h('div', { class: 'buybar-btns' }, h('button', { class: 'btn alt gl-add', id: 'atc', onclick: e => addToCart(p, S.vid, S.qty, e.currentTarget) }, icon('bag'), t('add')), h('button', { class: 'btn gl-buy', onclick: () => { cart.add(p.id, S.vid, S.qty); nav('/checkout'); } }, t('buy'))));
+    h('div', { class: 'buybar-btns' }, h('button', { class: 'btn alt gl-add', id: 'atc', onclick: e => addToCart(p, S.vid, S.qty, e.currentTarget) }, icon('bag'), t('add')), h('button', { class: 'btn gl-buy', onclick: () => { cart.buyNow(p.id, S.vid, S.qty); nav('/checkout'); } }, t('buy'))));
   function paintBar(c) {
     sticky.classList.toggle('hide', !c.in_stock);
     document.body.classList.toggle('has-buybar', c.in_stock);

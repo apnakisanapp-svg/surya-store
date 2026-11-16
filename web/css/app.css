@@ -574,3 +574,9 @@ em.pop,span.pop,b.pop{display:inline-block;animation:popin .45s cubic-bezier(.2,
 @media(prefers-color-scheme:dark){.fab .btn.gl-top{background:rgba(255,255,255,.12);color:#fff;border-color:rgba(255,255,255,.22);box-shadow:0 10px 24px -10px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.18)}}
 .tot .adv-split{display:grid;gap:6px}.tot .adv-split div{display:flex;justify-content:space-between;gap:10px;font-size:.88rem}
 .tot .adv-split>div{width:100%;display:flex;justify-content:space-between}.tot .adv-split>div>b{margin-left:auto}
+
+/* compact address form + review breakdown */
+.grid2.two{grid-template-columns:1fr 1fr;gap:10px}
+.co .card.tight{gap:10px}.co .card.tight .field>span{font-size:.8rem;margin-bottom:3px}
+.co .card.tight h3{margin-bottom:0}
+.adv-box .adv-pay{background:rgba(201,162,75,.14);margin:0 -6px;padding:5px 6px;border-radius:8px}

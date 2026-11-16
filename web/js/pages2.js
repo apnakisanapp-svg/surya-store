@@ -74,10 +74,10 @@ route(/^\/checkout$/, async view => {
     const addrBtns = h('div', { class: 'row' });
     if (me.customer) api('/account/addresses').then(list => { list.slice(0, 3).forEach(a => addrBtns.append(h('button', { class: 'chip', onclick: () => { Object.assign(F, { line1: a.line1, line2: a.landmark || a.line2 || '', pincode: a.pincode, city: a.city, district: a.district || '', state: a.state }); stepAddress(); reprice(); } }, `${a.label || a.name}, ${a.pincode}`))); }).catch(() => {});
     const pinNote = h('div', { class: 'small muted', id: 'pinnote' });
-    body.append(h('div', { class: 'card stack' }, h('h3', null, t('delivery')), addrBtns,
+    body.append(h('div', { class: 'card stack tight' }, h('h3', null, t('delivery')), addrBtns,
       inp('line1', t('addr1'), { autocomplete: 'address-line1' }), inp('line2', t('addr2')),
-      inp('pincode', t('pincode'), { inputmode: 'numeric', maxlength: 6, autocomplete: 'postal-code', oninput: e => { F.pincode = e.target.value.replace(/\D/g, '').slice(0, 6); e.target.value = F.pincode; if (F.pincode.length === 6) { reprice(); lookupPin(); } else pinNote.textContent = ''; } }), pinNote,
-      h('div', { class: 'grid2' }, inp('city', t('city'), { autocomplete: 'address-level2' }), inp('district', 'District', { autocomplete: 'off' })), inp('state', t('state'), { autocomplete: 'address-level1' }),
+      h('div', { class: 'grid2 two' }, inp('pincode', t('pincode'), { inputmode: 'numeric', maxlength: 6, autocomplete: 'postal-code', oninput: e => { F.pincode = e.target.value.replace(/\D/g, '').slice(0, 6); e.target.value = F.pincode; if (F.pincode.length === 6) { reprice(); lookupPin(); } else pinNote.textContent = ''; } }), inp('city', t('city'), { autocomplete: 'address-level2' })), pinNote,
+      h('div', { class: 'grid2 two' }, inp('district', 'District', { autocomplete: 'off' }), inp('state', t('state'), { autocomplete: 'address-level1' })),
       h('div', { class: 'co-nav' }, h('button', { class: 'btn gl-back', onclick: () => goStep(1) }, icon('chevl'), t('back')), h('button', { class: 'btn gl-next', onclick: () => { if (validate(2)) { step = 3; stepPay(); toTop(); } else focusBad(); } }, t('next'), icon('chev')))));
     if (/^\d{6}$/.test(F.pincode) && (!F.district || !F.state)) lookupPin();
   }
@@ -146,7 +146,15 @@ route(/^\/checkout$/, async view => {
     body.append(h('div', { class: 'card stack' }, h('h3', null, t('review')),
       h('div', { class: 'row between', style: { alignItems: 'start' } }, h('div', { class: 'small' }, h('b', null, a.name), h('br'), a.line1, a.line2 ? ', ' + a.line2 : '', h('br'), `${a.city}${a.district && a.district !== a.city ? ', ' + a.district : ''}, ${a.state} - ${a.pincode}`, h('br'), a.phone, a.email ? h('span', null, h('br'), a.email) : null), h('button', { class: 'link', style: { background: 'none', border: 0, cursor: 'pointer' }, onclick: () => { step = 2; stepAddress(); toTop(); } }, 'Edit')),
       h('div', { class: 'row between' }, h('span', null, F.method === 'cod' ? t('cod') : t('upi')), h('button', { class: 'link', style: { background: 'none', border: 0, cursor: 'pointer' }, onclick: () => { step = 3; stepPay(); toTop(); } }, 'Edit')),
-      F.method === 'cod' && price.cod && price.cod.advance > 0 ? h('div', { class: 'adv-box' }, h('b', null, 'How you will pay'), h('div', { class: 'row between' }, h('span', null, 'Now, by UPI (advance)'), h('b', null, money(price.cod.advance))), h('div', { class: 'row between' }, h('span', null, 'On delivery'), h('b', null, money(Math.max(0, price.total - price.cod.advance)))), h('div', { class: 'row between adv-total' }, h('span', null, t('total')), h('b', null, money(price.total)))) : null,
+      F.method === 'cod' && price.cod && price.cod.advance > 0 ? h('div', { class: 'adv-box' }, h('b', null, 'How you will pay'),
+        h('div', { class: 'row between' }, h('span', null, 'Items'), h('span', null, money(price.subtotal))),
+        price.discount > 0 ? h('div', { class: 'row between' }, h('span', null, 'Discount'), h('span', null, '− ' + money(price.discount))) : null,
+        h('div', { class: 'row between' }, h('span', null, 'Delivery'), h('span', null, price.shipping + price.packaging ? money(price.shipping + price.packaging) : t('free'))),
+        price.gift_fee ? h('div', { class: 'row between' }, h('span', null, t('gift')), h('span', null, money(price.gift_fee))) : null,
+        price.cod_fee ? h('div', { class: 'row between' }, h('span', null, 'Cash on delivery charge'), h('span', null, money(price.cod_fee))) : null,
+        h('div', { class: 'row between adv-total' }, h('b', null, t('total')), h('b', null, money(price.total))),
+        h('div', { class: 'row between adv-pay' }, h('span', null, 'Pay now by UPI (advance)'), h('b', null, money(price.cod.advance))),
+        h('div', { class: 'row between adv-pay' }, h('span', null, 'Pay on delivery'), h('b', null, money(Math.max(0, price.total - price.cod.advance))))) : null,
       price.has_battery ? h('div', { class: 'box-note warn' }, icon('warn'), h('span', null, price.battery_notice)) : null,
       price.needs_safety_ack || price.has_battery ? h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: F.safety, onchange: e => { F.safety = e.target.checked; } }), h('span', null, t('safety_ok'), ' (', pol('safety', 'Safety'), ').')) : null,
       h('p', { class: 'muted small' }, `Easy ${BOOT.returns.window_days || 7}-day replacement on damaged or defective items.`),

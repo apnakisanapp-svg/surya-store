@@ -91,7 +91,7 @@ const order = (pid, qty, method = 'upi') => pj('/orders', { method: 'POST', body
   await pj(`/orders/${oA[1].number}/cancel?t=${oA[1].token}`, { method: 'POST', body: { reason: 'test' } });
   await aj('/products/' + bpl.id, { method: 'PUT', body: { pay_rule: '' } });
   // ---- per-product services & rules ----
-  const p2 = prods.find(x => x.id !== bpl.id) || p; await aj('/products/' + p2.id, { method: 'PUT', body: { stock: 10 } });
+  let p2 = p; for (const x of prods) { if (x.id === bpl.id) continue; await aj('/products/' + x.id, { method: 'PUT', body: { stock: 10 } }); const t = await pj('/cart/price', { method: 'POST', body: { items: [{ product_id: x.id, qty: 1 }], method: 'cod', pincode: '110001' } }); if (t[1].lines && t[1].lines[0] && t[1].lines[0].ok) { p2 = x; break; } }
   const cp = (items, extra = {}) => pj('/cart/price', { method: 'POST', body: { items, method: 'cod', pincode: '110001', ...extra } }).then(r => r[1]);
   const L = [{ product_id: bpl.id, qty: 1 }], L2 = [{ product_id: bpl.id, qty: 1 }, { product_id: p2.id, qty: 1 }];
   await aj('/products/' + bpl.id, { method: 'PUT', body: { adv_type: 'fixed', adv_value: 99 } });

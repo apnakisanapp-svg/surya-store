@@ -94,6 +94,8 @@ export const cart = {
   save() { ls.set('sy_cart', this.items); bus.emit('cart'); },
   count() { return this.items.reduce((s, i) => s + i.q, 0); },
   add(p, v, q = 1, info) { const it = this.items.find(i => i.p === p && (i.v || 0) === (v || 0)); if (it) it.q = Math.min(99, it.q + q); else this.items.push({ p, v: v || 0, q, info }); if (info && it) it.info = info; this.save(); },
+  /** Buy now: this product gets exactly this quantity (it does not add to what is already in the cart). */
+  buyNow(p, v, q = 1, info) { const it = this.items.find(i => i.p === p && (i.v || 0) === (v || 0)); if (it) { it.q = Math.max(1, Math.min(99, q)); if (info) it.info = info; } else this.items.push({ p, v: v || 0, q, info }); this.save(); },
   setQty(p, v, q) { const it = this.items.find(i => i.p === p && (i.v || 0) === (v || 0)); if (!it) return; it.q = Math.max(1, Math.min(99, q)); this.save(); },
   remove(p, v) { const i = this.items.findIndex(x => x.p === p && (x.v || 0) === (v || 0)); if (i < 0) return null; const [g] = this.items.splice(i, 1); this.save(); return { g, i }; },
   restore(r) { if (r) { this.items.splice(r.i, 0, r.g); this.save(); } },
