@@ -39,7 +39,11 @@ const SPEC = (cats) => [
   { k: 'tagline', l: 'One-line description', t: 'text', max: 160 }, { k: 'tagline_hi', l: 'One-line (Hindi, optional)', t: 'text' },
   { k: 'category_id', l: 'Category', t: 'select', num: true, opts: [['', '— choose —'], ...cats.map(c => [c.id, c.name])], w: 'half' }, { k: 'badge', l: 'Badge on photo (optional)', t: 'text', ph: 'New, Best seller…', w: 'half' },
   { k: 'description', l: 'Description', t: 'html', h: 'Plain text or simple HTML (<p>, <ul>, <b>). Scripts are removed.' }, { k: 'description_hi', l: 'Description (Hindi, optional)', t: 'html', rows: 4 },
-  { k: 'tags', l: 'Search tags', t: 'tags', ph: 'usb lighter, arc lighter, rechargeable', h: 'Customers find the product with these words.' },
+  { k: 'tags', l: 'Search words', t: 'tags', ph: 'diya, diye, deepak, दीया, diwali, led light …', h: 'Extra words customers may type (Hindi, English, Hinglish, spelling mistakes). Leave empty and the site still uses the name and category. Use “Copy prompt for AI” for a long list.', prompt: d => {
+    const cat = (cats.find(c => String(c.id) === String(d.category_id)) || {}).name || '';
+    const desc = String(d.description || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 300);
+    return `Mere online store ke ek product ke liye search keywords likho.\nProduct ka naam: ${d.name || '(naam yahan likho)'}\nCategory: ${cat || '(category)'}\nDetails: ${[d.tagline, desc].filter(Boolean).join('. ') || '(details)'}\n\nNiyam:\n- 40 se 60 keywords do, sab ek hi line me, comma se alag.\n- Wahi shabd do jo customer search me likhega: English, Hindi (Devanagari), Hinglish (Hindi shabd English letters me) aur 5-6 aam galat spellings.\n- Product ke doosre naam, use karne ke tareeke aur milti-julti cheezein bhi likho.\n- Sirf comma wali list do. Koi heading, number, explanation ya extra line mat likho.`;
+  } },
   { t: 'heading', l: 'Price & stock' },
   { k: 'price', l: 'Selling price (₹)', t: 'number', w: 'half' }, { k: 'mrp', l: 'MRP (₹) — must not be below price', t: 'number', w: 'half' },
   { k: 'stock', l: 'Stock (pieces)', t: 'number', w: 'half' }, { k: 'low_stock_limit', l: 'Warn me when stock is below', t: 'number', w: 'half' },
@@ -54,8 +58,6 @@ const SPEC = (cats) => [
   { k: 'safety', l: 'Safety instructions shown on the product page', t: 'textarea', rows: 4 }, { k: 'safety_hi', l: 'Safety (Hindi, optional)', t: 'textarea' },
   { k: 'safety_ack', l: 'Customer must tick "I read the safety instructions" at checkout', t: 'check' },
   { k: 'brand_used', l: 'Brand name you use (if any)', t: 'text', h: 'Do not use another company\'s brand.' },
-  { t: 'heading', l: 'How can customers pay for this product?', h: 'Use this for risky or high-value items. If a cart has several products, the strictest rule applies.' },
-  { k: 'pay_rule', l: 'Payment rule', t: 'select', opts: [['', 'Normal (follow Settings > Payments)'], ['upi_only', 'UPI only (no cash on delivery)'], ['cod_advance', 'Cash on delivery allowed, but advance is compulsory']] },
   { k: 'weight_g', l: 'Weight (grams)', t: 'number', w: 'half' }, { k: 'dims', l: 'Size (L x W x H cm)', t: 'text', w: 'half' },
   { t: 'heading', l: 'Details table & questions' },
   { k: 'specs', l: 'Details table', t: 'list', add: 'Add row', blank: { k: '', v: '' }, sub: [{ k: 'k', l: 'Label', t: 'text', w: 'half' }, { k: 'v', l: 'Value', t: 'text', w: 'half' }] },
@@ -63,6 +65,8 @@ const SPEC = (cats) => [
   { t: 'heading', l: 'Search engines & extras' },
   { k: 'seo_title', l: 'Google title (optional)', t: 'text' }, { k: 'seo_desc', l: 'Google description (optional)', t: 'textarea', rows: 2 }, { k: 'video_url', l: 'Video link (optional)', t: 'text' },
   { k: 'featured', l: 'Feature on the home page (shown higher in Trending)', t: 'check' },
+  { t: 'heading', l: 'Services for this product', h: 'Leave "Same as store" to use Settings > Payments.' },
+  { t: 'services' },
 ];
 
 reg(/^\/products\/(new|\d+)$/, async (v, m) => {
@@ -73,7 +77,7 @@ reg(/^\/products\/(new|\d+)$/, async (v, m) => {
   const form = buildForm(SPEC(cats), p, { onChange: () => { dirty = true; liveRisk(); } });
   let dirty = false, variants = JSON.parse(JSON.stringify(p.variants || []));
   const risk = h('div'), econ = h('div'), imgs = h('div'), vbox = h('div'), simBox = h('div');
-  const head = pageHead(isNew ? 'New product' : p.name, h('a', { class: 'btn', href: '#/products' }, '← All products'), !isNew ? h('a', { class: 'btn', href: `${location.origin.replace(/:\d+$/, '')}:3000/p/${p.slug}`, target: '_blank', id: 'viewlink' }, 'View on website') : null);
+  const head = pageHead(isNew ? 'New product' : p.name, h('a', { class: 'btn', href: '#/products' }, '← All products'), !isNew ? h('a', { class: 'btn', href: `${/^4\d{3}$/.test(location.port) ? location.origin.replace(/:\d+$/, '') + ':3000' : ''}/p/${p.slug}`, target: '_blank', id: 'viewlink' }, 'View on website') : null);
   const status = h('div', { class: 'row' });
   v.append(head, h('div', { class: 'grid g21' }, h('div', { class: 'stack-lg' }, card('', form.el), card('Photos', isNew ? h('p', { class: 'muted' }, 'Save the product first, then add photos.') : imgs), card('Options (size, colour…)', h('p', { class: 'muted small' }, 'Optional. Each option can have its own price and stock. Leave empty if the product has no options.'), vbox), card('Similar products shown at the bottom', simBox), isNew ? null : card('360° spin and 3D model (optional)', advanced())),
     h('div', { class: 'stack-lg' }, card('Save & publish', status, h('div', { class: 'row', style: { marginTop: '10px' } }, h('button', { class: 'btn primary', id: 'savebtn', onclick: save }, 'Save'))), card('Risk checker', risk), card('Profit calculator', econ))));
@@ -119,7 +123,7 @@ reg(/^\/products\/(new|\d+)$/, async (v, m) => {
   }
   function paintImgs() {
     if (isNew) return; clear(imgs);
-    const file = h('input', { type: 'file', accept: 'image/*', multiple: true, class: 'hide', onchange: async e => { const fd = new FormData(); [...e.target.files].forEach(f => fd.append('images', f)); if (!e.target.files.length) return; try { toast('Uploading…'); p = await api(`/products/${id}/images`, { method: 'POST', form: fd }); paintImgs(); paintRisk(p.risk); toast('Photos added'); } catch (x) { toast(x.message, true); } } });
+    const file = h('input', { type: 'file', accept: 'image/*', multiple: true, class: 'hide', onchange: async e => { const fd = new FormData(); [...e.target.files].forEach(f => fd.append('images', f)); if (!e.target.files.length) return; try { p = await api(`/products/${id}/images`, { method: 'POST', form: fd }); paintImgs(); paintRisk(p.risk); toast('Photos added'); } catch (x) { toast(x.message, true); } } });
     imgs.append(h('div', { class: 'row', style: { marginBottom: '10px' } }, h('button', { class: 'btn', onclick: () => file.click() }, '+ Add photos'), h('span', { class: 'muted small' }, 'First photo is the main one. Click a photo to choose which part stays in the square card picture.'), file));
     const g = h('div', { class: 'pimgs' });
     p.images.forEach((im, i) => g.append(h('div', { class: 'pimg' }, i === 0 ? h('span', { class: 'badge ok main' }, 'Main') : null,

@@ -129,3 +129,7 @@ GST/BIS advice, final policy wording, real photos and logo, payment gateway KYC.
 - Buy now: item kept in sessionStorage (`buyItem`), checkout at /checkout?buy=1 prices/orders only that item; cart untouched.
 - Quantity +/-: instant UI, debounced background reprice, newest wins; blue tap flash removed.
 - Glass: round gold menu button, glass logo pill (header only, splash unchanged), glass checkout stepper.
+
+## 19 Nov (2) — Loading + upload progress (gold glass)
+- Shop (web/js/core.js + app.css): top gold line on page change/API calls, glass shimmer page skeletons (by page type), gold dots on the button that was tapped, "Placing your order…" sun-ring overlay, slow-net pill after 3 s, glass "You're offline / Try again" card (old red bar removed), photo blur-up, upload card with ring + % + MB + Cancel for customer uploads (XHR).
+- Admin (admin-web/js/lib.js, router.js, admin.css): every api() call with a form shows an upload card (ring, %, MB, Cancel, failure text); top gold line; shimmer skeleton while a page loads; busy buttons show gold dots and "Saved ✓".

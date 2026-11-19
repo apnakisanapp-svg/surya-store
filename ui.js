@@ -1,10 +1,11 @@
-import { BOOT, h, $, $$, clear, icon, t, tr, lang, setLang, bus, api, money, cart, wish, me, ls, toast, drawer, modal, nav, debounce, sid } from './core.js';
+import { BOOT, h, $, $$, clear, icon, t, tr, lang, setLang, bus, api, money, cart, wish, me, ls, toast, drawer, modal, nav, debounce, sid, pushOverlay, releaseOverlay } from './core.js';
 
 /* ---------- logo ---------- */
 let LOGO_N = 0;
 export function logo(dark) {
   const T = BOOT.theme || {}, src = dark && T.logo_dark ? T.logo_dark : T.logo;
   if (src) return h('a', { class: 'logo', href: '/', 'aria-label': BOOT.brand.name }, h('img', { src, alt: BOOT.brand.name, height: 30 }), T.show_logo_text ? h('span', null, BOOT.brand.name) : null);
+  if (!dark) return h('a', { class: 'logo logo-img', href: '/', 'aria-label': BOOT.brand.name }, h('img', { class: 'lg-img', src: '/img/logo.webp', alt: '', width: 58, height: 38 }), h('span', { class: 'lg-name' }, BOOT.brand.name));
   const gid = 'lg' + (++LOGO_N); // one id per logo instance (header + footer must not clash)
   const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 64 64'); s.setAttribute('aria-hidden', 'true'); s.setAttribute('class', 'sunmark');
   s.innerHTML = `<defs><linearGradient id="lg${gid}L" gradientUnits="userSpaceOnUse" x1="10" y1="4" x2="54" y2="60"><stop offset="0" stop-color="#FFF1BF"/><stop offset=".35" stop-color="#FFC84A"/><stop offset=".7" stop-color="#E59A1B"/><stop offset="1" stop-color="#A8670A"/></linearGradient><radialGradient id="lg${gid}D" gradientUnits="userSpaceOnUse" cx="27" cy="26" r="19"><stop offset="0" stop-color="#FFF6CC"/><stop offset=".45" stop-color="#FFCB4F"/><stop offset="1" stop-color="#D98E12"/></radialGradient></defs><g><line class="ray" style="--i:0" x1="32.00" y1="12.50" x2="32.00" y2="2.00" pathLength="1" stroke="url(#lg${gid}L)" stroke-width="3.4" stroke-linecap="round"/><line class="ray" style="--i:1" x1="41.75" y1="15.11" x2="44.75" y2="9.92" pathLength="1" stroke="url(#lg${gid}L)" stroke-width="2.6" stroke-linecap="round"/><line class="ray" style="--i:2" x1="48.89" y1="22.25" x2="57.98" y2="17.00" pathLength="1" stroke="url(#lg${gid}L)" stroke-width="3.4" stroke-linecap="round"/><line class="ray" style="--i:3" x1="51.50" y1="32.00" x2="57.50" y2="32.00" pathLength="1" stroke="url(#lg${gid}L)" stroke-width="2.6" stroke-linecap="round"/><line class="ray" style="--i:4" x1="48.89" y1="41.75" x2="57.98" y2="47.00" pathLength="1" stroke="url(#lg${gid}L)" stroke-width="3.4" stroke-linecap="round"/><line class="ray" style="--i:5" x1="41.75" y1="48.89" x2="44.75" y2="54.08" pathLength="1" stroke="url(#lg${gid}L)" stroke-width="2.6" stroke-linecap="round"/><line class="ray" style="--i:6" x1="32.00" y1="51.50" x2="32.00" y2="62.00" pathLength="1" stroke="url(#lg${gid}L)" stroke-width="3.4" stroke-linecap="round"/><line class="ray" style="--i:7" x1="22.25" y1="48.89" x2="19.25" y2="54.08" pathLength="1" stroke="url(#lg${gid}L)" stroke-width="2.6" stroke-linecap="round"/><line class="ray" style="--i:8" x1="15.11" y1="41.75" x2="6.02" y2="47.00" pathLength="1" stroke="url(#lg${gid}L)" stroke-width="3.4" stroke-linecap="round"/><line class="ray" style="--i:9" x1="12.50" y1="32.00" x2="6.50" y2="32.00" pathLength="1" stroke="url(#lg${gid}L)" stroke-width="2.6" stroke-linecap="round"/><line class="ray" style="--i:10" x1="15.11" y1="22.25" x2="6.02" y2="17.00" pathLength="1" stroke="url(#lg${gid}L)" stroke-width="3.4" stroke-linecap="round"/><line class="ray" style="--i:11" x1="22.25" y1="15.11" x2="19.25" y2="9.92" pathLength="1" stroke="url(#lg${gid}L)" stroke-width="2.6" stroke-linecap="round"/></g><circle class="disc" cx="32" cy="32" r="12.5" fill="url(#lg${gid}D)"/><ellipse class="gloss" cx="27.5" cy="27" rx="6.5" ry="4" transform="rotate(-35 27.5 27)" fill="#fff" opacity=".42"/>`;
@@ -98,6 +99,7 @@ export function buildChrome(root) {
     ? h('button', { class: 'bb-i', 'data-k': it.k, onclick: openCart }, icon(it.ic), it.badge, h('span', null, it.label))
     : h('a', { class: 'bb-i', 'data-k': it.k, href: it.url }, icon(it.ic), h('span', null, it.label)));
   const bar = h('nav', { class: 'bbar', 'aria-label': 'Quick menu' }, bubble, ...links);
+  bar.addEventListener('pointerdown', e => { const it = e.target.closest('.bb-i'); if (!it) return; const r = it.getBoundingClientRect(), d = Math.max(r.width, r.height) * 1.3, rip = h('i', { class: 'bb-rip', style: { width: d + 'px', height: d + 'px', left: (e.clientX - r.left - d / 2) + 'px', top: (e.clientY - r.top - d / 2) + 'px' } }); it.append(rip); setTimeout(() => rip.remove(), 650); });
   let cur = -1;
   const moveBubble = i => {
     const to = `translateX(${i * 100}%)`;
@@ -144,11 +146,11 @@ export function buildChrome(root) {
   bus.on('route', fmark); fmark(location.pathname);
   root.append(ftr, slim);
   // floating buttons
-  const top = h('button', { class: 'btn alt hide', 'aria-label': 'Back to top', onclick: () => scrollTo({ top: 0, behavior: 'smooth' }) }, icon('up'));
+  const top = h('button', { class: 'btn alt gl-top hide', 'aria-label': 'Back to top', onclick: () => scrollTo({ top: 0, behavior: 'smooth' }) }, icon('up'));
   const waIcon = () => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 64 64'); s.setAttribute('aria-hidden', 'true'); s.innerHTML = '<defs><linearGradient id="waG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6BF58A"/><stop offset=".55" stop-color="#25C45A"/><stop offset="1" stop-color="#0E8F3C"/></linearGradient><radialGradient id="waS" cx=".3" cy=".18" r=".8"><stop offset="0" stop-color="#fff" stop-opacity=".75"/><stop offset=".5" stop-color="#fff" stop-opacity=".05"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient></defs><circle cx="32" cy="32" r="30" fill="url(#waG)"/><path d="M32 12c-11 0-20 8.5-20 19 0 4 1.3 7.7 3.5 10.8L13 51l9.6-2.4c2.7 1.4 5.700 2.200 9.400 2.200 11 0 20-8.500 20-19S43 12 32 12z" fill="#fff"/><path d="M25 22.500c-1 0-2 .9-2.300 2-.8 3.200 1.200 8 5.200 12 4 4 8.900 5.900 12 5.200 1.100-.3 2-1.300 2-2.300l-.1-1.900-4.500-2-1.900 2c-2.700-.9-5.500-3.700-6.400-6.500l1.900-1.900-2-4.500-1.900-.1z" fill="#1DAE4E"/><circle cx="32" cy="32" r="30" fill="url(#waS)"/>'; return s; };
   root.append(h('div', { class: 'fab' }, BOOT.ui.back_to_top ? top : null));
   addEventListener('scroll', () => top.classList.toggle('hide', scrollY < 700), { passive: true });
-  addEventListener('offline', () => { const o = h('div', { class: 'offline', id: 'offl' }, t('offline')); document.body.append(o); });
+  // the glass 'You're offline' card in core.js replaces the old red bar
   addEventListener('online', () => $('#offl') && $('#offl').remove());
 }
 function acctMenu() {
@@ -188,7 +190,9 @@ function newsletterBox() {
 export function openSearch() {
   const scrim = h('div', { class: 'scrim on' }), list = h('div', { class: 'sug' });
   const inp = h('input', { class: 'inp', type: 'search', placeholder: t('search'), 'aria-label': t('search'), autocomplete: 'off', enterkeyhint: 'search' });
-  const close = () => { pan.remove(); scrim.remove(); document.removeEventListener('keydown', esc); };
+  const vis = () => { pan.remove(); scrim.remove(); document.removeEventListener('keydown', esc); };
+  const ov = pushOverlay(vis);
+  const close = () => { vis(); releaseOverlay(ov); };
   const esc = e => { if (e.key === 'Escape') close(); };
   const go = q => { close(); nav('/shop?q=' + encodeURIComponent(q)); };
   const pan = h('div', { class: 'search-pan', role: 'dialog', 'aria-label': t('search') }, h('div', { class: 'wrap' }, h('form', { class: 'row', style: { flexWrap: 'nowrap' }, onsubmit: e => { e.preventDefault(); if (inp.value.trim()) go(inp.value.trim()); } }, h('div', { class: 'grow' }, inp), h('button', { type: 'button', class: 'ibtn', 'aria-label': t('close'), onclick: close }, icon('x'))), list));
@@ -199,10 +203,10 @@ export function openSearch() {
     const q = inp.value.trim(); if (q.length < 2) return;
     try {
       const r = await api('/suggest?q=' + encodeURIComponent(q)); clear(list);
+      if (r.fallback) list.append(h('p', { class: 'fb-sug muted small' }, `${t('fb_title')} “${q}” · ${t('fb_text')}`));
       for (const c of r.categories) list.append(h('a', { href: `/shop?category=${c.slug}`, onclick: close }, h('b', null, tr(c, 'name')), h('span', { class: 'muted small' }, 'Category')));
       for (const p of r.products) list.append(h('a', { href: `/p/${p.slug}`, onclick: close }, p.image ? h('img', { src: p.image, alt: '', width: 44, height: 44 }) : h('span', { style: { width: '44px' } }), h('span', { class: 'grow' }, tr(p, 'name')), h('b', null, money(p.price))));
-      if (!r.products.length && !r.categories.length) list.append(h('p', { class: 'muted', style: { padding: '12px 4px' } }, t('no_results')));
-      else list.append(h('a', { href: '/shop?q=' + encodeURIComponent(q), onclick: close }, h('span', { class: 'link' }, `${t('all')} → "${q}"`)));
+      if (r.products.length || r.categories.length) list.append(h('a', { href: '/shop?q=' + encodeURIComponent(q), onclick: close }, h('span', { class: 'link' }, `${t('all')} → "${q}"`)));
     } catch { /* ignore */ }
   }, 220);
   inp.addEventListener('input', run);
@@ -210,18 +214,23 @@ export function openSearch() {
 
 /* ---------- cart drawer ---------- */
 export async function priceNow(extra = {}) {
-  if (!cart.items.length) return null;
-  return api('/cart/price', { method: 'POST', body: { items: cart.payload(), ...extra } });
+  const items = extra.items || cart.payload();
+  if (!items.length) return null;
+  return api('/cart/price', { method: 'POST', body: { ...extra, items } });
 }
 export function lineEl(l, onChange) {
   const it = cart.items.find(i => i.p === l.product_id && (i.v || 0) === (l.variant_id || 0));
+  const unit = (l.line_total != null ? l.line_total : l.price * l.qty) / Math.max(1, l.qty), qs = h('span', null, l.qty), pr = h('span', null, money(l.line_total != null ? l.line_total : l.price * l.qty)), mr = h('div', { class: 'muted small' }, h('s', null, money(l.mrp * l.qty)));
+  const soon = debounce(() => onChange(), 220);
+  // Instant: the number and price change on the tap; the server re-check runs quietly afterwards (newest wins).
+  const bump = d => { const cur = it ? it.q : l.qty, q = Math.max(1, Math.min(99, cur + d)); if (q === cur) return; qs.textContent = q; pr.textContent = money(unit * q); mr.firstChild.textContent = money(l.mrp * q); cart.setQty(l.product_id, l.variant_id, q); soon(); };
   return h('div', { class: 'ci' },
     h('a', { href: l.slug ? `/p/${l.slug}` : null }, l.image ? h('img', { src: l.image, alt: '', width: 72, height: 72, loading: 'lazy' }) : h('div', { style: { width: '72px', height: '72px', background: 'var(--bg2)', borderRadius: '14px' } })),
     h('div', { style: { minWidth: 0 } }, h('div', { class: 'nm' }, (lang() === 'hi' && l.name_hi) || l.name), l.variant_name ? h('div', { class: 'muted small' }, l.variant_name) : null,
       l.issue ? h('div', { class: 'small', style: { color: 'var(--err)' } }, l.issue_text || ({ unavailable: 'No longer available', out: t('oos'), stock: `Only ${l.max_qty} available`, variant: 'Choose an option' }[l.issue] || l.issue)) : null,
-      h('div', { class: 'row', style: { gap: '10px' } }, h('div', { class: 'qty' }, h('button', { 'aria-label': '-', onclick: () => { if ((it ? it.q : 1) > 1) { cart.setQty(l.product_id, l.variant_id, it.q - 1); onChange(); } } }, '−'), h('span', null, l.qty), h('button', { 'aria-label': '+', onclick: () => { cart.setQty(l.product_id, l.variant_id, (it ? it.q : 1) + 1); onChange(); } }, '+')),
+      h('div', { class: 'row', style: { gap: '10px' } }, h('div', { class: 'qty' }, h('button', { 'aria-label': '-', onclick: () => bump(-1) }, '−'), qs, h('button', { 'aria-label': '+', onclick: () => bump(1) }, '+')),
         h('button', { class: 'link', style: { background: 'none', border: 0, cursor: 'pointer', fontSize: '.85rem', marginTop: '8px' }, onclick: () => { const r = cart.remove(l.product_id, l.variant_id); onChange(); toast(t('removed'), { action: t('undo'), onAction: () => { cart.restore(r); onChange(); } }); } }, t('remove')))),
-    h('div', { style: { textAlign: 'right', fontWeight: 600 } }, money(l.line_total != null ? l.line_total : l.price * l.qty), l.mrp > l.price ? h('div', { class: 'muted small' }, h('s', null, money(l.mrp * l.qty))) : null));
+    h('div', { style: { textAlign: 'right', fontWeight: 600 } }, pr, l.mrp > l.price ? mr : null));
 }
 export function shipBar(p) {
   if (!p.free_above) return null;
@@ -232,24 +241,26 @@ let drawerOpen = null;
 export async function openCart() {
   if (drawerOpen) return;
   const body = h('div'), foot = h('div');
-  const d = drawer(`${t('cart')}`, body, foot, { cls: 'cart-glass' }); drawerOpen = d;
-  const orig = d.close; d.close = () => { drawerOpen = null; bus.off('cart', refresh); orig(); };
+  const d = drawer(`${t('cart')}`, body, foot, { cls: 'cart-glass', onClose: () => { drawerOpen = null; bus.off('cart', refreshSoon); } }); drawerOpen = d;
+  let seq = 0, shown = false;
   async function refresh() {
-    clear(body); clear(foot);
+    const my = ++seq; // only the newest refresh may draw; older ones are dropped
     if (!cart.items.length) {
+      clear(body); clear(foot);
       const sug = h('div', { class: 'cart-sug' });
       body.append(h('div', { class: 'cart-empty' }, h('div', { class: 'ce-art' }, h('i', { class: 'ce-ring' }), h('i', { class: 'ce-ring r2' }), icon('bag')), h('h3', null, 'Your cart is empty'), h('p', { class: 'muted' }, 'Add something you like and it will wait for you here.'), h('a', { class: 'btn ce-btn', href: '/shop', onclick: () => d.close() }, 'Start shopping')), sug);
       api('/products?sort=trending&limit=4').then(r => { const list = (r.items || r || []).slice(0, 4); if (!list.length) return; sug.append(h('div', { class: 'ce-title' }, 'Popular right now'), h('div', { class: 'pgrid ce-grid' }, list.map(p => { const a = productCard(p); a.addEventListener('click', () => d.close()); return a; }))); }).catch(() => { /* suggestions are optional */ });
       return;
     }
-    body.append(skeletons(1));
-    let p; try { p = await priceNow(); } catch (e) { clear(body).append(h('p', { class: 'muted' }, e.message)); return; }
-    syncFromPrice(p); clear(body);
-    body.append(shipBar(p), ...p.lines.map(l => lineEl(l, refresh)));
+    if (!shown) { clear(body); clear(foot); body.append(skeletons(1)); } // first load only; later updates happen quietly in the background
+    let p; try { p = await priceNow(); } catch (e) { if (my === seq) { shown = false; clear(foot); clear(body).append(h('p', { class: 'muted' }, e.message)); } return; }
+    if (my !== seq) return;
+    syncFromPrice(p); shown = true; clear(body); clear(foot);
+    body.append(shipBar(p), ...p.lines.map(l => lineEl(l, () => {}))); // the cart event already triggers refresh
     foot.append(h('div', { class: 'tot', style: { marginBottom: '12px' } }, h('div', null, h('span', null, t('subtotal')), h('span', null, money(p.subtotal))), p.discount ? h('div', { class: 'g' }, h('span', null, t('coupon')), h('span', null, '−' + money(p.discount))) : null), h('p', { class: 'muted small', style: { marginBottom: '12px' } }, 'Shipping and COD fee are shown at checkout.'),
       h('a', { class: 'btn block', href: '/checkout', onclick: () => d.close() }, `${t('checkout')} · ${money(p.subtotal - p.discount)}`), h('a', { class: 'btn ghost block', style: { marginTop: '8px' }, href: '/cart', onclick: () => d.close() }, t('cart')));
   }
-  bus.on('cart', refresh); refresh();
+  const refreshSoon = debounce(refresh, 180); bus.on('cart', refreshSoon); refresh();
 }
 /** Drop lines the server says are gone and clamp quantities, so the cart never fights the shelf. */
 export function syncFromPrice(p) {
