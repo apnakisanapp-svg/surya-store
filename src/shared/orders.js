@@ -83,7 +83,7 @@ function createOrder(body, ctx) {
     else if (priced.total > 3000) { risky = 1; riskReason = 'High-value COD order'; }
   }
 
-  const advance = pricing.cartAdvance(P, priced, { method, total: priced.total, phone: address.phone, risky });
+  const advance = pricing.cartAdvance(P, priced, { method, total: priced.total });
   const run = db.transaction(() => {
     // duplicate guard: same phone + same total in last 2 minutes
     const dup = db.prepare("SELECT * FROM orders WHERE phone=? AND ABS(total+COALESCE(upi_adjust,0)-?)<0.001 AND placed_at > ? AND status NOT IN ('cancelled') ORDER BY id DESC LIMIT 1")

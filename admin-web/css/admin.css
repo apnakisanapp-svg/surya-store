@@ -61,3 +61,15 @@ a{color:var(--info);text-decoration:none}a:hover{text-decoration:underline}butto
 .rich-ta{font-family:inherit;line-height:1.55;min-height:180px}
 .rich-prev{border:1px dashed var(--line,#d8d2c4);border-radius:12px;padding:12px 14px;background:rgba(255,255,255,.5);max-height:320px;overflow:auto}
 .rich-prev h2{font-size:1.15rem;margin:.6em 0 .3em}.rich-prev h3{font-size:1rem;margin:.6em 0 .3em}.rich-prev ul,.rich-prev ol{padding-left:1.3em}
+
+/* Services panel (product + store defaults) */
+.svc{display:grid;gap:14px}
+.svc-q{border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:#fafbfc}
+.svc-t{margin-bottom:8px}
+.seg{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.segb{min-height:38px;padding:0 13px;border-radius:999px;border:1px solid var(--line);background:#fff;cursor:pointer;font-weight:500;-webkit-tap-highlight-color:transparent}
+.segb.on{background:var(--pri);color:#fff;border-color:var(--pri)}
+.svc-num{display:inline-flex;align-items:center;gap:6px}
+.svc-hint{margin-top:6px;font-size:.84rem;color:var(--mute)}
+.svc-sum{padding:11px 14px;border-radius:10px;background:#eef2ff;border:1px solid #d5ddff;font-size:.88rem;line-height:1.5}
+.svc .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}

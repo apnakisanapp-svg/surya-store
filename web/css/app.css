@@ -580,3 +580,25 @@ em.pop,span.pop,b.pop{display:inline-block;animation:popin .45s cubic-bezier(.2,
 .co .card.tight{gap:10px}.co .card.tight .field>span{font-size:.8rem;margin-bottom:3px}
 .co .card.tight h3{margin-bottom:0}
 .adv-box .adv-pay{background:rgba(201,162,75,.14);margin:0 -6px;padding:5px 6px;border-radius:8px}
+
+/* ===== v: glass menu button, glass logo pill, glass stepper, no blue tap flash ===== */
+button,a,.qty button,.chip,.ibtn,.stp-i{-webkit-tap-highlight-color:transparent}
+.qty button{transition:transform .12s,background .15s;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.qty button:active{transform:scale(.88);background:rgba(201,162,75,.22)}
+.qty button:focus,.qty button:focus-visible{outline:none}
+.qty span{min-width:1.6em;text-align:center;font-variant-numeric:tabular-nums}
+.hdr .burger{width:42px;height:42px;border-radius:50%;color:#b8851c;background:linear-gradient(145deg,rgba(255,255,255,.72),rgba(255,240,200,.4));border:1px solid rgba(201,162,75,.55);box-shadow:0 6px 16px -8px rgba(150,104,10,.55),inset 0 1px 0 rgba(255,255,255,.85);-webkit-backdrop-filter:blur(12px) saturate(180%);backdrop-filter:blur(12px) saturate(180%);transition:transform .15s,box-shadow .2s}
+.hdr .burger svg{width:22px;height:22px;stroke:#b8851c;stroke-width:2.2}
+.hdr .burger:hover{background:linear-gradient(145deg,rgba(255,255,255,.85),rgba(255,236,180,.55));transform:none}
+.hdr .burger:active{transform:scale(.92)}
+.hdr .logo{padding:5px 14px 5px 8px;border-radius:999px;background:linear-gradient(145deg,rgba(255,255,255,.62),rgba(255,244,214,.34));border:1px solid rgba(201,162,75,.4);box-shadow:0 8px 20px -12px rgba(150,104,10,.5),inset 0 1px 0 rgba(255,255,255,.8);-webkit-backdrop-filter:blur(10px) saturate(170%);backdrop-filter:blur(10px) saturate(170%)}
+.stp{padding:14px 8px 12px;border-radius:20px;background:linear-gradient(145deg,rgba(255,255,255,.62),rgba(255,244,214,.3));border:1px solid rgba(201,162,75,.35);box-shadow:0 14px 30px -20px rgba(120,84,10,.5),inset 0 1px 0 rgba(255,255,255,.85);-webkit-backdrop-filter:blur(14px) saturate(170%);backdrop-filter:blur(14px) saturate(170%)}
+.stp-track{top:32px;height:5px;background:rgba(120,90,20,.14);box-shadow:inset 0 1px 2px rgba(0,0,0,.08)}
+.stp-dot{background:linear-gradient(145deg,rgba(255,255,255,.9),rgba(255,244,214,.6));border:1.5px solid rgba(201,162,75,.5);box-shadow:inset 0 1px 0 #fff,0 4px 10px -6px rgba(120,84,10,.45)}
+.stp-i.on .stp-dot{background:linear-gradient(145deg,#2a2008,#1a1405)}
+@media(prefers-color-scheme:dark){
+  .hdr .burger,.hdr .logo,.stp{background:linear-gradient(145deg,rgba(255,255,255,.1),rgba(201,162,75,.08));border-color:rgba(201,162,75,.4);box-shadow:inset 0 1px 0 rgba(255,255,255,.12)}
+  .hdr .burger,.hdr .burger svg{color:#f4d77a;stroke:#f4d77a}
+  .stp-dot{background:rgba(255,255,255,.08)}
+}
+@media(max-width:380px){.hdr .logo{padding:4px 10px 4px 6px}}

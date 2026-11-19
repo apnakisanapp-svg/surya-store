@@ -77,9 +77,8 @@ function priceCart(items, opts = {}) {
   for (const it of merged.values()) {
     const p = db.prepare(`SELECT p.* FROM products p WHERE p.id=? AND ${catalog.LIVE_SQL}`).get(it.product_id, ...catalog.liveArgs());
     const line = { key: `${it.product_id}:${it.variant_id || 0}`, product_id: it.product_id, variant_id: it.variant_id, qty: it.qty, ok: false, issue: null };
-    line.pay_rule = p ? (p.pay_rule || '') : '';
     const E = p ? rules.effective(p) : null;
-    if (E) Object.assign(line, { adv_type: E.adv_type, adv_value: E.adv_value, gift_ok: E.gift_ok, gift_price: E.gift_price, ship_rule: E.ship, ret_rule: E.ret_rule, ret_days: E.ret_days, ret_custom: E.ret_custom });
+    if (E) Object.assign(line, { cod_mode: E.cod, adv_amount: E.adv, cod_fee_line: E.fee, gift_ok: E.gift_ok, gift_price: E.gift_price, ship_kind: E.ship, ship_value: E.ship_value, ret_rule: E.ret_rule, ret_days: E.ret_days, ret_custom: E.ret_custom });
     if (!p) { line.issue = 'unavailable'; line.name = 'Unavailable product'; lines.push(line); continue; }
     const variants = db.prepare('SELECT * FROM variants WHERE product_id=? AND active=1 ORDER BY sort,id').all(p.id);
     let v = null;
@@ -119,36 +118,37 @@ function priceCart(items, opts = {}) {
   }
   const afterDiscount = round2(subtotal - discount);
   const freeAbove = S.free_above > 0 ? S.free_above : null;
-  const allFree = okLines.length > 0 && okLines.every(l => l.ship_rule === 'free'), anyPaid = okLines.some(l => l.ship_rule === 'paid');
-  let shipping = okLines.length ? (freeShipCoupon || allFree ? 0 : anyPaid ? S.flat : (freeAbove && afterDiscount >= freeAbove) ? 0 : S.flat) : 0;
+  // delivery: 'own' charges of products win (the highest one), then 'free' on every item, else the store rule
+  const ownLines = okLines.filter(l => l.ship_kind === 'own');
+  const allFree = okLines.length > 0 && okLines.every(l => l.ship_kind === 'free');
+  let shipping = 0;
+  if (okLines.length && !freeShipCoupon) {
+    if (ownLines.length) shipping = Math.max(...ownLines.map(l => l.ship_value || 0));
+    else if (!allFree) shipping = (freeAbove && afterDiscount >= freeAbove) ? 0 : S.flat;
+  }
   const packaging = okLines.length ? (S.packaging_fee || 0) : 0;
   const giftAllowed = okLines.length > 0 && okLines.every(l => l.gift_ok);
   const giftPrices = okLines.map(l => (l.gift_price != null ? l.gift_price : S.gift_price));
   const giftPrice = giftPrices.length ? Math.max(...giftPrices) : S.gift_price;
   const giftFee = opts.gift && giftAllowed ? giftPrice : 0;
-  // advance asked by the products themselves (fixed / percent), summed across lines
-  let prodAdv = 0;
-  for (const l of okLines) {
-    if (l.adv_type === 'fixed') prodAdv += Math.round(l.adv_value || 0);
-    else if (l.adv_type === 'percent') prodAdv += Math.round(l.line_total * (l.adv_value || 0) / 100);
-  }
-  const advAllNone = okLines.length > 0 && okLines.every(l => l.adv_type === 'none');
+  // COD advance: every product that asks for one adds its own rupees
+  const advSum = okLines.filter(l => l.cod_mode === 'advance').reduce((t, l) => t + (l.adv_amount || 0), 0);
+  const maxFee = okLines.length ? Math.max(...okLines.map(l => l.cod_fee_line || 0)) : 0;
 
   let pin = null;
   if (opts.pincode) pin = checkPincode(opts.pincode, { battery: hasBattery });
   const codBase = !!P.cod_enabled && (!pin || pin.cod);
   const payTotalNoCod = round2(afterDiscount + shipping + packaging + giftFee);
-  const codRangeOk = payTotalNoCod >= (P.cod_min || 0) && (!P.cod_max || payTotalNoCod + (P.cod_fee || 0) <= P.cod_max);
+  const codRangeOk = payTotalNoCod >= (P.cod_min || 0) && (!P.cod_max || payTotalNoCod + maxFee <= P.cod_max);
   let codMsg = '';
   if (!P.cod_enabled) codMsg = 'Cash on delivery is not available right now.';
   else if (pin && !pin.cod) codMsg = 'Cash on delivery is not available for this pincode.';
   else if (!codRangeOk) codMsg = P.cod_max && payTotalNoCod > P.cod_max ? `Cash on delivery is available up to ₹${P.cod_max}.` : `Cash on delivery needs a minimum order of ₹${P.cod_min}.`;
-  const okRules = lines.filter(l => l.ok).map(l => l.pay_rule);
-  const upiOnly = okRules.includes('upi_only'), forceAdvance = okRules.includes('cod_advance');
+  const upiOnly = okLines.some(l => l.cod_mode === 'off');
   if (upiOnly && codBase) codMsg = 'An item in your cart can only be paid online by UPI.';
   const codOk = codBase && codRangeOk && !upiOnly;
   const method = opts.method === 'cod' ? 'cod' : opts.method === 'upi' ? 'upi' : null;
-  const codFee = method === 'cod' && codOk ? (P.cod_fee || 0) : 0;
+  const codFee = method === 'cod' && codOk ? maxFee : 0;
   const total = round2(payTotalNoCod + codFee);
 
   let gstAmount = 0;
@@ -167,27 +167,15 @@ function priceCart(items, opts = {}) {
     lines, count: okLines.reduce((s, l) => s + l.qty, 0), subtotal, mrp_total: mrpTotal, savings: round2(Math.max(0, mrpTotal - subtotal) + discount),
     discount, coupon, shipping, packaging, gift_fee: giftFee, cod_fee: codFee, total, gst: { enabled: !!B.gst_enabled, amount: gstAmount, inclusive: true },
     free_above: freeAbove, free_shipping_remaining: freeAbove && !freeShipCoupon ? Math.max(0, round2(freeAbove - afterDiscount)) : 0,
-    pincode: pin, cod: { ok: codOk, message: codMsg, fee: P.cod_fee || 0, advance: codOk ? cartAdvance(P, { prod_adv: prodAdv, all_none: advAllNone, force_advance: forceAdvance }, { method: 'cod', total: method === 'cod' ? total : round2(total + (P.cod_fee || 0)), phone: opts.identity && opts.identity.phone, risky: false }) : 0, advance_note: P.cod_advance_note || '' }, upi_ok: !!P.upi_enabled && !!P.upi_id,
-    force_advance: forceAdvance, prod_adv: prodAdv, adv_all_none: advAllNone, gift: { ok: giftAllowed, price: giftPrice }, upi_only: upiOnly, has_battery: hasBattery, battery_notice: hasBattery ? S.battery_notice : '', needs_safety_ack: needsSafety, method, errors,
+    pincode: pin, cod: { ok: codOk, message: codMsg, fee: maxFee, advance: codOk ? cartAdvance(P, { adv_sum: advSum }, { method: 'cod', total: method === 'cod' ? total : round2(total + maxFee) }) : 0, advance_note: P.cod_advance_note || '' }, upi_ok: !!P.upi_enabled && !!P.upi_id,
+    adv_sum: advSum, gift: { ok: giftAllowed, price: giftPrice }, upi_only: upiOnly, has_battery: hasBattery, battery_notice: hasBattery ? S.battery_notice : '', needs_safety_ack: needsSafety, method, errors,
   };
 }
 
-function advanceFor(P, { method, total, phone, risky, force }) {
+/** COD advance for a priced cart: the rupees the products ask for (each product's own, or the store default). */
+function cartAdvance(P, priced, { method, total }) {
   if (method !== 'cod' || !P.upi_enabled || !P.upi_id) return 0;
-  if (!force && !P.cod_advance_on) return 0;
-  if (!force && total < (Number(P.cod_advance_min_total) || 0)) return 0;
-  if (!force && P.cod_advance_for === 'new' && phone && db.prepare("SELECT 1 FROM orders WHERE phone=? AND status='delivered' LIMIT 1").get(phone)) return 0;
-  if (!force && P.cod_advance_for === 'risky' && !risky) return 0;
-  let a = P.cod_advance_mode === 'percent' ? Math.round(total * (Number(P.cod_advance_value) || 0) / 100) : Math.round(Number(P.cod_advance_value) || (force ? 99 : 0));
-  return Math.max(0, Math.min(a, Math.floor(total) - 1));
+  return Math.max(0, Math.min(Math.round(priced.adv_sum || 0), Math.floor(total) - 1));
 }
 
-/** COD advance for a priced cart: product-level amounts win, then 'none' on every item, then global Settings. */
-function cartAdvance(P, priced, { method, total, phone, risky }) {
-  if (method !== 'cod' || !P.upi_enabled || !P.upi_id) return 0;
-  if (priced.prod_adv > 0) return Math.max(0, Math.min(priced.prod_adv, Math.floor(total) - 1));
-  if (priced.all_none) return 0;
-  return advanceFor(P, { method, total, phone, risky, force: priced.force_advance });
-}
-
-module.exports = { cartAdvance, advanceFor, priceCart, checkPincode, couponFor, validateCoupon, eta };
+module.exports = { cartAdvance, priceCart, checkPincode, couponFor, validateCoupon, eta };

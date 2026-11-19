@@ -1,4 +1,4 @@
-import { BOOT, h, $, $$, clear, icon, t, tr, lang, bus, api, money, cart, wish, me, ls, toast, modal, nav, route, setTitle, reveal, sid } from './core.js';
+import { BOOT, h, $, $$, clear, icon, t, tr, lang, bus, api, money, cart, wish, me, ls, toast, modal, nav, route, setTitle, reveal, sid, buyItem } from './core.js';
 import { productCard, skeletons, lineEl, shipBar, priceNow, syncFromPrice } from './ui.js';
 import { faqList } from './pages1.js';
 
@@ -12,11 +12,12 @@ route(/^\/cart$/, async view => {
   setTitle(t('cart'));
   const box = h('div'); view.append(wrap(h('h1', { class: 'h1', style: { fontSize: 'clamp(1.8rem,5vw,2.8rem)', marginBottom: '20px' } }, t('cart')), box));
   let coupon = ls.get('sy_coupon', '');
+  let seq = 0, shown = false;
   async function refresh() {
-    clear(box);
-    if (!cart.items.length) { box.append(h('div', { class: 'empty' }, icon('bag'), h('h3', null, t('empty_cart')), h('p', { style: { marginTop: '16px' } }, h('a', { class: 'btn', href: '/shop' }, t('continue'))))); return; }
-    box.append(skeletons(1));
-    const p = await priceNow({ coupon }); syncFromPrice(p); clear(box);
+    const my = ++seq; // newest refresh wins; the page keeps showing the old content until the new one is ready
+    if (!cart.items.length) { clear(box); box.append(h('div', { class: 'empty' }, icon('bag'), h('h3', null, t('empty_cart')), h('p', { style: { marginTop: '16px' } }, h('a', { class: 'btn', href: '/shop' }, t('continue'))))); return; }
+    if (!shown) { clear(box); box.append(skeletons(1)); }
+    const p = await priceNow({ coupon }); if (my !== seq) return; syncFromPrice(p); shown = true; clear(box);
     const inp = h('input', { class: 'inp', placeholder: t('coupon'), value: coupon, 'aria-label': t('coupon') });
     const msg = h('div', { class: 'small', style: { marginTop: '6px', color: p.coupon && p.coupon.ok ? 'var(--ok)' : 'var(--err)' } }, coupon && p.coupon ? (p.coupon.ok ? `${p.coupon.code} applied` : p.coupon.message) : '');
     box.append(h('div', { class: 'co' }, h('div', null, shipBar(p), ...p.lines.map(l => lineEl(l, refresh))),
@@ -34,9 +35,11 @@ function totals(p, method) {
 }
 
 /* ================= CHECKOUT ================= */
-route(/^\/checkout$/, async view => {
+route(/^\/checkout$/, async (view, m, params) => {
+  const BUY = params && params.get('buy') === '1' ? buyItem.get() : null; // "Buy now": only this one item, the cart is left alone
+  const lines = () => (BUY ? [BUY] : cart.items), payload = () => lines().map(i => ({ product_id: i.p, variant_id: i.v || null, qty: i.q }));
   setTitle(t('checkout'));
-  if (!cart.items.length) { view.append(wrap(h('div', { class: 'empty' }, icon('bag'), h('h3', null, t('empty_cart')), h('p', { style: { marginTop: '16px' } }, h('a', { class: 'btn', href: '/shop' }, t('continue')))))); return; }
+  if (!lines().length) { view.append(wrap(h('div', { class: 'empty' }, icon('bag'), h('h3', null, t('empty_cart')), h('p', { style: { marginTop: '16px' } }, h('a', { class: 'btn', href: '/shop' }, t('continue')))))); return; }
   const saved = ls.get('sy_addr', {});
   const F = { name: saved.name || (me.customer && me.customer.name) || '', phone: saved.phone || (me.customer && me.customer.phone) || '', email: saved.email || (me.customer && me.customer.email) || '', line1: saved.line1 || '', line2: saved.line2 || '', pincode: saved.pincode || ls.get('sy_pin', ''), city: saved.city || '', district: saved.district || '', state: saved.state || '', method: BOOT.payments.upi ? 'upi' : 'cod', gift: false, gift_message: '', note: '', terms: false, safety: false, marketing: false, save_address: true };
   let step = 1, price = null, coupon = ls.get('sy_coupon', '');
@@ -44,9 +47,9 @@ route(/^\/checkout$/, async view => {
   view.append(wrap(h('h1', { class: 'h1', style: { fontSize: 'clamp(1.8rem,5vw,2.8rem)', marginBottom: '20px' } }, t('checkout')), stepsEl, h('div', { class: 'co' }, body, side)));
   const errs = {};
   async function reprice() {
-    try { price = await priceNow({ coupon, pincode: /^\d{6}$/.test(F.pincode) ? F.pincode : undefined, method: F.method, gift: F.gift, email: F.email, phone: F.phone }); } catch (e) { toast(e.message, { err: true }); return; }
-    syncFromPrice(price);
-    if (!cart.items.length) return nav('/cart');
+    try { price = await priceNow({ items: payload(), coupon, pincode: /^\d{6}$/.test(F.pincode) ? F.pincode : undefined, method: F.method, gift: F.gift, email: F.email, phone: F.phone }); } catch (e) { toast(e.message, { err: true }); return; }
+    if (!BUY) syncFromPrice(price); else { const l0 = price.lines[0]; if (l0 && l0.issue === 'unavailable') { buyItem.clear(); return nav('/cart'); } if (l0 && l0.qty > 0 && l0.qty !== BUY.q) BUY.q = l0.qty; }
+    if (!lines().length) return nav('/cart');
     clear(side).append(h('b', null, t('review')), ...price.lines.map(l => h('div', { class: 'row', style: { flexWrap: 'nowrap', gap: '10px' } }, l.image ? h('img', { src: l.image, alt: '', width: 48, height: 48, style: { width: '48px', height: '48px', borderRadius: '10px', objectFit: 'cover' } }) : null, h('div', { class: 'grow small' }, (lang() === 'hi' && l.name_hi) || l.name, h('span', { class: 'muted' }, ` × ${l.qty}`)), h('b', { class: 'small' }, money(l.line_total)))), totals({ ...price, adv_now: F.method === 'cod' && price.cod && price.cod.ok ? price.cod.advance : 0 }),
       price.pincode && !price.pincode.ok ? h('p', { class: 'err-text' }, price.pincode.message) : price.pincode && price.pincode.ok ? h('p', { class: 'small', style: { color: 'var(--ok)' } }, `${t('delivery_by')} ${price.pincode.eta.text}`) : null);
     if (step === 3) paintPay();
@@ -137,8 +140,8 @@ route(/^\/checkout$/, async view => {
       F.terms = true;
       if (price.needs_safety_ack && !F.safety) { toast('Please confirm the safety instructions.', { err: true }); return; }
       try { await busy(btn, async () => {
-        const r = await api('/orders', { method: 'POST', body: { items: cart.payload(), coupon, method: F.method, gift: F.gift, gift_message: F.gift_message, note: F.note, lang: lang(), email: F.email || undefined, save_address: !!me.customer, address: { name: F.name, phone: F.phone, line1: F.line1, line2: F.line2, landmark: F.line2, pincode: F.pincode, city: F.city, district: F.district, state: F.state }, consents: { terms: true, safety: F.safety, marketing: !!(me.customer && me.customer.marketing_optin) } } });
-        cart.clear(); ls.del('sy_coupon'); ls.set('sy_last_order', { n: r.number, t: r.token });
+        const r = await api('/orders', { method: 'POST', body: { items: payload(), coupon, method: F.method, gift: F.gift, gift_message: F.gift_message, note: F.note, lang: lang(), email: F.email || undefined, save_address: !!me.customer, address: { name: F.name, phone: F.phone, line1: F.line1, line2: F.line2, landmark: F.line2, pincode: F.pincode, city: F.city, district: F.district, state: F.state }, consents: { terms: true, safety: F.safety, marketing: !!(me.customer && me.customer.marketing_optin) } } });
+        if (BUY) buyItem.clear(); else cart.clear(); ls.del('sy_coupon'); ls.set('sy_last_order', { n: r.number, t: r.token });
         nav(`/order/${r.number}?t=${r.token}&new=1`);
       }); } catch (e) { toast(e.message, { err: true }); if (e.data && e.data.out_of_stock) { step = 3; stepPay(); } }
     } }, `${t('place')} · ${money(price.total)}`);

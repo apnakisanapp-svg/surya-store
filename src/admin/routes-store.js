@@ -163,10 +163,11 @@ r.put('/settings/:group', asyncH((req, res) => {
   if (g === 'payments') {
     if (b.upi_id !== undefined && b.upi_id && !/^[a-zA-Z0-9._-]{2,64}@[a-zA-Z]{2,32}$/.test(String(b.upi_id).trim())) throw bad('UPI ID looks wrong. It should look like name@bank.');
     if (b.upi_id) b.upi_id = String(b.upi_id).trim();
-    for (const k of ['cod_fee', 'cod_min', 'cod_max', 'upi_timer_min', 'upi_grace_min']) if (b[k] !== undefined) b[k] = Math.max(0, num(b[k]));
+    for (const k of ['cod_fee', 'cod_advance_value', 'cod_min', 'cod_max', 'upi_timer_min', 'upi_grace_min']) if (b[k] !== undefined) b[k] = Math.max(0, num(b[k]));
   }
   if (g === 'shipping') for (const k of ['flat', 'free_above', 'eta_min', 'eta_max', 'gift_price', 'avg_ship_cost']) if (b[k] !== undefined) b[k] = Math.max(0, num(b[k]));
   if (g === 'returns' && b.window_days !== undefined) b.window_days = Math.min(60, Math.max(0, int(b.window_days)));
+  if (g === 'returns' && b.default_rule !== undefined && !['replacement', 'refund', 'either', 'exchange', 'none'].includes(b.default_rule)) throw bad('Return type is not valid.');
   if (g === 'brand' && b.gst_enabled && !(b.gstin || settings.get('brand').gstin)) throw bad('Enter your GSTIN before turning GST on.');
   if (['home', 'menu'].includes(g)) settings.set(g, { ...settings.get(g), ...b }); // lists are replaced as a whole
   else settings.patch(g, b);

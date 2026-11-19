@@ -102,6 +102,12 @@ export const cart = {
   clear() { this.items = []; this.save(); },
   payload() { return this.items.map(i => ({ product_id: i.p, variant_id: i.v || null, qty: i.q })); },
 };
+/** "Buy now" item: kept apart from the cart so the cart is never touched. Lives only in this tab. */
+export const buyItem = {
+  get() { try { const o = JSON.parse(sessionStorage.getItem('sy_buy') || 'null'); return o && o.p ? o : null; } catch { return null; } },
+  set(p, v, q, info) { try { sessionStorage.setItem('sy_buy', JSON.stringify({ p, v: v || 0, q: Math.max(1, Math.min(99, q || 1)), info })); } catch {} },
+  clear() { try { sessionStorage.removeItem('sy_buy'); } catch {} },
+};
 export const me = { customer: BOOT.customer || null };
 export const wish = {
   ids: new Set(ls.get('sy_wish', [])),

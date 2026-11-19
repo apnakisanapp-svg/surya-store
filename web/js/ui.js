@@ -214,18 +214,23 @@ export function openSearch() {
 
 /* ---------- cart drawer ---------- */
 export async function priceNow(extra = {}) {
-  if (!cart.items.length) return null;
-  return api('/cart/price', { method: 'POST', body: { items: cart.payload(), ...extra } });
+  const items = extra.items || cart.payload();
+  if (!items.length) return null;
+  return api('/cart/price', { method: 'POST', body: { ...extra, items } });
 }
 export function lineEl(l, onChange) {
   const it = cart.items.find(i => i.p === l.product_id && (i.v || 0) === (l.variant_id || 0));
+  const unit = (l.line_total != null ? l.line_total : l.price * l.qty) / Math.max(1, l.qty), qs = h('span', null, l.qty), pr = h('span', null, money(l.line_total != null ? l.line_total : l.price * l.qty)), mr = h('div', { class: 'muted small' }, h('s', null, money(l.mrp * l.qty)));
+  const soon = debounce(() => onChange(), 220);
+  // Instant: the number and price change on the tap; the server re-check runs quietly afterwards (newest wins).
+  const bump = d => { const cur = it ? it.q : l.qty, q = Math.max(1, Math.min(99, cur + d)); if (q === cur) return; qs.textContent = q; pr.textContent = money(unit * q); mr.firstChild.textContent = money(l.mrp * q); cart.setQty(l.product_id, l.variant_id, q); soon(); };
   return h('div', { class: 'ci' },
     h('a', { href: l.slug ? `/p/${l.slug}` : null }, l.image ? h('img', { src: l.image, alt: '', width: 72, height: 72, loading: 'lazy' }) : h('div', { style: { width: '72px', height: '72px', background: 'var(--bg2)', borderRadius: '14px' } })),
     h('div', { style: { minWidth: 0 } }, h('div', { class: 'nm' }, (lang() === 'hi' && l.name_hi) || l.name), l.variant_name ? h('div', { class: 'muted small' }, l.variant_name) : null,
       l.issue ? h('div', { class: 'small', style: { color: 'var(--err)' } }, l.issue_text || ({ unavailable: 'No longer available', out: t('oos'), stock: `Only ${l.max_qty} available`, variant: 'Choose an option' }[l.issue] || l.issue)) : null,
-      h('div', { class: 'row', style: { gap: '10px' } }, h('div', { class: 'qty' }, h('button', { 'aria-label': '-', onclick: () => { if ((it ? it.q : 1) > 1) { cart.setQty(l.product_id, l.variant_id, it.q - 1); onChange(); } } }, '−'), h('span', null, l.qty), h('button', { 'aria-label': '+', onclick: () => { cart.setQty(l.product_id, l.variant_id, (it ? it.q : 1) + 1); onChange(); } }, '+')),
+      h('div', { class: 'row', style: { gap: '10px' } }, h('div', { class: 'qty' }, h('button', { 'aria-label': '-', onclick: () => bump(-1) }, '−'), qs, h('button', { 'aria-label': '+', onclick: () => bump(1) }, '+')),
         h('button', { class: 'link', style: { background: 'none', border: 0, cursor: 'pointer', fontSize: '.85rem', marginTop: '8px' }, onclick: () => { const r = cart.remove(l.product_id, l.variant_id); onChange(); toast(t('removed'), { action: t('undo'), onAction: () => { cart.restore(r); onChange(); } }); } }, t('remove')))),
-    h('div', { style: { textAlign: 'right', fontWeight: 600 } }, money(l.line_total != null ? l.line_total : l.price * l.qty), l.mrp > l.price ? h('div', { class: 'muted small' }, h('s', null, money(l.mrp * l.qty))) : null));
+    h('div', { style: { textAlign: 'right', fontWeight: 600 } }, pr, l.mrp > l.price ? mr : null));
 }
 export function shipBar(p) {
   if (!p.free_above) return null;
@@ -236,7 +241,7 @@ let drawerOpen = null;
 export async function openCart() {
   if (drawerOpen) return;
   const body = h('div'), foot = h('div');
-  const d = drawer(`${t('cart')}`, body, foot, { cls: 'cart-glass', onClose: () => { drawerOpen = null; bus.off('cart', refresh); } }); drawerOpen = d;
+  const d = drawer(`${t('cart')}`, body, foot, { cls: 'cart-glass', onClose: () => { drawerOpen = null; bus.off('cart', refreshSoon); } }); drawerOpen = d;
   let seq = 0, shown = false;
   async function refresh() {
     const my = ++seq; // only the newest refresh may draw; older ones are dropped
@@ -255,7 +260,7 @@ export async function openCart() {
     foot.append(h('div', { class: 'tot', style: { marginBottom: '12px' } }, h('div', null, h('span', null, t('subtotal')), h('span', null, money(p.subtotal))), p.discount ? h('div', { class: 'g' }, h('span', null, t('coupon')), h('span', null, '−' + money(p.discount))) : null), h('p', { class: 'muted small', style: { marginBottom: '12px' } }, 'Shipping and COD fee are shown at checkout.'),
       h('a', { class: 'btn block', href: '/checkout', onclick: () => d.close() }, `${t('checkout')} · ${money(p.subtotal - p.discount)}`), h('a', { class: 'btn ghost block', style: { marginTop: '8px' }, href: '/cart', onclick: () => d.close() }, t('cart')));
   }
-  bus.on('cart', refresh); refresh();
+  const refreshSoon = debounce(refresh, 180); bus.on('cart', refreshSoon); refresh();
 }
 /** Drop lines the server says are gone and clamp quantities, so the cart never fights the shelf. */
 export function syncFromPrice(p) {

@@ -122,3 +122,10 @@ GST/BIS advice, final policy wording, real photos and logo, payment gateway KYC.
 - Back-to-top button is glass (`.gl-top`).
 - 15 Nov (later): "Buy now" used cart.add (+qty) so a product already in the cart ended up with a higher quantity; now `cart.buyNow` sets the exact quantity. Address step is 2 columns on phone (pincode+city, district+state). Review box lists Items / Discount / Delivery / Gift / COD charge / Total, then "Pay now by UPI" and "Pay on delivery". MRP-cut-off issue parked by owner.
 - 16 Nov: cart drawer showed Subtotal/Checkout/Cart twice after +/-: two refreshes ran at once and the footer was never cleared after the price call. Now the newest refresh wins, later updates run quietly (no skeleton flash), footer is cleared together with the body.
+
+## 19 Nov — Services form, Buy now checkout, fast quantity, glass header
+- Product add/edit (bottom) and Settings > Payments (store defaults) share ONE 6-question "Services" panel (admin-web/js/lib.js `servicesPanel`): COD, advance ₹, COD charge, gift wrap, delivery, return + days. Blank / "Same as store" on a product uses the store default. Old advance/gift/flat/window fields removed from Settings pages.
+- DB: products.cod_fee_rule, cod_fee_value, ship_value. Legacy adv_type/ship_rule 'paid' are read as nearest new option (src/shared/rules.js).
+- Buy now: item kept in sessionStorage (`buyItem`), checkout at /checkout?buy=1 prices/orders only that item; cart untouched.
+- Quantity +/-: instant UI, debounced background reprice, newest wins; blue tap flash removed.
+- Glass: round gold menu button, glass logo pill (header only, splash unchanged), glass checkout stepper.

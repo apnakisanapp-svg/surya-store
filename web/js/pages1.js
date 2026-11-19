@@ -1,4 +1,4 @@
-import { BOOT, h, $, $$, clear, icon, t, tr, lang, bus, api, money, cart, wish, me, ls, toast, modal, nav, route, setTitle, reveal, recentlyViewed, sid, debounce, pushOverlay, releaseOverlay } from './core.js';
+import { BOOT, h, $, $$, clear, icon, t, tr, lang, bus, api, money, cart, wish, me, ls, toast, modal, nav, route, setTitle, reveal, recentlyViewed, sid, debounce, pushOverlay, releaseOverlay, buyItem } from './core.js';
 import { pctBadge, fillPrice, tweenNum, productCard, skeletons, stars, addToCart, openCart } from './ui.js';
 
 const sec = (title, link, body, cls = '') => h('section', { class: 'section rev ' + cls }, h('div', { class: 'wrap' }, h('div', { class: 'sec-head' }, h('h2', null, title), link), body));
@@ -143,7 +143,7 @@ route(/^\/p\/([^/]+)$/, async (view, m) => {
   const RU = p.rules || {};
   const retShort = RU.ret_rule === 'none' ? 'No return (damaged items still handled)' : ({ replacement: 'replacement', refund: 'refund', either: 'replacement or refund', exchange: 'exchange' }[RU.ret_rule] ? `${RU.ret_days}-day ${({ replacement: 'replacement', refund: 'refund', either: 'replacement or refund', exchange: 'exchange' })[RU.ret_rule]}` : `Easy ${BOOT.returns.window_days || 7}-day replacement`);
   const svc = [];
-  if (RU.cod === 'no') svc.push('Online payment only'); else if (RU.cod === 'advance') svc.push('Cash on delivery with advance');
+  if (RU.cod === 'off') svc.push('Online payment only'); else if (RU.cod === 'advance') svc.push(`Cash on delivery (₹${RU.adv} advance)`); else if (RU.cod === 'cod') svc.push('Cash on delivery');
   if (RU.ship === 'free') svc.push('Free delivery');
   if (RU.gift_ok) svc.push('Gift wrap available');
   const svcRow = svc.length ? h('div', { class: 'row svc-row' }, ...svc.map(x => h('span', { class: 'chip svc-chip' }, x))) : null;
@@ -163,15 +163,16 @@ route(/^\/p\/([^/]+)$/, async (view, m) => {
   const totalEl = h('b', { class: 'pb-total' }), delEl = h('small', { class: 'pb-del' });
   const setQ = d => { S.qty = Math.max(1, Math.min(p.max_per_order || 10, S.qty + d)); paint(); };
   const sticky = h('div', { class: 'buybar on' }, h('div', { class: 'buybar-top' }, h('div', { class: 'qty' }, h('button', { 'aria-label': '-', onclick: () => setQ(-1) }, '−'), qtyN, h('button', { 'aria-label': '+', onclick: () => setQ(1) }, '+')), h('div', { class: 'pb-sum' }, totalEl, delEl)),
-    h('div', { class: 'buybar-btns' }, h('button', { class: 'btn alt gl-add', id: 'atc', onclick: e => addToCart(p, S.vid, S.qty, e.currentTarget) }, icon('bag'), t('add')), h('button', { class: 'btn gl-buy', onclick: () => { cart.buyNow(p.id, S.vid, S.qty); nav('/checkout'); } }, t('buy'))));
+    h('div', { class: 'buybar-btns' }, h('button', { class: 'btn alt gl-add', id: 'atc', onclick: e => addToCart(p, S.vid, S.qty, e.currentTarget) }, icon('bag'), t('add')), h('button', { class: 'btn gl-buy', onclick: () => { buyItem.set(p.id, S.vid, S.qty, { name: p.name }); nav('/checkout?buy=1'); } }, t('buy'))));
   function paintBar(c) {
     sticky.classList.toggle('hide', !c.in_stock);
     document.body.classList.toggle('has-buybar', c.in_stock);
     qtyN.textContent = S.qty;
     const total = c.price * S.qty;
     const prevT = +totalEl.dataset.v || 0; totalEl.dataset.v = total; tweenNum(totalEl, prevT && prevT !== total ? prevT : total, total, v => money(v), 350);
-    const free = !SH.flat || RU.ship === 'free' || (RU.ship !== 'paid' && SH.free_above && total >= SH.free_above);
-    delEl.textContent = free ? 'Free delivery' : `+ ${money(SH.flat)} delivery` + (SH.free_above && RU.ship !== 'paid' ? ` · free above ${money(SH.free_above)}` : '');
+    const own = RU.ship === 'own', charge = own ? (RU.ship_value || 0) : SH.flat;
+    const free = !charge || RU.ship === 'free' || (!own && SH.free_above && total >= SH.free_above);
+    delEl.textContent = free ? 'Free delivery' : `+ ${money(charge)} delivery` + (!own && SH.free_above ? ` · free above ${money(SH.free_above)}` : '');
     delEl.classList.toggle('ok', !!free);
   }
   document.body.append(sticky); paint();

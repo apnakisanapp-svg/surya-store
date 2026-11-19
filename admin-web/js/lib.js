@@ -61,6 +61,7 @@ export function buildForm(spec, values, { onChange } = {}) {
   const ch = () => onChange && onChange(data);
   for (const f of spec) {
     if (f.t === 'heading') { root.append(h('h3', { class: 'fh' }, f.l), f.h ? h('p', { class: 'muted small fhelp' }, f.h) : null); continue; }
+    if (f.t === 'services') { let ready = false; const sp = servicesPanel('product', data, o => { if (ready) { Object.assign(data, o); ch(); } }); Object.assign(data, sp.get()); ready = true; root.append(h('div', { class: 'fld' }, sp.el)); continue; }
     const cur = get(data, f.k);
     let input, wrapper;
     const set = v => { setp(data, f.k, v); ch(); };
@@ -149,3 +150,89 @@ export const kv = (k, v) => h('div', { class: 'kv' }, h('span', { class: 'muted'
 export const card = (title, ...kids) => h('section', { class: 'card' }, title ? h('h3', null, title) : null, ...kids);
 export const pageHead = (title, ...actions) => h('div', { class: 'ph' }, h('h1', null, title), h('div', { class: 'row' }, ...actions));
 export function tabs(items, active, onPick) { const bar = h('div', { class: 'tabs', role: 'tablist' }, items.map(([k, l, n]) => h('button', { class: k === active ? 'on' : '', onclick: () => onPick(k) }, l, n != null && n !== '' ? h('span', { class: 'cnt' }, n) : null))); return bar; }
+
+/* ===== Services panel: the same 6 questions for a product and for the store default (Settings > Payments) ===== */
+const SVC_RET = [['replacement', 'Replacement only'], ['refund', 'Refund only'], ['either', 'Replacement or refund'], ['exchange', 'Exchange only'], ['none', 'No return']];
+const SVC_RET_LABEL = Object.fromEntries(SVC_RET);
+const numOr = (v, d = '') => (v === '' || v == null || Number.isNaN(Number(v)) ? d : Number(v));
+export function servicesPanel(mode, init, onChange) {
+  const isP = mode === 'product', root = h('div', { class: 'svc' });
+  let st = {}, store = null;
+  if (isP) {
+    const d = init || {};
+    st.cod = d.pay_rule === 'upi_only' ? 'off' : d.pay_rule === 'cod' ? 'cod' : d.pay_rule === 'cod_advance' ? 'advance' : (d.adv_type === 'fixed' || d.adv_type === 'percent') ? 'advance' : d.adv_type === 'none' ? 'cod' : 'store';
+    st.adv = d.adv_type === 'percent' ? '' : numOr(d.adv_value);
+    st.fee = d.cod_fee_rule === 'none' ? 'none' : d.cod_fee_rule === 'fixed' ? 'fixed' : 'store'; st.feeV = numOr(d.cod_fee_value);
+    st.gift = d.gift_rule === 'yes' ? 'yes' : d.gift_rule === 'no' ? 'no' : 'store'; st.giftV = numOr(d.gift_price);
+    st.ship = d.ship_rule === 'free' ? 'free' : (d.ship_rule === 'own' || d.ship_rule === 'paid') ? 'own' : 'store'; st.shipV = numOr(d.ship_value);
+    st.ret = SVC_RET_LABEL[d.ret_rule] ? d.ret_rule : 'store'; st.days = numOr(d.ret_days);
+  } else {
+    const p = init.payments || {}, s = init.shipping || {}, r = init.returns || {};
+    st.cod = !p.cod_enabled ? 'off' : p.cod_advance_on ? 'advance' : 'cod';
+    st.adv = numOr(p.cod_advance_value, 99); st.feeV = numOr(p.cod_fee, 0);
+    st.gift = s.gift_enabled ? 'yes' : 'no'; st.giftV = numOr(s.gift_price, 29);
+    st.flat = numOr(s.flat, 49); st.freeAbove = numOr(s.free_above, 0);
+    st.ret = SVC_RET_LABEL[r.default_rule] ? r.default_rule : 'either'; st.days = numOr(r.window_days, 7);
+  }
+  const storeNow = () => {
+    if (!store) return {};
+    const p = store.payments || {}, s = store.shipping || {}, r = store.returns || {};
+    return {
+      cod: !p.cod_enabled ? 'Off' : p.cod_advance_on ? `On, ₹${p.cod_advance_value} advance` : 'On, no advance',
+      fee: Number(p.cod_fee) > 0 ? `₹${p.cod_fee}` : 'No charge',
+      gift: s.gift_enabled ? `Yes, ₹${s.gift_price}` : 'No',
+      ship: `₹${s.flat}${Number(s.free_above) > 0 ? `, free above ₹${s.free_above}` : ''}`,
+      ret: `${SVC_RET_LABEL[r.default_rule] || 'Replacement or refund'}, ${r.window_days} days`,
+    };
+  };
+  const patch = () => {
+    if (isP) {
+      const o = {
+        pay_rule: { store: '', off: 'upi_only', cod: 'cod', advance: 'cod_advance' }[st.cod], adv_type: '', adv_value: st.cod === 'advance' ? st.adv : '',
+        cod_fee_rule: st.fee === 'store' ? '' : st.fee, cod_fee_value: st.fee === 'fixed' ? st.feeV : '',
+        gift_rule: st.gift === 'store' ? '' : st.gift, gift_price: st.gift === 'yes' ? st.giftV : '',
+        ship_rule: st.ship === 'store' ? '' : st.ship, ship_value: st.ship === 'own' ? st.shipV : '',
+        ret_rule: st.ret === 'store' ? '' : st.ret, ret_days: st.ret === 'none' ? '' : st.days,
+      };
+      onChange && onChange(o); return o;
+    }
+    const o = {
+      payments: { cod_enabled: st.cod !== 'off', cod_advance_on: st.cod === 'advance', cod_advance_value: numOr(st.adv, 99), cod_advance_mode: 'fixed', cod_advance_min_total: 0, cod_advance_for: 'all', cod_fee: numOr(st.feeV, 0) },
+      shipping: { gift_enabled: st.gift === 'yes', gift_price: numOr(st.giftV, 0), flat: numOr(st.flat, 0), free_above: numOr(st.freeAbove, 0) },
+      returns: { default_rule: st.ret, window_days: numOr(st.days, 7) },
+    };
+    onChange && onChange(o); return o;
+  };
+  const seg = (key, opts, after) => h('div', { class: 'seg', role: 'group' }, opts.map(([v, l]) => h('button', { type: 'button', class: 'segb' + (st[key] === v ? ' on' : ''), 'aria-pressed': st[key] === v ? 'true' : 'false', onclick: () => { st[key] = v; patch(); draw(); } }, l)), after);
+  const num = (key, ph, w) => h('label', { class: 'svc-num' }, h('span', null, '₹'), h('input', { class: 'inp', type: 'number', min: 0, step: 'any', inputmode: 'decimal', placeholder: ph || '', value: st[key], style: w ? { width: w } : null, oninput: e => { st[key] = e.target.value === '' ? '' : Math.max(0, Number(e.target.value)); patch(); sum(); } }));
+  const q = (n, title, ...kids) => h('div', { class: 'svc-q' }, h('div', { class: 'svc-t' }, h('b', null, `${n}. ${title}`)), ...kids);
+  const hint = k => (isP && store && storeNow()[k] ? h('div', { class: 'svc-hint' }, 'Same as store = ', h('b', null, storeNow()[k])) : null);
+  const sumEl = h('div', { class: 'svc-sum' });
+  function sum() {
+    if (!isP) { clear(sumEl); return; }
+    const sn = storeNow(), parts = [];
+    parts.push('Cash on delivery: ' + (st.cod === 'store' ? (sn.cod || 'as store') : st.cod === 'off' ? 'Off' : st.cod === 'cod' ? 'On, no advance' : `On, ₹${st.adv || '?'} advance`));
+    if (st.cod !== 'off') parts.push('COD charge: ' + (st.fee === 'store' ? (sn.fee || 'as store') : st.fee === 'none' ? 'No charge' : `₹${st.feeV || 0}`));
+    parts.push('Gift wrap: ' + (st.gift === 'store' ? (sn.gift || 'as store') : st.gift === 'no' ? 'No' : `Yes, ₹${st.giftV || 0}`));
+    parts.push('Delivery: ' + (st.ship === 'store' ? (sn.ship || 'as store') : st.ship === 'free' ? 'Free' : `₹${st.shipV || 0}`));
+    parts.push('Return: ' + (st.ret === 'store' ? (sn.ret || 'as store') : st.ret === 'none' ? 'No return' : `${SVC_RET_LABEL[st.ret]}${st.days !== '' ? ', ' + st.days + ' days' : ''}`));
+    clear(sumEl).append(h('b', null, 'On this product: '), parts.join(' · '));
+  }
+  function draw() {
+    clear(root);
+    const S0 = isP ? [['store', 'Same as store']] : [];
+    root.append(
+      q(1, 'Cash on delivery', seg('cod', [...S0, ['off', 'Off'], ['cod', 'On, no advance'], ['advance', 'On, advance needed']]), hint('cod')),
+      st.cod === 'advance' ? q(2, 'How much advance?', h('div', { class: 'row' }, num('adv', '99', '110px'), h('span', { class: 'muted small' }, 'Customer pays this by UPI when choosing cash on delivery. The rest is paid on delivery.'))) : null,
+      st.cod !== 'off' ? q(3, 'Cash on delivery charge', isP ? [seg('fee', [['store', 'Same as store'], ['none', 'No charge'], ['fixed', 'Charge']], st.fee === 'fixed' ? num('feeV', '50', '110px') : null), hint('fee')] : h('div', { class: 'row' }, num('feeV', '0', '110px'), h('span', { class: 'muted small' }, '0 = no charge'))) : null,
+      q(4, 'Gift wrap', seg('gift', [...S0, ['no', 'No'], ['yes', 'Yes']], st.gift === 'yes' ? num('giftV', '29', '110px') : null), hint('gift')),
+      q(5, 'Delivery', isP ? [seg('ship', [['store', 'Same as store'], ['free', 'Always free'], ['own', 'Own charge']], st.ship === 'own' ? num('shipV', '49', '110px') : null), hint('ship')]
+        : h('div', { class: 'row' }, h('span', { class: 'muted small' }, 'Charge'), num('flat', '49', '110px'), h('span', { class: 'muted small' }, 'Free above'), num('freeAbove', '499', '110px'), h('span', { class: 'muted small' }, '(0 = never free)'))),
+      q(6, 'Return', seg('ret', [...S0, ...SVC_RET]), st.ret !== 'none' ? h('div', { class: 'row', style: { marginTop: '8px' } }, h('span', { class: 'muted small' }, 'Days'), h('input', { class: 'inp', type: 'number', min: 0, max: 90, inputmode: 'numeric', placeholder: isP ? 'store days' : '7', value: st.days, style: { width: '110px' }, oninput: e => { st.days = e.target.value === '' ? '' : Math.max(0, Math.min(90, Number(e.target.value))); patch(); sum(); } }), isP ? h('span', { class: 'muted small' }, 'empty = store days') : null) : null, hint('ret')),
+      isP ? sumEl : null);
+    sum();
+  }
+  draw();
+  if (isP) api('/settings').then(r => { store = r.values; draw(); }).catch(() => {});
+  return { el: root, get: patch };
+}

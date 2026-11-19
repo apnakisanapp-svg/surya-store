@@ -34,7 +34,7 @@ const DEFAULTS = {
     battery_notice: 'This product contains a rechargeable lithium battery. Delivery is by road where required, so some pincodes may be unavailable.',
     courier_options: ['Delhivery', 'Shiprocket', 'India Post', 'DTDC', 'Other'], avg_ship_cost: 60,
   },
-  returns: { window_days: 7, auto_review_days: 5, text: 'Damaged or defective products can be replaced or refunded within 7 days of delivery. Please record an unboxing video.' },
+  returns: { window_days: 7, default_rule: 'either', auto_review_days: 5, text: 'Damaged or defective products can be replaced or refunded within 7 days of delivery. Please record an unboxing video.' },
   popups: {
     welcome: { enabled: false, delay_s: 12, code: '', title: 'Welcome', title_hi: 'Swagat hai', text: 'Get a discount on your first order.', text_hi: 'Pehle order par discount paayein.' },
     exit_intent: { enabled: false, code: '', text: 'Wait! Here is a small discount for you.', text_hi: 'Ruko! Aapke liye ek chhota discount.' },
