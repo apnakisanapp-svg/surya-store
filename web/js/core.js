@@ -59,7 +59,7 @@ const EN = {
   notify: 'Notify me', share: 'Share', copied: 'Link copied', mrp: 'MRP', off: 'off', save: 'Save', send: 'Send', msg: 'Message', order_no: 'Order number', find: 'Find order', logout: 'Log out', register: 'Create account', password: 'Password',
   orders: 'My orders', wishlist: 'Wishlist', addresses: 'Addresses', profile: 'Profile', no_results: 'Nothing found', fb_title: 'No exact match for', fb_text: 'These similar and popular products might help.', try_other: 'Try another word or clear the filters.', load_more: 'Show more', gift: 'Gift wrap', delivery_by: 'Delivery by', pay_now: 'Pay now',
   have_paid: 'I have paid', utr: 'UPI transaction ID (UTR)', cancel_order: 'Cancel order', request: 'Replacement or refund', free_ship_left: 'Add {n} more for free shipping', free_ship_got: 'You get free shipping', size: 'Details', grievance: 'Grievance officer',
-  cookies_text: 'We use cookies to keep your cart and improve the site.', accept: 'Accept', reject: 'Reject', lang: 'हिं', yes: 'Yes', no: 'No', close: 'Close', retry: 'Try again', offline: 'You are offline. Some things may not work.',
+  cookies_text: 'We use cookies to keep your cart and improve the site.', accept: 'Accept', reject: 'Reject', lang: 'हिं', yes: 'Yes', no: 'No', close: 'Close', retry: 'Try again', offline: "You're offline. Check your connection and try again.",
 };
 const HI = {
   empty_cart: 'Cart khaali hai', continue: 'Shopping jaari rakho', added: 'Cart mein add ho gaya', oos: 'Stock khatam', low: 'Sirf {n} bache hain', free: 'Free', remove: 'Hatao', undo: 'Wapas', removed: 'Cart se hata diya',
@@ -81,8 +81,17 @@ export const bus = { m: {}, on(e, f) { (this.m[e] ||= []).push(f); }, off(e, f) 
 export async function api(path, { method = 'GET', body, form } = {}) {
   const opt = { method, headers: { 'x-sy-csrf': '1' }, credentials: 'same-origin' };
   if (form) opt.body = form; else if (body !== undefined) { opt.headers['content-type'] = 'application/json'; opt.body = JSON.stringify(body); }
+  const end = ldBegin(method, path);
   let res;
-  try { res = await fetch('/api' + path, opt); } catch { throw Object.assign(new Error(navigator.onLine ? 'Could not reach the server. Please try again.' : t('offline')), { offline: true }); }
+  if (form && typeof XMLHttpRequest !== 'undefined') {
+    // uploads: real progress (percent + size) in a glass card, with Cancel
+    const up = uploadCard(form);
+    try { res = await new Promise((ok, no) => { const x = new XMLHttpRequest(); up.abort = () => { x.abort(); }; x.open(method, '/api' + path); x.withCredentials = true; x.setRequestHeader('x-sy-csrf', '1'); x.upload.onprogress = e => e.lengthComputable && up.set(e.loaded, e.total); x.onload = () => { up.set(1, 1); ok({ ok: x.status >= 200 && x.status < 300, status: x.status, json: async () => JSON.parse(x.responseText) }); }; x.onerror = () => no(new Error('net')); x.onabort = () => no(Object.assign(new Error('Upload cancelled.'), { cancelled: true })); x.send(form); }); }
+    catch (e) { up.fail(); end(); if (e.cancelled) throw e; throw Object.assign(new Error('Upload failed. Check your connection and try again.'), { offline: true }); }
+    up.done(); end();
+  } else
+  try { res = await fetch('/api' + path, opt); } catch { end(); throw Object.assign(new Error(navigator.onLine ? 'Could not reach the server. Please try again.' : t('offline')), { offline: true }); }
+  end();
   let data = null; try { data = await res.json(); } catch { /* */ }
   if (!res.ok) throw Object.assign(new Error((data && data.error) || 'Something went wrong. Please try again.'), { status: res.status, data });
   return data;
@@ -187,6 +196,82 @@ export const nav = (url, replace) => {
   if (url === location.pathname + location.search) { if (open) { pendingBack++; history.go(-open); } window.scrollTo(0, 0); return; }
   history[replace ? 'replaceState' : 'pushState']({}, '', url); render();
 };
+
+/* ---------- loading feedback: top gold line, button dots, order overlay, slow/offline notes, photo blur-up ---------- */
+const LD = { n: 0, route: false, last: null, slowT: 0, since: 0, els: null };
+function ldEls() {
+  if (LD.els) return LD.els;
+  const line = h('div', { class: 'ldline', 'aria-hidden': 'true' });
+  const pill = h('div', { class: 'ldpill', role: 'status' }, h('span', { class: 'lddot' }), 'Hang tight, this is taking a little longer than usual.');
+  const off = h('div', { class: 'ldoff', role: 'alert' }, h('div', { class: 'ldoff-t' }, h('b', null, "You're offline"), h('span', null, 'Check your connection and try again.')),
+    h('button', { class: 'btn sm', onclick: () => { if (navigator.onLine) { off.classList.remove('on'); render(); } else { off.classList.add('shake'); setTimeout(() => off.classList.remove('shake'), 400); } } }, 'Try again'));
+  document.body.append(line, pill, off);
+  window.addEventListener('offline', () => off.classList.add('on'));
+  window.addEventListener('online', () => { off.classList.remove('on'); });
+  if (!navigator.onLine) off.classList.add('on');
+  return (LD.els = { line, pill, off });
+}
+function ldSync() {
+  const { line, pill } = ldEls(), busy = LD.n > 0 || LD.route;
+  if (busy) {
+    if (!line.classList.contains('on')) { line.classList.remove('fin'); line.classList.add('on'); LD.since = Date.now(); }
+    if (!LD.slowT) LD.slowT = setTimeout(() => pill.classList.add('on'), 3000);
+  } else {
+    clearTimeout(LD.slowT); LD.slowT = 0; pill.classList.remove('on');
+    if (line.classList.contains('on')) { const long = Date.now() - LD.since > 160; line.classList.remove('on'); if (long) { line.classList.add('fin'); setTimeout(() => line.classList.remove('fin'), 600); } }
+  }
+}
+export const loadingRoute = v => { LD.route = v; ldSync(); };
+export function showOverlay(title, sub) {
+  const el = h('div', { class: 'ldover', role: 'status' }, h('div', { class: 'ldover-c' }, h('div', { class: 'sunring' }, h('i')), h('b', null, title), sub ? h('span', null, sub) : null));
+  document.body.append(el); requestAnimationFrame(() => el.classList.add('on'));
+  return () => { el.classList.remove('on'); setTimeout(() => el.remove(), 250); };
+}
+export function uploadCard(form) {
+  let names = [], total = 0; try { for (const [, v] of form.entries()) if (v && v.name !== undefined) { names.push(v.name); total += v.size || 0; } } catch { /* */ }
+  const pct = h('b', null, '0%'), sz = h('span', { class: 'upsz' }, mb(0) + ' / ' + mb(total || 0)), bar = h('i'), ring = h('div', { class: 'upring', style: { '--p': 0 } }, pct);
+  const cancel = h('button', { class: 'btn sm ghost', type: 'button', onclick: () => api_.abort && api_.abort() }, 'Cancel');
+  const el = h('div', { class: 'upcard', role: 'status' }, ring, h('div', { class: 'upi' }, h('b', null, names.length > 1 ? `Uploading ${names.length} files…` : 'Uploading…'), h('div', { class: 'upbar' }, bar), sz), cancel);
+  document.body.append(el); requestAnimationFrame(() => el.classList.add('on'));
+  const gone = ms => setTimeout(() => { el.classList.remove('on'); setTimeout(() => el.remove(), 300); }, ms);
+  const api_ = {
+    abort: null,
+    set(l, t) { const p = Math.min(100, Math.round(l / (t || 1) * 100)); pct.textContent = p + '%'; ring.style.setProperty('--p', p); bar.style.width = p + '%'; sz.textContent = mb(l) + ' / ' + mb(t); },
+    done() { pct.textContent = '✓'; ring.style.setProperty('--p', 100); bar.style.width = '100%'; cancel.remove(); gone(700); },
+    fail() { el.classList.add('bad'); el.querySelector('.upi b').textContent = 'Upload failed. Check your connection and try again.'; cancel.remove(); gone(4000); },
+  };
+  return api_;
+}
+const mb = n => (n / 1048576).toFixed(n > 1048576 * 10 ? 0 : 1) + ' MB';
+function ldBegin(method, path) {
+  LD.n++; ldSync();
+  let btn = null, over = null;
+  const L = LD.last;
+  if (method !== 'GET' && L && Date.now() - L.at < 1500 && document.contains(L.el) && !L.el.closest('.qty')) { btn = L.el; btn.classList.add('busy'); btn.setAttribute('aria-busy', 'true'); }
+  if (method === 'POST' && path === '/orders') over = showOverlay('Placing your order…', "Please don't close this page.");
+  let done = false;
+  return () => { if (done) return; done = true; LD.n = Math.max(0, LD.n - 1); ldSync(); if (btn) { btn.classList.remove('busy'); btn.removeAttribute('aria-busy'); } if (over) over(); };
+}
+if (typeof document !== 'undefined') {
+  document.addEventListener('pointerdown', e => { const b = e.target.closest && e.target.closest('button,.btn'); if (b) LD.last = { el: b, at: Date.now() }; }, true);
+  document.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { const b = document.activeElement; if (b && b.matches && b.matches('button,.btn')) LD.last = { el: b, at: Date.now() }; } }, true);
+  const wire = () => {
+    ldEls();
+    const fade = im => { if (im.complete || im.dataset.imw) return; im.dataset.imw = '1'; im.classList.add('imgw'); const f = () => im.classList.remove('imgw'); im.addEventListener('load', f, { once: true }); im.addEventListener('error', f, { once: true }); };
+    new MutationObserver(ms => { for (const m of ms) for (const n of m.addedNodes) { if (n.nodeType !== 1) continue; if (n.tagName === 'IMG') fade(n); else if (n.querySelectorAll) n.querySelectorAll('img').forEach(fade); } }).observe(document.body, { childList: true, subtree: true });
+  };
+  if (document.body) wire(); else document.addEventListener('DOMContentLoaded', wire);
+}
+function pageSkel(path) {
+  const line = (w, hgt = 14) => h('div', { class: 'skel', style: { height: hgt + 'px', width: w, margin: '10px 0' } });
+  const cards = n => h('div', { class: 'pgrid' }, Array.from({ length: n }, () => h('div', null, h('div', { class: 'skel', style: { aspectRatio: '1/1' } }), line('80%', 16), line('45%', 14))));
+  let inner;
+  if (/^\/p\//.test(path)) inner = h('div', { class: 'grid2' }, h('div', { class: 'skel', style: { aspectRatio: '1/1' } }), h('div', null, line('70%', 26), line('35%', 22), line('100%'), line('90%'), line('60%'), line('100%', 48)));
+  else if (path === '/' || path === '/shop' || path === '/wishlist') inner = h('div', null, line('40%', 28), cards(6));
+  else if (/^\/(policy|about|faq|contact|grievance)/.test(path)) inner = h('div', null, line('45%', 30), ...[100, 96, 92, 100, 88, 94, 60].map(w => line(w + '%')));
+  else inner = h('div', null, line('40%', 28), ...[0, 1, 2].map(() => h('div', { class: 'skel', style: { height: '88px', margin: '14px 0', borderRadius: '16px' } })));
+  return h('div', { class: 'wrap pg-skel', 'aria-hidden': 'true' }, inner);
+}
 let mount;
 export function startRouter(el) {
   mount = el;
@@ -209,7 +294,11 @@ export async function render() {
     if (m) {
       const view = h('div', { class: 'view' });
       clear(mount).append(view);
-      try { await fn(view, m, new URLSearchParams(location.search)); } catch (e) { if (my === token) { clear(view); view.append(errorView(e)); } }
+      const sk = pageSkel(path); view.append(sk);
+      const mo = new MutationObserver(() => { if (view.firstChild !== sk || view.children.length > 1) { sk.remove(); mo.disconnect(); } }); mo.observe(view, { childList: true });
+      loadingRoute(true);
+      try { await fn(view, m, new URLSearchParams(location.search)); } catch (e) { if (my === token) { sk.remove(); clear(view); view.append(errorView(e)); } }
+      mo.disconnect(); sk.remove(); if (my === token) loadingRoute(false);
       if (my !== token) return;
       if (!location.hash) window.scrollTo(0, 0);
       else setTimeout(() => { const el = document.getElementById(location.hash.slice(1)); el && el.scrollIntoView({ behavior: 'smooth' }); }, 60);
@@ -227,5 +316,5 @@ export function reveal(root) {
   const io = 'IntersectionObserver' in window ? new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { rootMargin: '0px 0px -8% 0px' }) : null;
   $$('.rev', root).forEach(el => io ? io.observe(el) : el.classList.add('in'));
 }
-export const errorView = e => h('div', { class: 'wrap empty' }, icon('warn'), h('h2', null, e.offline ? t('offline') : 'Something went wrong'), h('p', { class: 'muted' }, e.message), h('p', { style: { marginTop: '16px' } }, h('button', { class: 'btn', onclick: () => render() }, t('retry'))));
+export const errorView = e => h('div', { class: 'wrap empty' }, icon('warn'), h('h2', null, e.offline ? "You're offline" : 'Something went wrong'), h('p', { class: 'muted' }, e.message), h('p', { style: { marginTop: '16px' } }, h('button', { class: 'btn', onclick: () => render() }, t('retry'))));
 export const notFoundView = () => h('div', { class: 'wrap empty' }, icon('search'), h('h2', null, 'Page not found'), h('p', { class: 'muted' }, 'The page you opened is not here.'), h('p', { style: { marginTop: '16px' } }, h('a', { class: 'btn', href: '/' }, t('home'))));

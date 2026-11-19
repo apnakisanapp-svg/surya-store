@@ -123,7 +123,7 @@ reg(/^\/products\/(new|\d+)$/, async (v, m) => {
   }
   function paintImgs() {
     if (isNew) return; clear(imgs);
-    const file = h('input', { type: 'file', accept: 'image/*', multiple: true, class: 'hide', onchange: async e => { const fd = new FormData(); [...e.target.files].forEach(f => fd.append('images', f)); if (!e.target.files.length) return; try { toast('Uploading…'); p = await api(`/products/${id}/images`, { method: 'POST', form: fd }); paintImgs(); paintRisk(p.risk); toast('Photos added'); } catch (x) { toast(x.message, true); } } });
+    const file = h('input', { type: 'file', accept: 'image/*', multiple: true, class: 'hide', onchange: async e => { const fd = new FormData(); [...e.target.files].forEach(f => fd.append('images', f)); if (!e.target.files.length) return; try { p = await api(`/products/${id}/images`, { method: 'POST', form: fd }); paintImgs(); paintRisk(p.risk); toast('Photos added'); } catch (x) { toast(x.message, true); } } });
     imgs.append(h('div', { class: 'row', style: { marginBottom: '10px' } }, h('button', { class: 'btn', onclick: () => file.click() }, '+ Add photos'), h('span', { class: 'muted small' }, 'First photo is the main one. Click a photo to choose which part stays in the square card picture.'), file));
     const g = h('div', { class: 'pimgs' });
     p.images.forEach((im, i) => g.append(h('div', { class: 'pimg' }, i === 0 ? h('span', { class: 'badge ok main' }, 'Main') : null,

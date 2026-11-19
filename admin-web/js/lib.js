@@ -25,10 +25,52 @@ export const ago = s => { const m = Math.floor((Date.now() - new Date(s).getTime
 export const get = (o, path) => path.split('.').reduce((a, k) => (a == null ? undefined : a[k]), o);
 export const setp = (o, path, v) => { const ks = path.split('.'); let c = o; ks.slice(0, -1).forEach(k => { c = c[k] ||= {}; }); c[ks.at(-1)] = v; };
 
+/* ---- loading feedback (same gold + glass look as the shop) ---- */
+let ldN = 0, ldLine, ldSince = 0;
+export function ldSet(on) {
+  ldLine ||= document.body.appendChild(h('div', { class: 'ldline', 'aria-hidden': 'true' }));
+  if (on) { if (!ldLine.classList.contains('on')) { ldLine.classList.remove('fin'); ldLine.classList.add('on'); ldSince = Date.now(); } }
+  else if (ldLine.classList.contains('on')) { const long = Date.now() - ldSince > 160; ldLine.classList.remove('on'); if (long) { ldLine.classList.add('fin'); setTimeout(() => ldLine.classList.remove('fin'), 600); } }
+}
+const mbs = n => (n / 1048576).toFixed(n > 10485760 ? 0 : 1) + ' MB';
+let upTray;
+/* One card per upload: ring + percent, MB sent, Cancel. Every api() call with a form uses this, so every upload in the admin shows progress. */
+export function uploadCard(form) {
+  upTray ||= document.body.appendChild(h('div', { class: 'uptray' }));
+  let names = [], total = 0; try { for (const [, v] of form.entries()) if (v && v.name !== undefined) { names.push(v.name); total += v.size || 0; } } catch { /* */ }
+  const pct = h('b', null, '0%'), sz = h('span', { class: 'upsz' }, mbs(0) + ' / ' + mbs(total)), bar = h('i'), ring = h('div', { class: 'upring', style: { '--p': 0 } }, pct);
+  const title = h('b', { class: 'upt' }, names.length > 1 ? `Uploading ${names.length} files…` : `Uploading ${names[0] || 'file'}…`);
+  const cancel = h('button', { class: 'btn sm', type: 'button', onclick: () => c.abort && c.abort() }, 'Cancel');
+  const el = h('div', { class: 'upcard', role: 'status' }, ring, h('div', { class: 'upi' }, title, h('div', { class: 'upbar' }, bar), sz), cancel);
+  upTray.append(el); requestAnimationFrame(() => el.classList.add('on'));
+  const gone = ms => setTimeout(() => { el.classList.remove('on'); setTimeout(() => el.remove(), 300); }, ms);
+  const c = {
+    abort: null,
+    set(l, t) { const p = Math.min(100, Math.round(l / (t || 1) * 100)); pct.textContent = p + '%'; ring.style.setProperty('--p', p); bar.style.width = p + '%'; sz.textContent = mbs(l) + ' / ' + mbs(t); },
+    done() { pct.textContent = '✓'; ring.style.setProperty('--p', 100); bar.style.width = '100%'; title.textContent = 'Uploaded ✓'; cancel.remove(); gone(1200); },
+    fail(msg) { el.classList.add('bad'); title.textContent = msg || 'Upload failed. Check your connection and try again.'; cancel.remove(); gone(5000); },
+  };
+  return c;
+}
+function xhrSend(method, url, form) {
+  const up = uploadCard(form);
+  return new Promise(ok => {
+    const x = new XMLHttpRequest(); up.abort = () => x.abort();
+    x.open(method, url); x.withCredentials = true; x.setRequestHeader('x-sy-csrf', '1');
+    x.upload.onprogress = e => e.lengthComputable && up.set(e.loaded, e.total);
+    x.onload = () => { x.status >= 200 && x.status < 300 ? up.done() : up.fail('Upload failed. ' + ((() => { try { return JSON.parse(x.responseText).error; } catch { return ''; } })() || 'Please try again.')); ok({ ok: x.status >= 200 && x.status < 300, status: x.status, json: async () => JSON.parse(x.responseText) }); };
+    x.onerror = () => { up.fail(); ok(null); };
+    x.onabort = () => { up.fail('Upload cancelled.'); ok(null); };
+    x.send(form);
+  });
+}
 export async function api(path, { method = 'GET', body, form } = {}) {
   const opt = { method, headers: { 'x-sy-csrf': '1' }, credentials: 'same-origin' };
   if (form) opt.body = form; else if (body !== undefined) { opt.headers['content-type'] = 'application/json'; opt.body = JSON.stringify(body); }
-  let res; try { res = await fetch('api' + path, opt); } catch { throw Object.assign(new Error('Cannot reach the server. Is it running?'), { offline: true }); }
+  ldN++; ldSet(true);
+  let res;
+  try { res = form ? await xhrSend(method, 'api' + path, form) : await fetch('api' + path, opt); if (!res) throw new Error('x'); } catch { throw Object.assign(new Error(form ? 'Upload failed. Check your connection and try again.' : 'Cannot reach the server. Is it running?'), { offline: true }); }
+  finally { ldN = Math.max(0, ldN - 1); if (!ldN) ldSet(false); }
   let data = null; try { data = await res.json(); } catch { /* */ }
   if (res.status === 401 && !path.startsWith('/login') && path !== '/me') { location.hash = '#/login'; location.reload(); }
   if (!res.ok) throw Object.assign(new Error((data && data.error) || 'Something went wrong.'), { status: res.status, data });
@@ -49,7 +91,7 @@ export function modal(title, content, { wide, onClose } = {}) {
 }
 export const confirmBox = (msg, okText = 'Yes, do it') => new Promise(res => { const m = modal('Please confirm', h('div', { class: 'stack' }, h('p', null, msg), h('div', { class: 'row end' }, h('button', { class: 'btn', onclick: () => { res(false); m.close(); } }, 'Cancel'), h('button', { class: 'btn primary', onclick: () => { res(true); m.close(); } }, okText))), { onClose: () => res(false) }); });
 export const promptBox = (title, label, { multiline, ok = 'Save', value = '' } = {}) => new Promise(res => { const inp = multiline ? h('textarea', { class: 'inp', rows: 3 }) : h('input', { class: 'inp' }); inp.value = value; const m = modal(title, h('div', { class: 'stack' }, h('label', { class: 'fld' }, h('span', null, label), inp), h('div', { class: 'row end' }, h('button', { class: 'btn', onclick: () => { res(null); m.close(); } }, 'Cancel'), h('button', { class: 'btn primary', onclick: () => { res(inp.value); m.close(); } }, ok))), { onClose: () => res(null) }); setTimeout(() => inp.focus(), 50); });
-export async function busy(btn, fn) { btn.disabled = true; btn.classList.add('busy'); try { return await fn(); } finally { btn.disabled = false; btn.classList.remove('busy'); } }
+export async function busy(btn, fn) { btn.disabled = true; btn.classList.add('busy'); let ok = false; try { const r = await fn(); ok = true; return r; } finally { btn.disabled = false; btn.classList.remove('busy'); if (ok && btn.isConnected) { btn.classList.add('okflash'); setTimeout(() => btn.classList.remove('okflash'), 1100); } } }
 export const badge = (text, kind = '') => h('span', { class: 'badge ' + kind }, text);
 export const STATUS_KIND = { placed: 'info', payment_pending: 'warn', cod_confirm: 'warn', confirmed: 'info', packed: 'info', shipped: 'info', delivered: 'ok', cancelled: 'bad', returned: 'bad', published: 'ok', draft: '', scheduled: 'info', green: 'ok', yellow: 'warn', red: 'bad', amber: 'warn' };
 export const statusBadge = s => badge(String(s || '').replace('_', ' '), STATUS_KIND[s] || '');
