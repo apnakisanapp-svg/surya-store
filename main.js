@@ -4,6 +4,7 @@ import './orders.js';
 import './products.js';
 import './resources.js';
 import './finance.js';
+import './notifications.js';
 
 const NAV = [
   ['', [['/', 'Dashboard'], ['/orders', 'Orders', 'orders'], ['/products', 'Products']]],
@@ -11,10 +12,16 @@ const NAV = [
   ['Money', [['/profit', 'Profit centre'], ['/purchases', 'Purchases'], ['/suppliers', 'Suppliers & sourcing'], ['/expenses', 'Expenses'], ['/insights', 'Daily insights']]],
   ['Website', [['/content', 'Banners & home page'], ['/testimonials', 'Testimonials'], ['/faqs', 'FAQ'], ['/policies', 'Policies & pages'], ['/settings/theme', 'Look & theme'], ['/settings/seo', 'SEO & redirects']]],
   ['Rules', [['/compliance', 'Compliance centre', 'compliance'], ['/settings/brand', 'Business details'], ['/settings/payments', 'Payments'], ['/settings/shipping', 'Shipping'], ['/settings/returns', 'Returns'], ['/settings/popups', 'Popups'], ['/settings/profit', 'Profit & risk rules'], ['/settings/messages', 'Message templates'], ['/settings/store', 'Store options']]],
-  ['System', [['/security', 'Security'], ['/backup', 'Backup'], ['/activity', 'Activity log']]],
+  ['System', [['/notifications', 'Phone notifications'], ['/security', 'Security'], ['/backup', 'Backup'], ['/activity', 'Activity log']]],
 ];
 
 const app = $('#app');
+// phone notifications: the worker receives pushes; taps on a notification tell the open page where to go
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); window.__installPrompt = e; });
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+  navigator.serviceWorker.addEventListener('message', e => { if (e.data && e.data.go) location.hash = String(e.data.go).replace(/^#?/, '#'); });
+}
 async function boot() {
   let me;
   try { me = await api('/me'); } catch { return loginView(); }

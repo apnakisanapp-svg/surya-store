@@ -12,6 +12,7 @@ const pricing = require('../shared/pricing');
 const orders = require('../shared/orders');
 const images = require('../shared/images');
 const mail = require('../shared/mail');
+const push = require('../shared/push');
 const auth = require('../shared/auth');
 const U = require('../shared/util');
 const { asyncH, bad, notFound, HttpError, now, jparse, int, sha256, token, isEmail, normPhone, isPhone, hashIp, ipOf } = U;
@@ -74,7 +75,7 @@ api.get('/home', asyncH((req, res) => {
 api.get('/products', asyncH((req, res) => {
   const q = req.query, r = catalog.listPublic({
     q: q.q ? String(q.q).slice(0, 80) : undefined, category: q.category, min: q.min, max: q.max, inStock: q.in_stock === '1', sort: q.sort || (q.q ? 'relevance' : 'trending'),
-    page: q.page, limit: q.limit, offers: q.offers === '1', tag: q.tag,
+    page: q.page, limit: q.limit, offers: q.offers === '1', tag: q.tag, fallback: !!q.q,
     ids: q.ids ? String(q.ids).split(',').slice(0, 40).map(Number).filter(Boolean) : undefined,
   });
   if (q.q && int(q.page, 1) === 1) db.prepare('INSERT INTO search_log(term,results,created_at) VALUES(?,?,?)').run(String(q.q).toLowerCase().slice(0, 80), r.total, now());
@@ -83,10 +84,10 @@ api.get('/products', asyncH((req, res) => {
 api.get('/suggest', asyncH((req, res) => {
   const q = String(req.query.q || '').trim().slice(0, 60);
   if (q.length < 2) return res.json({ products: [], categories: [], popular: settings.get('search').popular || [] });
-  const products = catalog.listPublic({ q, limit: 6, sort: 'relevance' }).items.map(p => ({ slug: p.slug, name: p.name, name_hi: p.name_hi, price: p.price, image: p.images[0]?.thumb || null }));
+  const sg = catalog.listPublic({ q, limit: 6, sort: 'relevance', fallback: true }); const products = sg.items.map(p => ({ slug: p.slug, name: p.name, name_hi: p.name_hi, price: p.price, image: p.images[0]?.thumb || null }));
   const like = '%' + q.replace(/[%_]/g, '') + '%';
   const categories = db.prepare('SELECT slug,name,name_hi FROM categories WHERE active=1 AND deleted_at IS NULL AND (name LIKE ? OR name_hi LIKE ?) LIMIT 4').all(like, like);
-  res.json({ products, categories });
+  res.json({ products, categories, fallback: sg.fallback || null });
 }));
 api.get('/products/:slug', asyncH((req, res) => {
   const p = catalog.getBySlug(req.params.slug);
@@ -101,7 +102,7 @@ api.get('/products/:slug/reviews', asyncH((req, res) => {
   const p = db.prepare('SELECT id FROM products WHERE slug=?').get(req.params.slug);
   if (!p) throw notFound();
   const page = Math.max(1, int(req.query.page, 1)), per = 8;
-  const rows = db.prepare("SELECT id,name,rating,title,body,verified,reply,created_at FROM reviews WHERE product_id=? AND status='approved' ORDER BY created_at DESC LIMIT ? OFFSET ?").all(p.id, per, (page - 1) * per);
+  const rows = db.prepare("SELECT id,name,rating,title,body,verified,reply,created_at FROM reviews WHERE product_id=? AND status='approved' AND body<>'' ORDER BY created_at DESC LIMIT ? OFFSET ?").all(p.id, per, (page - 1) * per);
   const dist = db.prepare("SELECT rating, COUNT(*) c FROM reviews WHERE product_id=? AND status='approved' GROUP BY rating").all(p.id);
   res.json({ items: rows, dist, page });
 }));
@@ -113,7 +114,7 @@ api.post('/products/:slug/reviews', lim(60, 8, 'Too many reviews from this devic
   if (rating < 1 || rating > 5) throw bad('Please choose 1 to 5 stars.');
   const name = String(b.name || req.customer?.name || '').trim().slice(0, 60) || 'Customer';
   const body = String(b.body || '').trim().slice(0, 1200);
-  if (body.length < 3) throw bad('Please write a few words about the product.');
+  if (body && body.length < 3) throw bad('Please write a few more words, or leave the text empty and send only stars.');
   let verified = 0, orderId = null;
   const num_ = String(b.order || '').trim(), phone = normPhone(b.phone || req.customer?.phone);
   if (num_) {
@@ -122,7 +123,8 @@ api.post('/products/:slug/reviews', lim(60, 8, 'Too many reviews from this devic
   }
   db.prepare('INSERT INTO reviews(product_id,customer_id,order_id,name,rating,title,body,verified,status,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)')
     .run(p.id, req.customer?.id || null, orderId, name, rating, String(b.title || '').slice(0, 100) || null, body, verified, 'pending', now());
-  res.json({ ok: true, message: 'Thank you! Your review will appear after we check it.' });
+  try { push.newReview({ rating, text: body }); } catch { /* optional */ }
+  res.json({ ok: true, message: body ? 'Thank you! Your review will appear after we check it.' : 'Thank you for your rating!' });
 }));
 
 /* ---------- cart, pincode, coupons ---------- */
@@ -139,6 +141,22 @@ api.get('/coupons', (req, res) => res.json(db.prepare("SELECT code,type,value,mi
 
 /* ---------- checkout ---------- */
 const ctxOf = req => ({ customer: req.customer, ip: ipOf(req), ua: req.headers['user-agent'] });
+/* pincode -> district/state helper. Only the 6-digit pincode leaves our server (India Post's free public data); answers are cached. */
+api.get('/pincode-info/:pin', lim(1, 30), asyncH(async (req, res) => {
+  const pin = String(req.params.pin || '');
+  if (!/^[1-9]\d{5}$/.test(pin)) throw bad('Enter a valid 6-digit pincode.');
+  const hit = db.prepare('SELECT * FROM pin_cache WHERE pin=?').get(pin);
+  if (hit && (hit.found || Date.now() - new Date(hit.at).getTime() < 86400000)) return res.json(hit.found ? { found: true, district: hit.district, state: hit.state, city: hit.city } : { found: false });
+  let out = { found: false };
+  try {
+    const r = await fetch(`https://api.postalpincode.in/pincode/${pin}`, { signal: AbortSignal.timeout(4000) });
+    const j = await r.json();
+    const po = j && j[0] && j[0].Status === 'Success' && Array.isArray(j[0].PostOffice) ? j[0].PostOffice : [];
+    if (po.length) out = { found: true, district: String(po[0].District || '').slice(0, 60), state: String(po[0].State || '').slice(0, 60), city: String(po[0].Block && po[0].Block !== 'NA' ? po[0].Block : po[0].District || '').slice(0, 60) };
+  } catch { /* the service may be down; the customer simply types it */ return res.json({ found: false }); }
+  db.prepare('INSERT OR REPLACE INTO pin_cache(pin,district,state,city,found,at) VALUES(?,?,?,?,?,?)').run(pin, out.district || '', out.state || '', out.city || '', out.found ? 1 : 0, new Date().toISOString());
+  res.json(out);
+}));
 api.post('/orders', lim(10, +process.env.ORDER_RATE_MAX || 12, 'Too many orders from this device. Please wait a few minutes.'), asyncH((req, res) => {
   if (process.env.CATALOGUE_ONLY === '1') { const B = settings.get('brand'); const wa = String(B.whatsapp || B.phone || '').replace(/\D/g, '').slice(-10); throw bad('Orders are not taken on this preview website. Please order on WhatsApp' + (wa ? ': +91 ' + wa : '') + '.'); }
   const r = orders.createOrder(req.body || {}, ctxOf(req));
@@ -191,14 +209,16 @@ api.post('/orders/:number/cancel', lim(15, 10), asyncH((req, res) => {
 api.post('/orders/:number/request', lim(60, 6), upload.array('photos', 3), asyncH(async (req, res) => {
   const o = orderAccess(req);
   const s = orders.serializeForCustomer(o);
-  if (!s.can_request) throw bad(`Replacement or refund can be requested within ${s.return_window_days} days of delivery, once at a time.`);
+  if (!s.can_request) throw bad(s.all_no_return ? 'The items in this order are sold without return. If something arrived damaged or wrong, please contact us.' : `Replacement or refund can be requested within ${s.return_window_days} days of delivery, once at a time.`);
   const type = req.body.type === 'refund' ? 'refund' : 'replace';
+  if (!s.allowed_requests.includes(type)) throw bad(type === 'refund' ? 'A refund is not offered for the items in this order. You can ask for a replacement.' : 'A replacement is not offered for the items in this order. You can ask for a refund.');
   const reason = String(req.body.reason || '').trim().slice(0, 800);
   if (reason.length < 5) throw bad('Please tell us what is wrong with the product.');
   const photos = [];
   for (const f of req.files || []) photos.push(await images.processPrivate(f.buffer));
   db.prepare('INSERT INTO order_requests(order_id,type,reason,photos,status,created_at) VALUES(?,?,?,?,?,?)').run(o.id, type, reason, JSON.stringify(photos), 'open', now());
   orders.addEvent(o.id, o.status, `Customer asked for ${type === 'refund' ? 'a refund' : 'a replacement'}`, 'customer');
+  try { push.returnRequested(o, type); } catch { /* optional */ }
   res.json({ ok: true, message: 'We received your request. We will reply within 48 hours.' });
 }));
 
@@ -219,6 +239,7 @@ api.post('/auth/register', authLim, asyncH((req, res) => {
     db.prepare('INSERT INTO consents(customer_id,email,phone,kind,policy_slug,policy_version,accepted,ip_hash,ua,created_at) VALUES(?,?,?,?,?,?,1,?,?,?)').run(id, email, phone, 'terms', slug, pol?.version || null, hashIp(ipOf(req)), String(req.headers['user-agent'] || '').slice(0, 200), now());
   }
   // guest orders are linked only after the email is proven with a login code (see /auth/otp/verify)
+  try { push.newCustomer({ name: String(b.name || '').trim().slice(0, 40) }); } catch { /* optional */ }
   auth.startCustomerSession(res, id);
   res.json({ customer: publicCustomer(db.prepare('SELECT * FROM customers WHERE id=?').get(id)) });
 }));
@@ -267,6 +288,7 @@ api.post('/auth/otp/verify', authLim, asyncH((req, res) => {
     if (!b.terms) throw bad('Please accept the Terms and Privacy Policy to create your account.');
     const id = db.prepare('INSERT INTO customers(email,phone,name,pass_hash,email_verified,marketing_optin,ref_code,created_at) VALUES(?,?,?,?,1,0,?,?)')
       .run(email, phone, String(b.name || '').trim().slice(0, 80) || null, null, token(4), now()).lastInsertRowid;
+    try { push.newCustomer({ name: String(b.name || '').trim().slice(0, 40) }); } catch { /* optional */ }
     for (const slug of ['terms', 'privacy']) {
       const pol = db.prepare('SELECT version FROM policies WHERE slug=?').get(slug);
       db.prepare('INSERT INTO consents(customer_id,email,phone,kind,policy_slug,policy_version,accepted,ip_hash,ua,created_at) VALUES(?,?,?,?,?,?,1,?,?,?)').run(id, email, phone, 'terms', slug, pol?.version || null, hashIp(ipOf(req)), String(req.headers['user-agent'] || '').slice(0, 200), now());
@@ -339,7 +361,7 @@ acct.put('/addresses/:id', asyncH((req, res) => {
   const id = int(req.params.id), row = db.prepare('SELECT id FROM addresses WHERE id=? AND customer_id=?').get(id, req.customer.id);
   if (!row) throw bad('Address not found.');
   const a = orders.validateAddress(req.body);
-  db.prepare('UPDATE addresses SET name=?, phone=?, line1=?, line2=?, landmark=?, pincode=?, city=?, state=? WHERE id=?').run(a.name, a.phone, a.line1, a.line2, a.landmark, a.pincode, a.city, a.state, id);
+  db.prepare('UPDATE addresses SET name=?, phone=?, line1=?, line2=?, landmark=?, pincode=?, city=?, state=?, district=? WHERE id=?').run(a.name, a.phone, a.line1, a.line2, a.landmark, a.pincode, a.city, a.state, a.district || '', id);
   res.json({ ok: true });
 }));
 acct.post('/addresses/:id/default', (req, res) => {
@@ -386,6 +408,7 @@ api.post('/contact', lim(60, 8, 'Too many messages. Please try again later.'), a
   const resolve = kind === 'grievance' ? new Date(Date.now() + 30 * 86400e3).toISOString() : null;
   const id = db.prepare('INSERT INTO contact_messages(kind,name,email,phone,order_number,subject,message,status,ack_due_at,resolve_due_at,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)')
     .run(kind, name, email || null, phone || null, String(b.order_number || '').trim().toUpperCase().slice(0, 30) || null, String(b.subject || '').slice(0, 120) || null, msg, 'open', ack, resolve, ts).lastInsertRowid;
+  try { push.contactMessage({ name, subject: String(b.subject || '').slice(0, 60), message: String(b.message || '') }); } catch { /* optional */ }
   res.json({ ok: true, ref: (kind === 'grievance' ? 'G-' : 'M-') + id, message: kind === 'grievance' ? 'Your complaint is registered. We will acknowledge it within 48 hours and resolve it within one month.' : 'Thank you. We will reply soon.' });
 }));
 api.post('/notify', lim(60, 10), asyncH((req, res) => {
@@ -415,7 +438,10 @@ api.post('/events', lim(1, 120), (req, res) => {
 function fillPolicy(html) {
   const b = settings.get('brand'), R = settings.get('returns'), S = settings.get('shipping');
   const v = { brand: b.name, legal_name: b.legal_name || b.name, address: b.address || '(address)', city: b.city || '(city)', email: b.email || '(email)', phone: b.phone || '(phone)', return_days: R.window_days, eta_min: S.eta_min, eta_max: S.eta_max };
-  return String(html || '').replace(/\{\{\s*(\w+)\s*\}\}/g, (_, k) => U.esc(v[k] != null ? v[k] : ''));
+  let src = String(html || '');
+  if (/Write your story here/i.test(src)) src = require('../shared/policies-default').ABOUT_DEFAULT; // never show the setup placeholder to customers
+  src = src.replace(/<p class="draft-note">[\s\S]*?<\/p>/g, '');           // the "have a lawyer review this" note is for the owner, not for customers
+  return src.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, k) => U.esc(v[k] != null ? v[k] : ''));
 }
 api.get('/policies/:slug', asyncH((req, res) => {
   const p = db.prepare('SELECT slug,title,title_hi,body,body_hi,version,updated_at FROM policies WHERE slug=?').get(req.params.slug);

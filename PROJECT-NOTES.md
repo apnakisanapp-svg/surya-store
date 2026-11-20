@@ -140,3 +140,9 @@ GST/BIS advice, final policy wording, real photos and logo, payment gateway KYC.
 - MRP strike-through: old price never clipped at the sides (app.css end).
 - "Admin change not visible": API GET responses now `Cache-Control: no-cache`; js/css/html are revalidated on every load (src/public/server.js). Pictures stay cached.
 - Admin order page: summary card on top (status, photo, who, total, payment line, call/WhatsApp, "What to do now"), bigger item photos, history/profit/notes/policies inside "More details".
+
+## 20 Nov (2) — Release 2: phone notifications, VIP messages, Sab Done, order cards
+- Phone notifications (free Web Push): src/shared/push.js (VAPID key made on first use, stored in private/vapid.json; table push_subs), admin-web/sw.js (receives pushes, buttons "WhatsApp bhejo"/"Done", tap opens the order), manifest + icons so the admin installs as an app with the Surya logo, page Admin > Phone notifications (turn on, test, per-event switches, hide-on-lock-screen switch). Events: new order, payment to check, cancel, return/replacement request, stock low, contact message, review, new customer. Hooks are fire-and-forget (never slow an order). Needs `npm install --omit=dev` once (new package web-push).
+- Customer messages rewritten in a warm VIP tone (settings.js messages) + new `cod_advance` message; vars {{advance}} {{balance}} {{brand}}. NOTE: if the owner already saved templates in Admin > Message templates, those saved texts stay; delete/reset them there to get the new wording.
+- Messages to send: "Sab Done" button, per-message Done, record on the order ("Message sent to customer"), cards on phones. API: POST /outbox/done-all.
+- Orders list: cards on phones with product photo + name (+N more), total, payment line, status colour, next action; table on PC has a photo column.

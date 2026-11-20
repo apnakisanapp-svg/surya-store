@@ -8,6 +8,7 @@ const images = require('../shared/images');
 const catalog = require('../shared/catalog');
 const auth = require('../shared/auth');
 const mail = require('../shared/mail');
+const push = require('../shared/push');
 const { crud } = require('./crud');
 const { itemImage, asyncH, bad, notFound, int, num, jparse, now, uniqueSlug, toCSV, isEmail } = require('../shared/util');
 
@@ -52,6 +53,11 @@ r.use('/redirects', crud({
 r.get('/reviews', asyncH((req, res) => {
   const st = req.query.status || 'pending';
   res.json(db.prepare(`SELECT r.*, p.name product_name FROM reviews r JOIN products p ON p.id=r.product_id ${st === 'all' ? '' : 'WHERE r.status=?'} ORDER BY r.id DESC LIMIT 300`).all(...(st === 'all' ? [] : [st])));
+}));
+r.post('/reviews/approve-star-only', asyncH((req, res) => {
+  const n = db.prepare("UPDATE reviews SET status='approved' WHERE status='pending' AND (body IS NULL OR body='') AND flagged IS NOT 1").run().changes;
+  auth.logActivity(req.admin.id, 'review_approve_stars', 'review', 0, String(n), req);
+  res.json({ ok: true, approved: n });
 }));
 r.patch('/reviews/:id', asyncH((req, res) => {
   const id = int(req.params.id), b = req.body || {};
@@ -144,9 +150,30 @@ r.get('/outbox', (req, res) => {
   const st = req.query.status;
   res.json(db.prepare(`SELECT o.*, ord.number order_number FROM outbox o LEFT JOIN orders ord ON ord.id=o.order_id ${st ? 'WHERE o.status=?' : "WHERE o.status IN ('manual','failed','queued')"} ORDER BY o.id DESC LIMIT 300`).all(...(st ? [st] : [])));
 });
-r.post('/outbox/:id/sent', (req, res) => { db.prepare("UPDATE outbox SET status='sent', sent_at=? WHERE id=?").run(now(), int(req.params.id)); res.json({ ok: true }); });
+/* mark a message as sent (and keep a record on the order: "Message sent to customer") */
+function markSent(id) {
+  const row = db.prepare('SELECT * FROM outbox WHERE id=?').get(id); if (!row || row.status === 'sent') return false;
+  db.prepare("UPDATE outbox SET status='sent', sent_at=? WHERE id=?").run(now(), id);
+  if (row.order_id) { const o = db.prepare('SELECT status FROM orders WHERE id=?').get(row.order_id); if (o) require('../shared/orders').addEvent(row.order_id, o.status, `Message sent to customer (${row.channel === 'whatsapp' ? 'WhatsApp' : 'email'}: ${String(row.kind || '').replace(/_/g, ' ')})`, 'admin'); }
+  return true;
+}
+r.post('/outbox/:id/sent', (req, res) => { markSent(int(req.params.id)); res.json({ ok: true }); });
+r.post('/outbox/done-all', (req, res) => {
+  const ids = Array.isArray(req.body?.ids) && req.body.ids.length ? req.body.ids.map(int) : db.prepare("SELECT id FROM outbox WHERE status IN ('manual','failed')").all().map(x => x.id);
+  let n = 0; for (const id of ids.slice(0, 500)) if (markSent(id)) n++;
+  res.json({ ok: true, done: n });
+});
 r.post('/outbox/:id/retry', asyncH(async (req, res) => { await mail.sendEmail(int(req.params.id)); res.json({ ok: true }); }));
 r.delete('/outbox/:id', (req, res) => { db.prepare('DELETE FROM outbox WHERE id=?').run(int(req.params.id)); res.json({ ok: true }); });
+
+/* ---- phone notifications (web push) ---- */
+r.get('/push/info', (req, res) => res.json({ key: push.publicKey(), devices: push.count(), prefs: settings.get('push') }));
+r.post('/push/subscribe', (req, res) => { if (!push.subscribe(req.body?.subscription, req.get('user-agent'))) throw bad('This phone could not be registered. Try again.'); res.json({ ok: true, devices: push.count() }); });
+r.post('/push/unsubscribe', (req, res) => { push.unsubscribe(req.body?.endpoint); res.json({ ok: true, devices: push.count() }); });
+r.post('/push/test', asyncH(async (req, res) => {
+  const n = await push.send('test', { title: '☀️ Test from SURYA', body: 'Notifications are working on this phone.\nTap Done to close it.', url: './', tag: 'test', actions: [{ action: 'done', title: 'Done' }], publicBody: 'Notifications are working.' });
+  res.json({ ok: true, sent: n });
+}));
 
 /* ---- settings ---- */
 const GROUPS = Object.keys(settings.DEFAULTS);
@@ -158,10 +185,11 @@ r.put('/settings/:group', asyncH((req, res) => {
   if (g === 'payments') {
     if (b.upi_id !== undefined && b.upi_id && !/^[a-zA-Z0-9._-]{2,64}@[a-zA-Z]{2,32}$/.test(String(b.upi_id).trim())) throw bad('UPI ID looks wrong. It should look like name@bank.');
     if (b.upi_id) b.upi_id = String(b.upi_id).trim();
-    for (const k of ['cod_fee', 'cod_min', 'cod_max', 'upi_timer_min', 'upi_grace_min']) if (b[k] !== undefined) b[k] = Math.max(0, num(b[k]));
+    for (const k of ['cod_fee', 'cod_advance_value', 'cod_min', 'cod_max', 'upi_timer_min', 'upi_grace_min']) if (b[k] !== undefined) b[k] = Math.max(0, num(b[k]));
   }
   if (g === 'shipping') for (const k of ['flat', 'free_above', 'eta_min', 'eta_max', 'gift_price', 'avg_ship_cost']) if (b[k] !== undefined) b[k] = Math.max(0, num(b[k]));
   if (g === 'returns' && b.window_days !== undefined) b.window_days = Math.min(60, Math.max(0, int(b.window_days)));
+  if (g === 'returns' && b.default_rule !== undefined && !['replacement', 'refund', 'either', 'exchange', 'none'].includes(b.default_rule)) throw bad('Return type is not valid.');
   if (g === 'brand' && b.gst_enabled && !(b.gstin || settings.get('brand').gstin)) throw bad('Enter your GSTIN before turning GST on.');
   if (['home', 'menu'].includes(g)) settings.set(g, { ...settings.get(g), ...b }); // lists are replaced as a whole
   else settings.patch(g, b);

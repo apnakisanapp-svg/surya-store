@@ -98,15 +98,15 @@ const order = (pid, qty, method = 'upi') => pj('/orders', { method: 'POST', body
   ok((await cp(L)).cod.advance === 99, 'product advance: fixed 99 asked even when the global rule is off');
   await aj('/products/' + p2.id, { method: 'PUT', body: { adv_type: 'fixed', adv_value: 49 } });
   ok((await cp(L2)).cod.advance === 148, 'advances of two products are added (99 + 49)');
-  await aj('/products/' + p2.id, { method: 'PUT', body: { adv_type: 'percent', adv_value: 10 } });
-  const pp = await cp([{ product_id: p2.id, qty: 1 }]); ok(pp.cod.advance === Math.round(pp.subtotal * 0.1), 'percent advance is a share of that product');
-  await aj('/products/' + bpl.id, { method: 'PUT', body: { adv_type: 'none' } }); await aj('/products/' + p2.id, { method: 'PUT', body: { adv_type: 'none' } });
+  await aj('/products/' + p2.id, { method: 'PUT', body: { pay_rule: 'cod_advance', adv_type: '', adv_value: 25 } });
+  const pp = await cp([{ product_id: p2.id, qty: 1 }]); ok(pp.cod.advance === 25, 'advance rupees set in the Services form are used');
+  await aj('/products/' + bpl.id, { method: 'PUT', body: { pay_rule: 'cod' } }); await aj('/products/' + p2.id, { method: 'PUT', body: { pay_rule: 'cod' } });
   ok((await cp(L2)).cod.advance === 0, 'advance "none" on every product asks nothing');
   const bad1 = await aj('/products/' + bpl.id, { method: 'PUT', body: { adv_type: 'percent', adv_value: 95 } }); ok(bad1[0] >= 400, 'advance over 90% is refused');
-  await aj('/products/' + bpl.id, { method: 'PUT', body: { adv_type: '', adv_value: '' } }); await aj('/products/' + p2.id, { method: 'PUT', body: { adv_type: '', adv_value: '' } });
+  await aj('/products/' + bpl.id, { method: 'PUT', body: { pay_rule: '', adv_type: '', adv_value: '' } }); await aj('/products/' + p2.id, { method: 'PUT', body: { pay_rule: '', adv_type: '', adv_value: '' } });
   await aj('/products/' + bpl.id, { method: 'PUT', body: { ship_rule: 'free' } });
   ok((await cp(L)).shipping === 0, 'free-delivery product has no delivery charge');
-  await aj('/products/' + bpl.id, { method: 'PUT', body: { ship_rule: 'paid' } });
+  await aj('/products/' + bpl.id, { method: 'PUT', body: { ship_rule: 'own', ship_value: 30 } });
   const shp = await cp([{ product_id: bpl.id, qty: 9 }]); ok(shp.subtotal > 0 && shp.shipping > 0, 'always-charged product pays delivery even above the free limit');
   await aj('/products/' + bpl.id, { method: 'PUT', body: { ship_rule: '' } });
   await aj('/products/' + bpl.id, { method: 'PUT', body: { gift_rule: 'no' } });
@@ -150,5 +150,30 @@ const order = (pid, qty, method = 'upi') => pj('/orders', { method: 'POST', body
   const sv = await aj('/settings/brand', { method: 'PUT', body: { support_hours: '9 AM - 9 PM TEST' } }); ok(sv[0] === 200, 'admin saves settings');
   await new Promise(r => setTimeout(r, 1800));
   const bs = await pj('/bootstrap'); ok(JSON.stringify(bs[1]).includes('9 AM - 9 PM TEST'), 'admin setting reaches website');
+  // ---- release 2: phone notifications, VIP messages, Sab Done, list data ----
+  const A = async (p, o) => (await aj(p, o))[1];
+  const pi = await A('/push/info');
+  ok(pi.key && pi.key.length > 60 && pi.prefs.order !== false, 'push: signing key is made and event switches exist');
+  const sub = { endpoint: 'https://example.invalid/push/abc123', keys: { p256dh: 'BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg7A8u-Ts1XbjhazAkj7I99e8QcYP7DkM', auth: 'tBHItJI5svbpez7KI4CCXg' } };
+  const ps = await A('/push/subscribe', { method: 'POST', body: { subscription: sub } });
+  ok(ps && ps.ok && ps.devices >= 1, 'push: a phone can be registered');
+  const badSub = await aj('/push/subscribe', { method: 'POST', body: { subscription: { endpoint: 'http://x', keys: {} } } });
+  ok(badSub[0] === 400, 'push: a bad registration is refused');
+  const pt = await A('/push/test', { method: 'POST', body: {} });
+  ok(pt && pt.ok === true, 'push: test notification call never crashes, even if the phone is unreachable');
+  const pu = await A('/push/unsubscribe', { method: 'POST', body: { endpoint: sub.endpoint } });
+  ok(pu && pu.ok === true, 'push: a phone can be removed');
+  await A('/settings/push', { method: 'PUT', body: { lock_hide: true, stock: false } });
+  const pi2 = await A('/push/info'); ok(pi2.prefs.lock_hide === true && pi2.prefs.stock === false, 'push: switches are saved');
+  await A('/settings/push', { method: 'PUT', body: { lock_hide: false, stock: true } });
+  const ob = await A('/outbox'); const rowW = ob.find(x => x.channel === 'whatsapp' && x.order_id);
+  ok(rowW && /^Hi \w+/.test(rowW.body) && !/\{\{/.test(rowW.body), 'messages: customer message is queued with the new warm wording');
+  if (rowW) {
+    const done = await A('/outbox/done-all', { method: 'POST', body: { ids: [rowW.id] } });
+    ok(done.done === 1, 'Sab Done: marks the chosen messages as sent');
+    const od = await A('/orders/' + rowW.order_id); ok(od.events.some(e => /Message sent to customer/.test(e.note || '')), 'Sab Done: the order keeps a record that the message was sent');
+  }
+  const lst = await A('/orders?status=');
+  ok(lst.items.length && lst.items.every(x => 'image_url' in x && 'first_name' in x && 'item_count' in x), 'orders list carries photo and product name for the cards');
   console.log(fail ? `\n${fail} FAILED` : '\nAll passed'); process.exit(fail ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });
