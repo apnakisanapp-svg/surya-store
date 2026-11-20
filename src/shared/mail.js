@@ -22,7 +22,7 @@ function orderVars(o) {
   return {
     name: (o.name || '').split(' ')[0] || 'there', order: o.number, total: rupee(o.total), courier: o.courier || '', tracking: o.tracking_no || '',
     track_url: o.tracking_url || `${base}/track?order=${encodeURIComponent(o.number)}`, days: settings.get('returns').window_days,
-    reason: o.cancel_reason || '', review_url: `${base}/order/${o.number}?t=${o.access_token}#review`, brand: b.name, url: base,
+    reason: o.cancel_reason || '', advance: rupee(o.advance_amount || 0), balance: rupee(Math.max(0, Number(o.total) - Number(o.advance_amount || 0))), review_url: `${base}/order/${o.number}?t=${o.access_token}#review`, brand: b.name, url: base,
   };
 }
 

@@ -18,15 +18,29 @@ reg(/^\/orders$/, async (v, m, q) => {
     const nextOf = { payment_pending: 'confirmed', cod_confirm: 'confirmed', confirmed: 'packed', packed: 'shipped', shipped: 'delivered' };
     bulk.append(cnt, h('button', { class: 'btn sm', onclick: async () => { const to = nextOf[st.status]; if (!to) return toast('Pick a status tab first.', true); const out = await api('/orders/bulk', { method: 'POST', body: { ids: [...sel], to } }); toast(`${out.done.length} updated${out.failed.length ? `, ${out.failed.length} could not change` : ''}`, !!out.failed.length); load(); } }, 'Move to next step'),
       h('button', { class: 'btn sm bad', onclick: async () => { const reason = await promptBox('Cancel selected orders', 'Reason (shown to customers)'); if (!reason) return; const out = await api('/orders/bulk', { method: 'POST', body: { ids: [...sel], to: 'cancelled', reason } }); toast(`${out.done.length} cancelled`); load(); } }, 'Cancel'));
-    box.append(bulk, table([
+    const NEXT_LABEL = { payment_pending: 'Check payment', cod_confirm: 'Call to confirm', confirmed: 'Pack it', packed: 'Ship it', shipped: 'Mark delivered' };
+    const payLine = r => r.payment_method === 'upi' ? 'UPI · ' + (r.payment_status === 'verified' ? 'paid ✓' : r.payment_status === 'submitted' ? 'UTR ' + (r.utr || '') : 'waiting') : (r.has_advance ? `COD · ₹${r.advance_amount} ${r.advance_status === 'verified' ? 'received ✓' : 'advance waiting'}` : 'COD');
+    const tone = r => ['cancelled', 'returned', 'failed', 'expired'].includes(r.status) ? 'bad' : ['confirmed', 'packed', 'shipped', 'delivered'].includes(r.status) ? 'ok' : 'wait';
+    const cardList = h('div', { class: 'ocards' }, r.items.length ? r.items.map(o => h('div', { class: 'ocard ' + tone(o), onclick: e => { if (!e.target.closest('input,a')) go('/orders/' + o.id); } },
+      h('label', { class: 'oc-sel' }, h('input', { type: 'checkbox', 'aria-label': 'Select', onchange: e => { e.target.checked ? sel.add(o.id) : sel.delete(o.id); upd(); } })),
+      h('div', { class: 'oc-img' }, o.image_url ? h('img', { src: o.image_url, alt: '', loading: 'lazy' }) : h('span', null, '📦')),
+      h('div', { class: 'oc-body' },
+        h('div', { class: 'oc-prod' }, h('b', null, o.first_name || 'Order'), o.first_qty > 1 ? ` ×${o.first_qty}` : '', o.item_count > 1 ? h('span', { class: 'oc-more' }, ` +${o.item_count - 1} more`) : null),
+        h('div', { class: 'oc-who muted' }, `${o.name}${o.city ? ' · ' + o.city : ''}`),
+        h('div', { class: 'oc-meta muted small' }, `${o.number} · ${ago(o.placed_at)}`),
+        h('div', { class: 'oc-pay' }, h('b', null, money(o.total)), h('span', null, payLine(o))),
+        h('div', { class: 'oc-foot' }, statusBadge(o.status), o.risky ? badge('risky', 'bad') : null, o.has_battery ? badge('battery', 'info') : null, NEXT_LABEL[o.status] ? h('span', { class: 'oc-next' }, NEXT_LABEL[o.status] + ' ›') : null)))) : h('div', { class: 'empty' }, 'No orders in this tab.'));
+    box.append(bulk, cardList, table([
       { l: '', f: r => h('input', { type: 'checkbox', onchange: e => { e.target.checked ? sel.add(r.id) : sel.delete(r.id); upd(); } }) },
+      { l: '', f: r => r.image_url ? h('img', { src: r.image_url, width: 44, height: 44, alt: '', loading: 'lazy', style: { borderRadius: '8px', objectFit: 'cover' } }) : null },
       { l: 'Order', f: r => h('div', null, h('a', { href: '#/orders/' + r.id }, h('b', null, r.number)), h('div', { class: 'small muted' }, ago(r.placed_at))) },
       { l: 'Customer', f: r => h('div', null, r.name, h('div', { class: 'small muted' }, `${r.phone}${r.city ? ' · ' + r.city : ''}`)) },
-      { l: 'Items', f: r => h('span', { class: 'small' }, r.summary.slice(0, 70)) },
+      { l: 'Items', f: r => h('div', null, h('b', { class: 'small' }, r.first_name || ''), r.item_count > 1 ? h('span', { class: 'small muted' }, ` +${r.item_count - 1} more`) : null) },
       { l: 'Payment', f: r => h('div', null, r.payment_method.toUpperCase(), h('div', { class: 'small' }, r.payment_status === 'submitted' ? badge('UTR ' + r.utr, 'warn') : badge(r.payment_status.replace('_', ' '), r.payment_status === 'verified' || r.payment_status === 'cod_collected' ? 'ok' : ''))) },
       { l: 'Total', f: r => money(r.total), r: 1 },
       { l: 'Status', f: r => h('div', { class: 'col' }, statusBadge(r.status), r.risky ? badge('risky COD', 'bad') : null, r.has_battery ? badge('battery', 'info') : null) },
     ], r.items, { onRow: r => go('/orders/' + r.id), empty: 'No orders in this tab.' }));
+    box.lastChild.classList && box.lastChild.classList.add('otable');
     if (r.pages > 1) box.append(h('div', { class: 'row end', style: { marginTop: '12px' } }, h('span', { class: 'muted' }, `Page ${r.page} of ${r.pages}`), h('button', { class: 'btn sm', disabled: r.page <= 1, onclick: () => { st.page--; load(); } }, 'Previous'), h('button', { class: 'btn sm', disabled: r.page >= r.pages, onclick: () => { st.page++; load(); } }, 'Next')));
   }
   await load();

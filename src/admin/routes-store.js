@@ -8,6 +8,7 @@ const images = require('../shared/images');
 const catalog = require('../shared/catalog');
 const auth = require('../shared/auth');
 const mail = require('../shared/mail');
+const push = require('../shared/push');
 const { crud } = require('./crud');
 const { itemImage, asyncH, bad, notFound, int, num, jparse, now, uniqueSlug, toCSV, isEmail } = require('../shared/util');
 
@@ -149,9 +150,30 @@ r.get('/outbox', (req, res) => {
   const st = req.query.status;
   res.json(db.prepare(`SELECT o.*, ord.number order_number FROM outbox o LEFT JOIN orders ord ON ord.id=o.order_id ${st ? 'WHERE o.status=?' : "WHERE o.status IN ('manual','failed','queued')"} ORDER BY o.id DESC LIMIT 300`).all(...(st ? [st] : [])));
 });
-r.post('/outbox/:id/sent', (req, res) => { db.prepare("UPDATE outbox SET status='sent', sent_at=? WHERE id=?").run(now(), int(req.params.id)); res.json({ ok: true }); });
+/* mark a message as sent (and keep a record on the order: "Message sent to customer") */
+function markSent(id) {
+  const row = db.prepare('SELECT * FROM outbox WHERE id=?').get(id); if (!row || row.status === 'sent') return false;
+  db.prepare("UPDATE outbox SET status='sent', sent_at=? WHERE id=?").run(now(), id);
+  if (row.order_id) { const o = db.prepare('SELECT status FROM orders WHERE id=?').get(row.order_id); if (o) require('../shared/orders').addEvent(row.order_id, o.status, `Message sent to customer (${row.channel === 'whatsapp' ? 'WhatsApp' : 'email'}: ${String(row.kind || '').replace(/_/g, ' ')})`, 'admin'); }
+  return true;
+}
+r.post('/outbox/:id/sent', (req, res) => { markSent(int(req.params.id)); res.json({ ok: true }); });
+r.post('/outbox/done-all', (req, res) => {
+  const ids = Array.isArray(req.body?.ids) && req.body.ids.length ? req.body.ids.map(int) : db.prepare("SELECT id FROM outbox WHERE status IN ('manual','failed')").all().map(x => x.id);
+  let n = 0; for (const id of ids.slice(0, 500)) if (markSent(id)) n++;
+  res.json({ ok: true, done: n });
+});
 r.post('/outbox/:id/retry', asyncH(async (req, res) => { await mail.sendEmail(int(req.params.id)); res.json({ ok: true }); }));
 r.delete('/outbox/:id', (req, res) => { db.prepare('DELETE FROM outbox WHERE id=?').run(int(req.params.id)); res.json({ ok: true }); });
+
+/* ---- phone notifications (web push) ---- */
+r.get('/push/info', (req, res) => res.json({ key: push.publicKey(), devices: push.count(), prefs: settings.get('push') }));
+r.post('/push/subscribe', (req, res) => { if (!push.subscribe(req.body?.subscription, req.get('user-agent'))) throw bad('This phone could not be registered. Try again.'); res.json({ ok: true, devices: push.count() }); });
+r.post('/push/unsubscribe', (req, res) => { push.unsubscribe(req.body?.endpoint); res.json({ ok: true, devices: push.count() }); });
+r.post('/push/test', asyncH(async (req, res) => {
+  const n = await push.send('test', { title: '☀️ Test from SURYA', body: 'Notifications are working on this phone.\nTap Done to close it.', url: './', tag: 'test', actions: [{ action: 'done', title: 'Done' }], publicBody: 'Notifications are working.' });
+  res.json({ ok: true, sent: n });
+}));
 
 /* ---- settings ---- */
 const GROUPS = Object.keys(settings.DEFAULTS);

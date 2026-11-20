@@ -5,6 +5,7 @@ const settings = require('./settings');
 const pricing = require('./pricing');
 const mail = require('./mail');
 const notify = require('./notify');
+const push = require('./push');
 const { itemImage, now, jstr, jparse, orderNumber, token, normPhone, isPhone, isEmail, isPin, isUTR, bad, HttpError, hashIp, round2 } = require('./util');
 
 const STATUSES = ['placed', 'payment_pending', 'cod_confirm', 'confirmed', 'packed', 'shipped', 'delivered', 'cancelled', 'returned'];
@@ -165,6 +166,15 @@ function createOrder(body, ctx) {
     // UPI orders are not "placed" for the customer until payment is checked: send only the payment request.
     if (res.order.payment_method === 'upi') mail.queueOrderMessage(res.order, 'payment_pending');
     else if (!hasAdvance(res.order)) mail.queueOrderMessage(res.order, 'placed');
+    else mail.queueOrderMessage(res.order, 'cod_advance');
+    try {
+      push.orderPlaced(res.order);
+      const lim0 = (settings.get('store').low_stock_default || 3);
+      for (const l of db.prepare('SELECT product_id, variant_id, name FROM order_items WHERE order_id=?').all(res.order.id)) {
+        const row = l.variant_id ? db.prepare('SELECT stock FROM variants WHERE id=?').get(l.variant_id) : db.prepare('SELECT stock, low_stock_limit, preorder FROM products WHERE id=?').get(l.product_id);
+        if (row && !row.preorder && row.stock <= (row.low_stock_limit != null ? row.low_stock_limit : lim0)) push.lowStock(l.name, Math.max(0, row.stock));
+      }
+    } catch (e) { /* alerts are optional */ }
   }
   return res;
 }
@@ -230,6 +240,7 @@ function setStatus(orderId, to, { actor = 'system', note = '', reason = '', forc
     const fresh = db.prepare('SELECT * FROM orders WHERE id=?').get(orderId);
     if (to === 'cancelled') {
       releaseStock(fresh);
+      try { push.orderCancelled(fresh, fresh.cancel_reason); } catch (e) { /* alerts are optional */ }
       // a verified COD advance is the customer's money: it must go back if the order is cancelled
       if (hasAdvance(fresh) && fresh.advance_status === 'verified') { db.prepare("UPDATE orders SET advance_status='refund_due' WHERE id=?").run(orderId); fresh.advance_status = 'refund_due'; addEvent(orderId, 'cancelled', `Advance of ${fresh.advance_amount} must be refunded to the customer`, 'system'); }
       else if (hasAdvance(fresh) && fresh.advance_status === 'pending') db.prepare("UPDATE orders SET advance_status='cancelled' WHERE id=?").run(orderId);
@@ -253,7 +264,7 @@ function submitUTR(order, utr, screenshotFile) {
   if (used) throw bad('This transaction ID was already used for another order.');
   db.prepare("UPDATE orders SET utr=?, payment_status='submitted', payment_screenshot=COALESCE(?,payment_screenshot), updated_at=? WHERE id=?").run(u, screenshotFile || null, now(), order.id);
   addEvent(order.id, order.status, `Customer submitted UTR ${u}`, 'customer');
-  try { notify.paymentSubmitted({ ...order, pay_amount: payAmount(order) }, u); } catch (e) { /* alerts are optional */ }
+  try { notify.paymentSubmitted({ ...order, pay_amount: payAmount(order) }, u); push.paymentSubmitted({ ...order, pay_amount: payAmount(order) }, u); } catch (e) { /* alerts are optional */ }
 }
 
 function verifyPayment(orderId, actor, ok, note) {

@@ -150,5 +150,30 @@ const order = (pid, qty, method = 'upi') => pj('/orders', { method: 'POST', body
   const sv = await aj('/settings/brand', { method: 'PUT', body: { support_hours: '9 AM - 9 PM TEST' } }); ok(sv[0] === 200, 'admin saves settings');
   await new Promise(r => setTimeout(r, 1800));
   const bs = await pj('/bootstrap'); ok(JSON.stringify(bs[1]).includes('9 AM - 9 PM TEST'), 'admin setting reaches website');
+  // ---- release 2: phone notifications, VIP messages, Sab Done, list data ----
+  const A = async (p, o) => (await aj(p, o))[1];
+  const pi = await A('/push/info');
+  ok(pi.key && pi.key.length > 60 && pi.prefs.order !== false, 'push: signing key is made and event switches exist');
+  const sub = { endpoint: 'https://example.invalid/push/abc123', keys: { p256dh: 'BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg7A8u-Ts1XbjhazAkj7I99e8QcYP7DkM', auth: 'tBHItJI5svbpez7KI4CCXg' } };
+  const ps = await A('/push/subscribe', { method: 'POST', body: { subscription: sub } });
+  ok(ps && ps.ok && ps.devices >= 1, 'push: a phone can be registered');
+  const badSub = await aj('/push/subscribe', { method: 'POST', body: { subscription: { endpoint: 'http://x', keys: {} } } });
+  ok(badSub[0] === 400, 'push: a bad registration is refused');
+  const pt = await A('/push/test', { method: 'POST', body: {} });
+  ok(pt && pt.ok === true, 'push: test notification call never crashes, even if the phone is unreachable');
+  const pu = await A('/push/unsubscribe', { method: 'POST', body: { endpoint: sub.endpoint } });
+  ok(pu && pu.ok === true, 'push: a phone can be removed');
+  await A('/settings/push', { method: 'PUT', body: { lock_hide: true, stock: false } });
+  const pi2 = await A('/push/info'); ok(pi2.prefs.lock_hide === true && pi2.prefs.stock === false, 'push: switches are saved');
+  await A('/settings/push', { method: 'PUT', body: { lock_hide: false, stock: true } });
+  const ob = await A('/outbox'); const rowW = ob.find(x => x.channel === 'whatsapp' && x.order_id);
+  ok(rowW && /^Hi \w+/.test(rowW.body) && !/\{\{/.test(rowW.body), 'messages: customer message is queued with the new warm wording');
+  if (rowW) {
+    const done = await A('/outbox/done-all', { method: 'POST', body: { ids: [rowW.id] } });
+    ok(done.done === 1, 'Sab Done: marks the chosen messages as sent');
+    const od = await A('/orders/' + rowW.order_id); ok(od.events.some(e => /Message sent to customer/.test(e.note || '')), 'Sab Done: the order keeps a record that the message was sent');
+  }
+  const lst = await A('/orders?status=');
+  ok(lst.items.length && lst.items.every(x => 'image_url' in x && 'first_name' in x && 'item_count' in x), 'orders list carries photo and product name for the cards');
   console.log(fail ? `\n${fail} FAILED` : '\nAll passed'); process.exit(fail ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });

@@ -12,6 +12,7 @@ const pricing = require('../shared/pricing');
 const orders = require('../shared/orders');
 const images = require('../shared/images');
 const mail = require('../shared/mail');
+const push = require('../shared/push');
 const auth = require('../shared/auth');
 const U = require('../shared/util');
 const { asyncH, bad, notFound, HttpError, now, jparse, int, sha256, token, isEmail, normPhone, isPhone, hashIp, ipOf } = U;
@@ -122,6 +123,7 @@ api.post('/products/:slug/reviews', lim(60, 8, 'Too many reviews from this devic
   }
   db.prepare('INSERT INTO reviews(product_id,customer_id,order_id,name,rating,title,body,verified,status,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)')
     .run(p.id, req.customer?.id || null, orderId, name, rating, String(b.title || '').slice(0, 100) || null, body, verified, 'pending', now());
+  try { push.newReview({ rating, text: body }); } catch { /* optional */ }
   res.json({ ok: true, message: body ? 'Thank you! Your review will appear after we check it.' : 'Thank you for your rating!' });
 }));
 
@@ -216,6 +218,7 @@ api.post('/orders/:number/request', lim(60, 6), upload.array('photos', 3), async
   for (const f of req.files || []) photos.push(await images.processPrivate(f.buffer));
   db.prepare('INSERT INTO order_requests(order_id,type,reason,photos,status,created_at) VALUES(?,?,?,?,?,?)').run(o.id, type, reason, JSON.stringify(photos), 'open', now());
   orders.addEvent(o.id, o.status, `Customer asked for ${type === 'refund' ? 'a refund' : 'a replacement'}`, 'customer');
+  try { push.returnRequested(o, type); } catch { /* optional */ }
   res.json({ ok: true, message: 'We received your request. We will reply within 48 hours.' });
 }));
 
@@ -236,6 +239,7 @@ api.post('/auth/register', authLim, asyncH((req, res) => {
     db.prepare('INSERT INTO consents(customer_id,email,phone,kind,policy_slug,policy_version,accepted,ip_hash,ua,created_at) VALUES(?,?,?,?,?,?,1,?,?,?)').run(id, email, phone, 'terms', slug, pol?.version || null, hashIp(ipOf(req)), String(req.headers['user-agent'] || '').slice(0, 200), now());
   }
   // guest orders are linked only after the email is proven with a login code (see /auth/otp/verify)
+  try { push.newCustomer({ name: String(b.name || '').trim().slice(0, 40) }); } catch { /* optional */ }
   auth.startCustomerSession(res, id);
   res.json({ customer: publicCustomer(db.prepare('SELECT * FROM customers WHERE id=?').get(id)) });
 }));
@@ -284,6 +288,7 @@ api.post('/auth/otp/verify', authLim, asyncH((req, res) => {
     if (!b.terms) throw bad('Please accept the Terms and Privacy Policy to create your account.');
     const id = db.prepare('INSERT INTO customers(email,phone,name,pass_hash,email_verified,marketing_optin,ref_code,created_at) VALUES(?,?,?,?,1,0,?,?)')
       .run(email, phone, String(b.name || '').trim().slice(0, 80) || null, null, token(4), now()).lastInsertRowid;
+    try { push.newCustomer({ name: String(b.name || '').trim().slice(0, 40) }); } catch { /* optional */ }
     for (const slug of ['terms', 'privacy']) {
       const pol = db.prepare('SELECT version FROM policies WHERE slug=?').get(slug);
       db.prepare('INSERT INTO consents(customer_id,email,phone,kind,policy_slug,policy_version,accepted,ip_hash,ua,created_at) VALUES(?,?,?,?,?,?,1,?,?,?)').run(id, email, phone, 'terms', slug, pol?.version || null, hashIp(ipOf(req)), String(req.headers['user-agent'] || '').slice(0, 200), now());
@@ -403,6 +408,7 @@ api.post('/contact', lim(60, 8, 'Too many messages. Please try again later.'), a
   const resolve = kind === 'grievance' ? new Date(Date.now() + 30 * 86400e3).toISOString() : null;
   const id = db.prepare('INSERT INTO contact_messages(kind,name,email,phone,order_number,subject,message,status,ack_due_at,resolve_due_at,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)')
     .run(kind, name, email || null, phone || null, String(b.order_number || '').trim().toUpperCase().slice(0, 30) || null, String(b.subject || '').slice(0, 120) || null, msg, 'open', ack, resolve, ts).lastInsertRowid;
+  try { push.contactMessage({ name, subject: String(b.subject || '').slice(0, 60), message: String(b.message || '') }); } catch { /* optional */ }
   res.json({ ok: true, ref: (kind === 'grievance' ? 'G-' : 'M-') + id, message: kind === 'grievance' ? 'Your complaint is registered. We will acknowledge it within 48 hours and resolve it within one month.' : 'Thank you. We will reply soon.' });
 }));
 api.post('/notify', lim(60, 10), asyncH((req, res) => {

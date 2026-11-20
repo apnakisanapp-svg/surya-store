@@ -33,12 +33,13 @@ r.get('/', asyncH((req, res) => {
   const page = Math.max(1, int(req.query.page, 1)), per = Math.min(100, int(req.query.per, 25));
   const total = db.prepare(`SELECT COUNT(*) c FROM orders WHERE ${w}`).get(...args).c;
   const rows = db.prepare(`SELECT * FROM orders WHERE ${w} ORDER BY id DESC LIMIT ? OFFSET ?`).all(...args, per, (page - 1) * per);
-  const items = db.prepare(`SELECT order_id, name, qty FROM order_items WHERE order_id IN (${rows.map(() => '?').join(',') || 'NULL'})`).all(...rows.map(x => x.id));
-  const by = {}; for (const i of items) (by[i.order_id] ||= []).push(`${i.name} x${i.qty}`);
+  const items = db.prepare(`SELECT order_id, name, qty, image FROM order_items WHERE order_id IN (${rows.map(() => '?').join(',') || 'NULL'}) ORDER BY id`).all(...rows.map(x => x.id));
+  const by = {}, first = {}, cnt = {}; for (const i of items) { (by[i.order_id] ||= []).push(`${i.name} x${i.qty}`); cnt[i.order_id] = (cnt[i.order_id] || 0) + 1; if (!first[i.order_id]) first[i.order_id] = i; }
   const counts = db.prepare('SELECT status, COUNT(*) c FROM orders GROUP BY status').all();
   res.json({ total, page, pages: Math.ceil(total / per), counts: Object.fromEntries(counts.map(c => [c.status, c.c])),
     items: rows.map(o => ({ id: o.id, number: o.number, name: o.name, phone: o.phone, status: o.status, payment_method: o.payment_method, payment_status: o.payment_status, total: o.total, placed_at: o.placed_at,
-      risky: !!o.risky, risk_reason: o.risk_reason, utr: o.utr, has_battery: !!o.has_battery, city: addr(o).city, summary: (by[o.id] || []).join(', ') })) });
+      risky: !!o.risky, risk_reason: o.risk_reason, utr: o.utr, has_battery: !!o.has_battery, city: addr(o).city, summary: (by[o.id] || []).join(', '), image_url: first[o.id] ? itemImage(first[o.id].image) : null, first_name: first[o.id] ? first[o.id].name : '', first_qty: first[o.id] ? first[o.id].qty : 0, item_count: cnt[o.id] || 0,
+      has_advance: orders.hasAdvance(o), advance_amount: Number(o.advance_amount) || 0, advance_status: o.advance_status, due_on_delivery: orders.dueOnDelivery(o), repeat: false })) });
 }));
 
 function orderProfit(o, items) {
