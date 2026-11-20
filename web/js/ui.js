@@ -99,6 +99,7 @@ export function buildChrome(root) {
     ? h('button', { class: 'bb-i', 'data-k': it.k, onclick: openCart }, icon(it.ic), it.badge, h('span', null, it.label))
     : h('a', { class: 'bb-i', 'data-k': it.k, href: it.url }, icon(it.ic), h('span', null, it.label)));
   const bar = h('nav', { class: 'bbar', 'aria-label': 'Quick menu' }, bubble, ...links);
+  adaptBars(hdr, bar);
   bar.addEventListener('pointerdown', e => { const it = e.target.closest('.bb-i'); if (!it) return; const r = it.getBoundingClientRect(), d = Math.max(r.width, r.height) * 1.3, rip = h('i', { class: 'bb-rip', style: { width: d + 'px', height: d + 'px', left: (e.clientX - r.left - d / 2) + 'px', top: (e.clientY - r.top - d / 2) + 'px' } }); it.append(rip); setTimeout(() => rip.remove(), 650); });
   let cur = -1;
   const moveBubble = i => {
@@ -318,4 +319,33 @@ export function intro() {
   try { sessionStorage.setItem('sy_intro', '1'); } catch { /* */ }
   const el = h('div', { class: 'intro', 'aria-hidden': 'true' }, logo(true)); document.body.append(el);
   setTimeout(() => el.classList.add('out'), Math.max(600, I.duration_ms || 1400)); setTimeout(() => el.remove(), (I.duration_ms || 1400) + 900);
+}
+
+/* Glass that reads what is behind it: over white/cream the bars get a clearer gold-tinted glass so they never melt into the page,
+   over photos or dark areas they turn lighter and more see-through. Updates while scrolling, with a soft fade. */
+function adaptBars(hdr, bar) {
+  const lum = c => { const m = (c || '').match(/[\d.]+/g); if (!m || m.length < 3) return null; const [r, g, b, a = 1] = m.map(Number); return a < 0.5 ? null : (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255; };
+  const toneAt = (x, y, skip) => {
+    for (const el of document.elementsFromPoint(x, y)) {
+      if (skip.some(n => n && n.contains(el))) continue;
+      if (/^(IMG|VIDEO|CANVAS|SVG|PICTURE)$/i.test(el.tagName)) return 'photo';
+      const cs = getComputedStyle(el);
+      if (/url\(/.test(cs.backgroundImage)) return 'photo';
+      const l = lum(cs.backgroundColor); if (l != null) return l > 0.8 ? 'light' : l > 0.45 ? 'photo' : 'rich';
+    }
+    return 'light';
+  };
+  const pick = (box, y, skip) => { const r = box.getBoundingClientRect(), w = r.width || innerWidth, votes = {}; for (const f of [0.2, 0.5, 0.8]) { const t = toneAt(Math.round(r.left + w * f), y, skip); votes[t] = (votes[t] || 0) + 1; } return Object.entries(votes).sort((a, b) => b[1] - a[1])[0][0]; };
+  let busy = 0, last = 0;
+  const run = () => {
+    busy = 0; last = Date.now();
+    try {
+      const hr = hdr.getBoundingClientRect(); hdr.dataset.tone = pick(hdr, Math.min(innerHeight - 2, Math.round(hr.bottom) + 3), [hdr]);
+      if (getComputedStyle(bar).display !== 'none') { const br = bar.getBoundingClientRect(); bar.dataset.tone = pick(bar, Math.max(1, Math.round(br.top) - 3), [bar]); }
+    } catch { /* */ }
+  };
+  const soon = () => { if (!busy) busy = setTimeout(() => requestAnimationFrame(run), Math.max(0, 90 - (Date.now() - last))); };
+  addEventListener('scroll', soon, { passive: true }); addEventListener('resize', soon);
+  bus.on('route', () => { setTimeout(run, 120); setTimeout(run, 700); });
+  setTimeout(run, 300);
 }

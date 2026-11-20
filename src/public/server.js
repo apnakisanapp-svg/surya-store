@@ -79,7 +79,8 @@ function createApp() {
   app.use('/media', express.static(cfg.UPLOADS, { maxAge: '365d', immutable: true, index: false, dotfiles: 'deny', fallthrough: false,
     setHeaders: (res, p) => { if (!/\.(webp|glb|jpg|png)$/i.test(p)) res.statusCode = 403; } }));
 
-  app.use('/api', (req, res, next) => { res.set('X-Robots-Tag', 'noindex'); next(); });
+  // data from the API is never kept by the browser: what you change in the admin shows on the next load
+  app.use('/api', (req, res, next) => { res.set('X-Robots-Tag', 'noindex'); if (req.method === 'GET') res.set('Cache-Control', 'no-cache, must-revalidate'); next(); });
   app.use('/api', api, notFoundApi);
 
   app.get('/robots.txt', (req, res) => {
@@ -101,7 +102,8 @@ function createApp() {
   });
 
   // static front-end
-  app.use(express.static(cfg.WEB, { maxAge: cfg.PRODUCTION ? '1h' : 0, index: false, extensions: ['html'] }));
+  // code files (js/css/html) are checked with the server on every load (a tiny 304 when unchanged), so a new release is picked up at once; pictures/fonts stay cached
+  app.use(express.static(cfg.WEB, { maxAge: cfg.PRODUCTION ? '1h' : 0, index: false, extensions: ['html'], setHeaders: (res, p) => { if (/\.(js|css|html|json|webmanifest)$/i.test(p)) res.set('Cache-Control', 'no-cache'); } }));
 
   // single-page app with server-side head tags (title, description, JSON-LD) so search engines and link previews work
   let tpl = null;

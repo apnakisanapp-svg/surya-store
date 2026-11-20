@@ -78,7 +78,26 @@ document.documentElement.lang = LANG === 'hi' ? 'hi' : 'en';
 export const bus = { m: {}, on(e, f) { (this.m[e] ||= []).push(f); }, off(e, f) { this.m[e] = (this.m[e] || []).filter(x => x !== f); }, emit(e, d) { (this.m[e] || []).slice().forEach(f => f(d)); } };
 
 /* ---------- API ---------- */
+/* Back/forward: the list you came from is shown from memory at once (3 min), scroll position is restored. Normal visits always fetch fresh data. */
+let backNav = false;
+const GETC = new Map(), cacheable = p => /^\/(home|products)(\/|\?|$)/.test(p);
+const SCR = (() => { try { return JSON.parse(sessionStorage.getItem('sy_scr') || '{}'); } catch { return {}; } })();
+let scrKey = null, scrTick = 0;
+const saveScr = () => { try { sessionStorage.setItem('sy_scr', JSON.stringify(SCR)); } catch { /* */ } };
+export const wasBack = () => backNav;
+export const pagesSeen = (n) => { try { if (n) sessionStorage.setItem('sy_pg:' + location.pathname + location.search, String(n)); else return Number(sessionStorage.getItem('sy_pg:' + location.pathname + location.search)) || 1; } catch { return 1; } };
+if (typeof window !== 'undefined') {
+  try { history.scrollRestoration = 'manual'; } catch { /* */ }
+  window.addEventListener('scroll', () => { if (scrKey == null || scrTick) return; scrTick = requestAnimationFrame(() => { scrTick = 0; if (scrKey != null) { SCR[scrKey] = Math.round(window.scrollY); } }); }, { passive: true });
+  window.addEventListener('pagehide', saveScr); document.addEventListener('visibilitychange', () => { if (document.hidden) saveScr(); });
+}
+function restoreScroll(y) {
+  let tries = 0;
+  const go = () => { window.scrollTo(0, y); if (Math.abs(window.scrollY - y) > 4 && ++tries < 40) setTimeout(go, 50); };
+  go();
+}
 export async function api(path, { method = 'GET', body, form } = {}) {
+  if (method === 'GET' && backNav && cacheable(path)) { const hit = GETC.get(path); if (hit && Date.now() - hit.at < 180000) return structuredClone(hit.data); }
   const opt = { method, headers: { 'x-sy-csrf': '1' }, credentials: 'same-origin' };
   if (form) opt.body = form; else if (body !== undefined) { opt.headers['content-type'] = 'application/json'; opt.body = JSON.stringify(body); }
   const end = ldBegin(method, path);
@@ -93,6 +112,7 @@ export async function api(path, { method = 'GET', body, form } = {}) {
   try { res = await fetch('/api' + path, opt); } catch { end(); throw Object.assign(new Error(navigator.onLine ? 'Could not reach the server. Please try again.' : t('offline')), { offline: true }); }
   end();
   let data = null; try { data = await res.json(); } catch { /* */ }
+  if (method === 'GET' && res.ok && data && cacheable(path)) { GETC.set(path, { at: Date.now(), data: structuredClone(data) }); if (GETC.size > 60) GETC.delete(GETC.keys().next().value); }
   if (!res.ok) throw Object.assign(new Error((data && data.error) || 'Something went wrong. Please try again.'), { status: res.status, data });
   return data;
 }
@@ -282,12 +302,13 @@ export function startRouter(el) {
     if (u.origin !== location.origin || /^\/(api|media|sitemap|robots)/.test(u.pathname) || u.hash && u.pathname === location.pathname) return;
     e.preventDefault(); nav(u.pathname + u.search + u.hash);
   });
-  window.addEventListener('popstate', e => { if (overlayPopped(e)) return; render(); });
+  window.addEventListener('popstate', e => { if (overlayPopped(e)) return; backNav = true; render(); });
   render();
 }
 let token = 0;
 export async function render() {
-  const my = ++token, path = location.pathname.replace(/\/+$/, '') || '/';
+  const my = ++token, path = location.pathname.replace(/\/+$/, '') || '/', key = location.pathname + location.search, goBack = backNav;
+  scrKey = null; // the new page's own scrolling must not overwrite the old page's saved position
   bus.emit('route', path);
   for (const [re, fn] of routes) {
     const m = path.match(re);
@@ -300,12 +321,14 @@ export async function render() {
       try { await fn(view, m, new URLSearchParams(location.search)); } catch (e) { if (my === token) { sk.remove(); clear(view); view.append(errorView(e)); } }
       mo.disconnect(); sk.remove(); if (my === token) loadingRoute(false);
       if (my !== token) return;
-      if (!location.hash) window.scrollTo(0, 0);
+      if (goBack && SCR[key] > 0 && !location.hash) restoreScroll(SCR[key]);
+      else if (!location.hash) window.scrollTo(0, 0);
       else setTimeout(() => { const el = document.getElementById(location.hash.slice(1)); el && el.scrollIntoView({ behavior: 'smooth' }); }, 60);
+      backNav = false; scrKey = key;
       reveal(view); return;
     }
   }
-  clear(mount).append(notFoundView());
+  backNav = false; clear(mount).append(notFoundView());
 }
 /* The server already sends the right <title> for the page that was opened. Keep it there (Google reads the rendered title),
    and only compute a title for pages reached by tapping inside the app. */

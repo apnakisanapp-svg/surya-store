@@ -48,11 +48,27 @@ reg(/^\/orders\/(\d+)$/, async (v, m) => {
       else actions.append(act(LABEL[to] || to, () => api(`/orders/${id}/status`, { method: 'POST', body: { to } }), to === 'returned' ? '' : 'primary'));
     }
     const a = o.address;
-    v.append(pageHead(`Order ${o.number}`, h('a', { class: 'btn', href: `api/orders/${id}/slip`, target: '_blank' }, 'Packing slip'), h('a', { class: 'btn', href: `api/orders/${id}/invoice`, target: '_blank' }, 'Invoice')),
-      h('div', { class: 'row', style: { marginBottom: '14px' } }, statusBadge(o.status), badge(o.payment_method.toUpperCase()), o.risky ? badge('Risky: ' + (o.risk_reason || ''), 'bad') : null, o.has_battery ? badge('Battery: check courier', 'info') : null, h('span', { class: 'muted small' }, dt(o.placed_at))));
-    if (o.status === 'payment_pending' && o.expires_at) v.append(h('div', { class: 'note', style: { marginBottom: '12px' } }, `Unpaid UPI orders cancel automatically at ${dt(o.expires_at)} and the stock is released.`));
-    if (o.payment_method === 'cod' && o.status === 'cod_confirm') v.append(h('div', { class: 'note warn', style: { marginBottom: '12px' } }, `Call ${o.phone} to confirm this COD order before packing.`));
-    v.append(card('Next step', actions.childNodes.length ? actions : h('span', { class: 'muted' }, 'Nothing to do on this order.')));
+    v.append(pageHead(`Order ${o.number}`, h('a', { class: 'btn', href: `api/orders/${id}/slip`, target: '_blank' }, 'Packing slip'), h('a', { class: 'btn', href: `api/orders/${id}/invoice`, target: '_blank' }, 'Invoice')));
+    // ---- at-a-glance summary: who, how much, what to do now ----
+    const tone = ['cancelled', 'returned', 'failed', 'expired'].includes(o.status) ? 'bad' : ['confirmed', 'packed', 'shipped', 'delivered'].includes(o.status) ? 'ok' : 'wait';
+    const adv = o.has_advance ? Number(o.advance_amount || 0) : 0, balance = Math.max(0, Math.round((Number(o.total) - adv) * 100) / 100);
+    const payLine = o.payment_method === 'upi'
+      ? `UPI · ${o.payment_status === 'verified' ? 'paid ✓' : o.payment_status === 'submitted' ? 'UTR sent, check it' : 'waiting for payment'}`
+      : adv ? `COD · ₹${adv} advance ${o.advance_status === 'verified' ? 'received ✓' : o.advance_status === 'refund_due' ? 'to refund' : 'waiting'} · ${money(balance)} on delivery` : `COD · ${money(o.total)} on delivery`;
+    const first = r.items && r.items[0];
+    const todo = actions.childNodes.length ? actions : h('span', { class: 'muted' }, 'Nothing to do on this order.');
+    v.append(h('div', { class: 'ohero ' + tone },
+      h('div', { class: 'oh-top' }, statusBadge(o.status), o.risky ? badge('Risky: ' + (o.risk_reason || ''), 'bad') : null, o.has_battery ? badge('Battery: check courier', 'info') : null, h('span', { class: 'muted small oh-time' }, dt(o.placed_at))),
+      h('div', { class: 'oh-main' },
+        first && first.image_url ? h('img', { class: 'oh-img', src: first.image_url, alt: '' }) : null,
+        h('div', { class: 'oh-info' },
+          h('div', { class: 'oh-who' }, h('b', null, o.name), h('span', { class: 'muted' }, ` · ${(a.city || '')}${a.state ? ', ' + a.state : ''}`)),
+          h('div', { class: 'oh-items muted' }, (r.items || []).map(i => `${i.name}${i.variant_name ? ' (' + i.variant_name + ')' : ''} ×${i.qty}`).join(' · ')),
+          h('div', { class: 'oh-money' }, h('b', null, money(o.total)), h('span', null, payLine)))),
+      h('div', { class: 'oh-call' }, h('a', { class: 'btn sm', href: 'tel:' + o.phone }, 'Call'), h('a', { class: 'btn sm', href: `https://wa.me/91${String(o.phone).replace(/\D/g, '').slice(-10)}`, target: '_blank', rel: 'noopener' }, 'WhatsApp')),
+      h('div', { class: 'oh-do' }, h('div', { class: 'oh-lbl' }, 'What to do now'), todo)));
+    if (o.status === 'payment_pending' && o.expires_at) v.append(h('div', { class: 'note', style: { margin: '12px 0' } }, `Unpaid UPI orders cancel automatically at ${dt(o.expires_at)} and the stock is released.`));
+    if (o.payment_method === 'cod' && o.status === 'cod_confirm') v.append(h('div', { class: 'note warn', style: { margin: '12px 0' } }, `Call ${o.phone} to confirm this COD order before packing.`));
     // payment panel
     if (o.payment_method === 'upi') {
       v.append(card('UPI payment', kv('Amount to receive', money(o.total)), kv('Status', o.payment_status), kv('UTR from customer', o.utr || '—'),
@@ -68,22 +84,23 @@ reg(/^\/orders\/(\d+)$/, async (v, m) => {
     }
     v.append(h('div', { class: 'grid g21', style: { marginTop: '14px' } },
       h('div', { class: 'stack-lg' },
-        card('Items', table([{ l: '', f: i => i.image_url ? h('img', { src: i.image_url, width: 44, height: 44, alt: '', style: { borderRadius: '8px', objectFit: 'cover' } }) : null }, { l: 'Product', f: i => h('div', null, i.name, i.variant_name ? h('div', { class: 'small muted' }, i.variant_name) : null) }, { l: 'Qty', k: 'qty', r: 1 }, { l: 'Price', f: i => money(i.price), r: 1 }, { l: 'Cost', f: i => money(i.cost), r: 1 }], r.items),
+        card('Items', table([{ l: '', f: i => i.image_url ? h('img', { src: i.image_url, width: 64, height: 64, alt: '', style: { borderRadius: '10px', objectFit: 'cover' } }) : null }, { l: 'Product', f: i => h('div', null, i.name, i.variant_name ? h('div', { class: 'small muted' }, i.variant_name) : null) }, { l: 'Qty', k: 'qty', r: 1 }, { l: 'Price', f: i => money(i.price), r: 1 }, { l: 'Cost', f: i => money(i.cost), r: 1 }], r.items),
           h('div', { style: { marginTop: '12px' } }, kv('Subtotal', money(o.subtotal)), o.discount ? kv(`Discount ${o.coupon_code || ''}`, '−' + money(o.discount)) : null, kv('Shipping', money(o.shipping)), o.cod_fee ? kv('COD fee', money(o.cod_fee)) : null, o.gift_fee ? kv('Gift wrap', money(o.gift_fee)) : null, kv('Total', money(o.total)))),
         r.requests.length ? card('Return / replacement requests', ...r.requests.map(q => h('div', { class: 'stack', style: { borderBottom: '1px solid var(--line)', paddingBottom: '10px' } }, h('div', { class: 'row' }, h('b', null, q.type === 'refund' ? 'Refund' : 'Replacement'), statusBadge(q.status), h('span', { class: 'muted small' }, dt(q.created_at))), h('p', null, q.reason), h('div', { class: 'row' }, q.photos.map((_, k) => h('a', { href: `api/orders/${id}/file/req-${q.id}-${k}`, target: '_blank' }, h('img', { src: `api/orders/${id}/file/req-${q.id}-${k}`, alt: '', width: 72, height: 72, style: { objectFit: 'cover', borderRadius: '8px' } })))),
           q.status === 'open' || q.status === 'approved' ? h('div', { class: 'row' }, q.status === 'open' ? act('Approve', () => api(`/orders/${id}/requests/${q.id}`, { method: 'POST', body: { action: 'approve' } }), 'ok') : null, act('Reject', async () => { const n = await promptBox('Reject request', 'Reason'); if (n === null) throw new Error('Stopped.'); await api(`/orders/${id}/requests/${q.id}`, { method: 'POST', body: { action: 'reject', note: n } }); }, 'bad'), q.status === 'approved' ? act('Mark completed', () => api(`/orders/${id}/requests/${q.id}`, { method: 'POST', body: { action: 'complete' } })) : null, q.type === 'refund' ? h('button', { class: 'btn', onclick: () => refundModal(o, reload) }, 'Record refund') : null) : null))) : null,
-        card('History', h('ul', { class: 'tl' }, r.events.map(e => h('li', null, h('b', null, (e.status || '').replace('_', ' ')), e.note ? ' · ' + e.note : '', h('div', { class: 'small muted' }, `${dt(e.created_at)} · ${e.actor}`))))),
-        r.refunds.length ? card('Refunds', table([{ l: 'Date', f: x => dt(x.created_at) }, { l: 'Amount', f: x => money(x.amount), r: 1 }, { l: 'Method', k: 'method' }, { l: 'Reference', k: 'ref' }], r.refunds)) : null),
       h('div', { class: 'stack-lg' },
         card('Customer', h('b', null, o.name), h('div', null, h('a', { href: 'tel:' + o.phone }, o.phone), ' · ', h('a', { href: `https://wa.me/91${o.phone}`, target: '_blank', rel: 'noopener' }, 'WhatsApp')), h('div', null, h('a', { href: `#/buyers/${String(o.phone).replace(/\D/g, '').slice(-10)}` }, 'All orders of this buyer →')), o.email ? h('div', null, o.email) : null,
           h('p', { style: { marginTop: '8px' } }, a.line1, a.line2 ? ', ' + a.line2 : '', h('br'), `${a.city}${a.district && a.district !== a.city ? ', Dist. ' + a.district : ''}, ${a.state} - ${a.pincode}`), h('button', { class: 'btn sm', onclick: () => { navigator.clipboard.writeText(`${a.name}\n${a.phone}\n${a.line1}${a.line2 ? ', ' + a.line2 : ''}\n${a.city}, ${a.state} - ${a.pincode}`).then(() => toast('Address copied')); } }, 'Copy address'),
           o.customer_note ? h('div', { class: 'note', style: { marginTop: '8px' } }, 'Customer note: ' + o.customer_note) : null, o.gift ? h('div', { class: 'note', style: { marginTop: '8px' } }, 'Gift wrap. Message: ' + (o.gift.message || '—')) : null,
           h('div', { class: 'muted small', style: { marginTop: '8px' } }, `Earlier orders from this phone: ${r.history.total} (delivered ${r.history.delivered || 0}, cancelled/returned ${r.history.bad || 0})`)),
         card('Shipping', kv('Courier', o.courier || '—'), kv('Tracking no.', o.tracking_no || '—'), kv('Your shipping cost', o.ship_cost != null ? money(o.ship_cost) : 'not entered'), o.tracking_url ? h('a', { href: o.tracking_url, target: '_blank', rel: 'noopener' }, 'Open tracking') : null, h('div', { style: { marginTop: '8px' } }, h('button', { class: 'btn sm', onclick: () => shipModal(o, reload, true) }, 'Edit courier details'))),
+        h('details', { class: 'more' }, h('summary', null, 'More details (history, profit, notes, policies)'),
+                card('History', h('ul', { class: 'tl' }, r.events.map(e => h('li', null, h('b', null, (e.status || '').replace('_', ' ')), e.note ? ' · ' + e.note : '', h('div', { class: 'small muted' }, `${dt(e.created_at)} · ${e.actor}`))))),
+          r.refunds.length ? card('Refunds', table([{ l: 'Date', f: x => dt(x.created_at) }, { l: 'Amount', f: x => money(x.amount), r: 1 }, { l: 'Method', k: 'method' }, { l: 'Reference', k: 'ref' }], r.refunds)) : null),
         card('Profit on this order', kv('Revenue (without GST)', money(r.profit.revenue)), kv('Product cost', money(r.profit.cost)), kv('Shipping cost' + (r.profit.ship_estimated ? ' (estimated)' : ''), money(r.profit.ship_cost)), kv('Profit', h('span', { style: { color: r.profit.profit >= 0 ? 'var(--ok)' : 'var(--bad)' } }, `${money(r.profit.profit)} (${r.profit.margin}%)`)), h('p', { class: 'muted small' }, 'Does not include ads or packaging.')),
         card('Messages', r.outbox.length ? r.outbox.map(x => h('div', { class: 'row between' }, h('span', { class: 'small' }, `${x.channel} · ${x.kind}`), x.link ? h('a', { class: 'btn sm', href: x.link, target: '_blank', rel: 'noopener', onclick: () => api(`/outbox/${x.id}/sent`, { method: 'POST' }) }, 'Send on WhatsApp') : badge(x.status))) : h('span', { class: 'muted' }, 'No messages.')),
         card('Private note', (() => { const t = h('textarea', { class: 'inp', rows: 3 }); t.value = o.internal_note || ''; return h('div', { class: 'stack' }, t, h('button', { class: 'btn sm', onclick: async () => { await api('/orders/' + id, { method: 'PATCH', body: { internal_note: t.value } }); toast('Saved'); } }, 'Save note')); })()),
-        card('Policies accepted', r.consents.length ? h('ul', { style: { margin: 0, paddingLeft: '18px' } }, r.consents.map(c => h('li', { class: 'small' }, `${c.policy_slug || c.kind} v${c.policy_version || '-'} · ${dt(c.created_at)}`))) : h('span', { class: 'muted' }, 'No record.')))));
+        card('Policies accepted', r.consents.length ? h('ul', { style: { margin: 0, paddingLeft: '18px' } }, r.consents.map(c => h('li', { class: 'small' }, `${c.policy_slug || c.kind} v${c.policy_version || '-'} · ${dt(c.created_at)}`))) : h('span', { class: 'muted' }, 'No record.'))))));
   }
   await paint();
 });

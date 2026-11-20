@@ -1,4 +1,4 @@
-import { BOOT, h, $, $$, clear, icon, t, tr, lang, bus, api, money, cart, wish, me, ls, toast, modal, nav, route, setTitle, reveal, recentlyViewed, sid, debounce, pushOverlay, releaseOverlay, buyItem } from './core.js';
+import { BOOT, h, $, $$, clear, icon, t, tr, lang, bus, api, money, cart, wish, me, ls, toast, modal, nav, route, setTitle, reveal, recentlyViewed, sid, debounce, pushOverlay, releaseOverlay, buyItem, wasBack, pagesSeen } from './core.js';
 import { pctBadge, fillPrice, tweenNum, productCard, skeletons, stars, addToCart, openCart } from './ui.js';
 
 const sec = (title, link, body, cls = '') => h('section', { class: 'section rev ' + cls }, h('div', { class: 'wrap' }, h('div', { class: 'sec-head' }, h('h2', null, title), link), body));
@@ -72,7 +72,7 @@ route(/^\/shop$/, async (view, m, q) => {
     r.items.forEach(x => g.append(productCard(x)));
     count.textContent = r.fallback ? '' : `${r.total} ${r.total === 1 ? 'product' : 'products'}`;
     if (!r.items.length && reset) grid.append(h('div', { class: 'empty' }, icon('search'), h('h3', null, t('no_results')), h('p', { class: 'muted' }, t('try_other')), h('p', { style: { marginTop: '14px' } }, h('button', { class: 'btn', onclick: () => { Object.assign(st, { q: '', category: '', min: '', max: '', in_stock: false, offers: false }); sync(); load(true); } }, 'Clear filters'))));
-    clear(more); if (st.page < r.pages) more.append(h('button', { class: 'btn ghost', onclick: () => { st.page++; load(false); } }, t('load_more')));
+    clear(more); if (st.page < r.pages) more.append(h('button', { class: 'btn ghost', onclick: () => { st.page++; pagesSeen(st.page); load(false); } }, t('load_more')));
   }
   const sortSel = h('select', { class: 'inp', 'aria-label': t('sort'), onchange: e => { st.sort = e.target.value; load(true); } }, [['trending', t('trending')], ['new', t('newest')], ['price_asc', t('price_lh')], ['price_desc', t('price_hl')], ['discount', t('discount')], ...(st.q ? [['relevance', 'Best match']] : [])].map(([v, l]) => h('option', { value: v, selected: v === st.sort }, l)));
   const minI = h('input', { class: 'inp', type: 'number', inputmode: 'numeric', min: 0, placeholder: 'Min ₹', value: st.min, 'aria-label': 'Min price', onchange: e => { st.min = e.target.value; load(true); } });
@@ -85,7 +85,10 @@ route(/^\/shop$/, async (view, m, q) => {
   view.append(h('div', { class: 'wrap', style: { paddingTop: '24px', paddingBottom: '20px' } }, h('div', { class: 'row between' }, h('h1', { class: 'h1', style: { fontSize: 'clamp(1.8rem,5vw,3rem)' } }, st.q ? `“${st.q}”` : cat ? tr(cat, 'name') : t('shop')), count),
     h('div', { class: 'shop-top' }, BOOT.filters.category ? chips : null),
     h('div', { class: 'filters' }, h('div', null, sortSel), BOOT.filters.price ? h('div', { class: 'row', style: { flexWrap: 'nowrap', gap: '8px' } }, minI, maxI) : null, BOOT.filters.stock ? h('div', { class: 'row' }, stock) : null, h('div', { class: 'row' }, offers)), grid, more));
+  const back = wasBack(), want = back ? pagesSeen() : 1;
+  if (!back) pagesSeen(1);
   await load(true);
+  for (let i = 2; i <= want; i++) { st.page = i; await load(false); } // coming back: bring the earlier 'Load more' pages back too, so the scroll spot exists
 });
 
 /* ================= PRODUCT ================= */

@@ -1,0 +1,10 @@
+RELEASE 1 - upload steps
+1. Extract this zip into a NEW EMPTY folder. You must see folders: web, admin-web, src  + files PROJECT-NOTES.md, UPLOAD-STEPS.txt
+2. Open https://github.com/apnakisanapp-svg/surya-store/upload/main
+3. DRAG THE FOLDERS (web, admin-web, src) and PROJECT-NOTES.md. Do NOT drag the files inside the folders.
+   Check: the list on the page must show names like  web/js/core.js  (not just core.js). If not, stop and redo.
+4. Commit changes.
+5. AWS terminal (ubuntu@...):   cd ~/surya-store && git pull && sudo systemctl restart surya
+   Then:  sudo systemctl is-active surya   (must say active)
+6. Phone Chrome > Settings > Site settings > All sites > suryastore.shop > Clear & reset
+   (after this release, new releases show without clearing)
