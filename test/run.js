@@ -16,6 +16,11 @@ const order = (pid, qty, method = 'upi') => pj('/orders', { method: 'POST', body
   const adminOnPublic = await fetch(PUB + '/api/dashboard'); ok(adminOnPublic.status === 404 || adminOnPublic.status === 401, 'admin routes not exposed on public port');
   const list = (await pj('/products?limit=50'))[1]; const prods = list.items || list; const p = prods.find(x => /Steel Water Bottle/.test(x.name)) || prods.find(x => x.stock >= 3) || prods[0]; // a product without colour/size choices, so the test needs no variant
   ok(!!p, 'storefront lists products');
+  // Release 3: checkout needs login unless the owner switches guest checkout on
+  const sv0 = (await aj('/settings'))[1].values.store;
+  ok(sv0.guest_checkout === false, 'guest checkout is OFF by default');
+  const gate = await order(p.id, 1); ok(gate[0] === 401, `guest order refused while login is required (got ${gate[0]})`);
+  await aj('/settings/store', { method: 'PUT', body: { guest_checkout: true } });
   await aj('/products/' + p.id, { method: 'PUT', body: { stock: 10 } });
   const stock = async () => (await aj('/products/' + p.id))[1].stock;
   const s0 = await stock();

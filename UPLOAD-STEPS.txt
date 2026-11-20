@@ -1,14 +1,5 @@
-RELEASE 2 - upload steps
-1. Extract this zip into a NEW EMPTY folder. You must see folders: admin-web, src, test + files package.json, package-lock.json, PROJECT-NOTES.md, UPLOAD-STEPS.txt
-2. Open https://github.com/apnakisanapp-svg/surya-store/upload/main
-3. DRAG THE FOLDERS (admin-web, src, test) and the root files package.json, package-lock.json, PROJECT-NOTES.md. Do NOT drag files from inside the folders.
-   Check: the list on the page must show names like  src/shared/push.js  (not just push.js). If not, stop and redo.
-4. Commit changes.
-5. AWS terminal (ubuntu@...), one line at a time:
-     cd ~/surya-store && git pull
-     npm install --omit=dev
-     sudo systemctl restart surya
-     sudo systemctl is-active surya        (must say active)
-6. Phone (Android, Chrome): open your admin link. Menu (3 dots) > "Install app" / "Add to Home screen".
-   Open the Surya Admin icon > Phone notifications > "Turn on notifications" > Allow > "Send a test notification".
-7. Phone settings > Apps > Surya Admin > Battery: Unrestricted.
+1. Zip ko fresh khali folder me extract karo.
+2. https://github.com/apnakisanapp-svg/surya-store/upload/main kholo.
+3. FOLDERS drag karo: web, src, test + file PROJECT-NOTES.md (page par web/js/core.js jaise paths dikhne chahiye). Commit karo.
+4. AWS terminal: cd ~/surya-store && git pull && sudo systemctl restart surya && sudo systemctl is-active surya
+(npm install nahi chahiye.)

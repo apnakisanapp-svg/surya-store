@@ -1,4 +1,4 @@
-import { BOOT, h, $, $$, clear, icon, t, tr, lang, bus, api, money, cart, wish, me, ls, toast, modal, nav, route, setTitle, reveal, sid, buyItem } from './core.js';
+import { BOOT, h, $, $$, clear, icon, t, tr, lang, bus, api, money, cart, wish, me, ls, toast, modal, nav, route, setTitle, reveal, sid, buyItem, confirmBox, guardWatch, guardOff, draft, afterLogin, slideIn, glassSelect } from './core.js';
 import { productCard, skeletons, lineEl, shipBar, priceNow, syncFromPrice } from './ui.js';
 import { faqList } from './pages1.js';
 
@@ -40,12 +40,28 @@ route(/^\/checkout$/, async (view, m, params) => {
   const lines = () => (BUY ? [BUY] : cart.items), payload = () => lines().map(i => ({ product_id: i.p, variant_id: i.v || null, qty: i.q }));
   setTitle(t('checkout'));
   if (!lines().length) { view.append(wrap(h('div', { class: 'empty' }, icon('bag'), h('h3', null, t('empty_cart')), h('p', { style: { marginTop: '16px' } }, h('a', { class: 'btn', href: '/shop' }, t('continue')))))); return; }
+  if (!me.customer && !BOOT.store.guest_checkout) { afterLogin.set(location.pathname + location.search); setTitle('Log in to continue'); return loginView(view, { gate: true }); }
   const saved = ls.get('sy_addr', {});
   const F = { name: saved.name || (me.customer && me.customer.name) || '', phone: saved.phone || (me.customer && me.customer.phone) || '', email: saved.email || (me.customer && me.customer.email) || '', line1: saved.line1 || '', line2: saved.line2 || '', pincode: saved.pincode || ls.get('sy_pin', ''), city: saved.city || '', district: saved.district || '', state: saved.state || '', method: BOOT.payments.upi ? 'upi' : 'cod', gift: false, gift_message: '', note: '', terms: false, safety: false, marketing: false, save_address: true };
   let step = 1, price = null, coupon = ls.get('sy_coupon', '');
   const body = h('div'), side = h('aside', { class: 'card stack' }), stepsEl = h('div', { class: 'steps' });
   view.append(wrap(h('h1', { class: 'h1', style: { fontSize: 'clamp(1.8rem,5vw,2.8rem)', marginBottom: '20px' } }, t('checkout')), stepsEl, h('div', { class: 'co' }, body, side)));
   const errs = {};
+  const DKEY = 'checkout' + (BUY ? '_buy' : ''), DF = ['name', 'phone', 'email', 'line1', 'line2', 'pincode', 'city', 'district', 'state', 'gift_message', 'note'];
+  const savedTag = h('span', { class: 'saved-tag' });
+  let savedT = 0;
+  const saveDraft = () => { const v = {}; DF.forEach(k => { v[k] = F[k]; }); if (!DF.some(k => String(v[k] || '').trim())) return; draft.set(DKEY, { F: v, step }); savedTag.textContent = 'Saved just now'; savedTag.classList.add('on'); clearTimeout(savedT); savedT = setTimeout(() => savedTag.classList.remove('on'), 2500); };
+  let dsT = 0; const soonSave = () => { clearTimeout(dsT); dsT = setTimeout(saveDraft, 600); };
+  let touched = false; view.addEventListener('input', () => { touched = true; soonSave(); });
+  guardWatch(view, () => touched, true);
+  let dir = 1;
+  const old = draft.get(DKEY);
+  if (old && old.F) {
+    const bn = h('div', { class: 'welcome-back gl' }, h('div', null, h('b', null, 'Welcome back!'), h('span', null, 'You were in the middle of checkout. Continue where you left off?')),
+      h('div', { class: 'wb-btns' }, h('button', { class: 'btn sm', onclick: () => { Object.assign(F, old.F); step = Math.min(Math.max(1, old.step || 1), 3); if (step === 3 && !(F.line1 && F.pincode)) step = 2; bn.remove(); dir = 1; ({ 1: stepContact, 2: stepAddress, 3: stepPay, 4: stepReview })[step](); reprice(); } }, 'Continue'),
+        h('button', { class: 'btn ghost sm', onclick: () => { draft.del(DKEY); bn.remove(); } }, 'Start fresh')));
+    stepsEl.before(bn);
+  }
   async function reprice() {
     try { price = await priceNow({ items: payload(), coupon, pincode: /^\d{6}$/.test(F.pincode) ? F.pincode : undefined, method: F.method, gift: F.gift, email: F.email, phone: F.phone }); } catch (e) { toast(e.message, { err: true }); return; }
     if (!BUY) syncFromPrice(price); else { const l0 = price.lines[0]; if (l0 && l0.issue === 'unavailable') { buyItem.clear(); return nav('/cart'); } if (l0 && l0.qty > 0 && l0.qty !== BUY.q) BUY.q = l0.qty; }
@@ -54,22 +70,22 @@ route(/^\/checkout$/, async (view, m, params) => {
       price.pincode && !price.pincode.ok ? h('p', { class: 'err-text' }, price.pincode.message) : price.pincode && price.pincode.ok ? h('p', { class: 'small', style: { color: 'var(--ok)' } }, `${t('delivery_by')} ${price.pincode.eta.text}`) : null);
     if (step === 3) paintPay();
   }
-  const toTop = () => { const y = stepsEl.getBoundingClientRect().top + scrollY - 70; scrollTo({ top: Math.max(0, y), behavior: 'smooth' }); body.classList.remove('step-in'); void body.offsetWidth; body.classList.add('step-in'); };
+  const toTop = () => { const y = stepsEl.getBoundingClientRect().top + scrollY - 70; scrollTo({ top: Math.max(0, y), behavior: 'smooth' }); body.classList.remove('step-in'); slideIn(body, dir); saveDraft(); };
   const STEP_LABELS = [['1', t('contact').replace(/ details$/i, '')], ['2', 'Address'], ['3', t('payment')], ['4', t('review')]];
-  const goStep = n => { if (n >= step) return; step = n; ({ 1: stepContact, 2: stepAddress, 3: stepPay, 4: stepReview })[n](); toTop(); };
+  const goStep = n => { if (n >= step) return; dir = -1; step = n; ({ 1: stepContact, 2: stepAddress, 3: stepPay, 4: stepReview })[n](); toTop(); };
   const paintSteps = () => {
     clear(stepsEl); stepsEl.className = 'stp';
     const pct = (step - 1) / (STEP_LABELS.length - 1) * 100;
     stepsEl.append(h('div', { class: 'stp-track' }, h('i', { class: 'stp-fill', style: { width: pct + '%' } })),
       ...STEP_LABELS.map(([n, lb], k) => h('button', { type: 'button', class: 'stp-i' + (k + 1 === step ? ' on' : k + 1 < step ? ' done' : ''), disabled: k + 1 >= step, 'aria-current': k + 1 === step ? 'step' : null, 'aria-label': `Step ${n}: ${lb}`, onclick: () => goStep(k + 1) },
-        h('span', { class: 'stp-dot' }, k + 1 < step ? icon('check') : n), h('span', { class: 'stp-lb' }, lb))));
+        h('span', { class: 'stp-dot' }, k + 1 < step ? icon('check') : n), h('span', { class: 'stp-lb' }, lb))), savedTag);
   };
   const inp = (key, label, props = {}) => { const el = h('input', { class: 'inp' + (errs[key] ? ' bad' : ''), value: F[key], 'aria-label': label, oninput: e => { F[key] = e.target.value; }, ...props }); return field(label, el, errs[key] ? h('div', { class: 'err-text' }, errs[key]) : null); };
   function stepContact() {
     paintSteps(); clear(body);
     body.append(h('div', { class: 'card stack' }, h('h3', null, t('contact')), h('p', { class: 'muted small' }, 'We use these to confirm your order and send updates.'),
       inp('name', t('name'), { autocomplete: 'name' }), inp('phone', t('phone'), { inputmode: 'numeric', maxlength: 10, autocomplete: 'tel-national' }), inp('email', t('email'), { type: 'email', autocomplete: 'email' }),
-      h('div', { class: 'co-nav' }, h('button', { class: 'btn gl-next', onclick: () => { if (validate(1)) { step = 2; stepAddress(); toTop(); } else focusBad(); } }, t('next'), icon('chev')))));
+      h('div', { class: 'co-nav' }, h('button', { class: 'btn gl-next', onclick: () => { if (validate(1)) { dir = 1; step = 2; stepAddress(); toTop(); } else focusBad(); } }, t('next'), icon('chev')))));
   }
   const focusBad = () => { const bad = $('.inp.bad'); if (bad) { bad.scrollIntoView({ behavior: 'smooth', block: 'center' }); bad.focus({ preventScroll: true }); } };
   function stepAddress() {
@@ -81,7 +97,7 @@ route(/^\/checkout$/, async (view, m, params) => {
       inp('line1', t('addr1'), { autocomplete: 'address-line1' }), inp('line2', t('addr2')),
       h('div', { class: 'grid2 two' }, inp('pincode', t('pincode'), { inputmode: 'numeric', maxlength: 6, autocomplete: 'postal-code', oninput: e => { F.pincode = e.target.value.replace(/\D/g, '').slice(0, 6); e.target.value = F.pincode; if (F.pincode.length === 6) { reprice(); lookupPin(); } else pinNote.textContent = ''; } }), inp('city', t('city'), { autocomplete: 'address-level2' })), pinNote,
       h('div', { class: 'grid2 two' }, inp('district', 'District', { autocomplete: 'off' }), inp('state', t('state'), { autocomplete: 'address-level1' })),
-      h('div', { class: 'co-nav' }, h('button', { class: 'btn gl-back', onclick: () => goStep(1) }, icon('chevl'), t('back')), h('button', { class: 'btn gl-next', onclick: () => { if (validate(2)) { step = 3; stepPay(); toTop(); } else focusBad(); } }, t('next'), icon('chev')))));
+      h('div', { class: 'co-nav' }, h('button', { class: 'btn gl-back', onclick: () => goStep(1) }, icon('chevl'), t('back')), h('button', { class: 'btn gl-next', onclick: () => { if (validate(2)) { dir = 1; step = 3; stepPay(); toTop(); } else focusBad(); } }, t('next'), icon('chev')))));
     if (/^\d{6}$/.test(F.pincode) && (!F.district || !F.state)) lookupPin();
   }
   let pinSeq = 0;
@@ -141,14 +157,14 @@ route(/^\/checkout$/, async (view, m, params) => {
       if (price.needs_safety_ack && !F.safety) { toast('Please confirm the safety instructions.', { err: true }); return; }
       try { await busy(btn, async () => {
         const r = await api('/orders', { method: 'POST', body: { items: payload(), coupon, method: F.method, gift: F.gift, gift_message: F.gift_message, note: F.note, lang: lang(), email: F.email || undefined, save_address: !!me.customer, address: { name: F.name, phone: F.phone, line1: F.line1, line2: F.line2, landmark: F.line2, pincode: F.pincode, city: F.city, district: F.district, state: F.state }, consents: { terms: true, safety: F.safety, marketing: !!(me.customer && me.customer.marketing_optin) } } });
-        if (BUY) buyItem.clear(); else cart.clear(); ls.del('sy_coupon'); ls.set('sy_last_order', { n: r.number, t: r.token });
+        if (BUY) buyItem.clear(); else cart.clear(); ls.del('sy_coupon'); draft.del(DKEY); guardOff(); ls.set('sy_last_order', { n: r.number, t: r.token });
         nav(`/order/${r.number}?t=${r.token}&new=1`);
-      }); } catch (e) { toast(e.message, { err: true }); if (e.data && e.data.out_of_stock) { step = 3; stepPay(); } }
+      }); } catch (e) { toast(e.message, { err: true }); if (e.data && e.data.out_of_stock) { dir = 1; step = 3; stepPay(); } }
     } }, `${t('place')} · ${money(price.total)}`);
     const a = F;
     body.append(h('div', { class: 'card stack' }, h('h3', null, t('review')),
-      h('div', { class: 'row between', style: { alignItems: 'start' } }, h('div', { class: 'small' }, h('b', null, a.name), h('br'), a.line1, a.line2 ? ', ' + a.line2 : '', h('br'), `${a.city}${a.district && a.district !== a.city ? ', ' + a.district : ''}, ${a.state} - ${a.pincode}`, h('br'), a.phone, a.email ? h('span', null, h('br'), a.email) : null), h('button', { class: 'link', style: { background: 'none', border: 0, cursor: 'pointer' }, onclick: () => { step = 2; stepAddress(); toTop(); } }, 'Edit')),
-      h('div', { class: 'row between' }, h('span', null, F.method === 'cod' ? t('cod') : t('upi')), h('button', { class: 'link', style: { background: 'none', border: 0, cursor: 'pointer' }, onclick: () => { step = 3; stepPay(); toTop(); } }, 'Edit')),
+      h('div', { class: 'row between', style: { alignItems: 'start' } }, h('div', { class: 'small' }, h('b', null, a.name), h('br'), a.line1, a.line2 ? ', ' + a.line2 : '', h('br'), `${a.city}${a.district && a.district !== a.city ? ', ' + a.district : ''}, ${a.state} - ${a.pincode}`, h('br'), a.phone, a.email ? h('span', null, h('br'), a.email) : null), h('button', { class: 'link', style: { background: 'none', border: 0, cursor: 'pointer' }, onclick: () => { dir = 1; step = 2; stepAddress(); toTop(); } }, 'Edit')),
+      h('div', { class: 'row between' }, h('span', null, F.method === 'cod' ? t('cod') : t('upi')), h('button', { class: 'link', style: { background: 'none', border: 0, cursor: 'pointer' }, onclick: () => { dir = 1; step = 3; stepPay(); toTop(); } }, 'Edit')),
       F.method === 'cod' && price.cod && price.cod.advance > 0 ? h('div', { class: 'adv-box' }, h('b', null, 'How you will pay'),
         h('div', { class: 'row between' }, h('span', null, 'Items'), h('span', null, money(price.subtotal))),
         price.discount > 0 ? h('div', { class: 'row between' }, h('span', null, 'Discount'), h('span', null, '− ' + money(price.discount))) : null,
@@ -215,15 +231,15 @@ route(/^\/order\/([A-Za-z0-9-]+)$/, async (view, m, q) => {
   }
   function actions(o, token) {
     const out = h('div', { class: 'stack' });
-    if (['placed', 'payment_pending', 'cod_confirm', 'confirmed'].includes(o.status)) out.append(h('button', { class: 'btn ghost', onclick: async e => { if (!confirm('Cancel this order?')) return; try { await busy(e.currentTarget, () => api(`/orders/${o.number}/cancel?t=${token}`, { method: 'POST', body: { reason: 'Cancelled by customer' } })); toast('Order cancelled'); load(); } catch (x) { toast(x.message, { err: true }); } } }, t('cancel_order')));
+    if (['placed', 'payment_pending', 'cod_confirm', 'confirmed'].includes(o.status)) out.append(h('button', { class: 'btn ghost', onclick: async e => { const btn = e.currentTarget; const why = await confirmBox({ title: 'Cancel this order?', text: 'Please tell us why. It helps us do better.', reasons: ['Ordered by mistake', 'Found a better price elsewhere', 'Delivery is taking too long', 'Other'], ok: 'Yes, cancel order', cancel: 'Keep my order', danger: true }); if (!why) return; try { await busy(btn, () => api(`/orders/${o.number}/cancel?t=${token}`, { method: 'POST', body: { reason: 'Cancelled by customer: ' + why } })); toast('Order cancelled'); load(); } catch (x) { toast(x.message, { err: true }); } } }, t('cancel_order')));
     if (o.can_request) out.append(h('button', { class: 'btn', onclick: () => requestForm(o, token) }, t('request')));
     for (const r of o.requests || []) out.append(h('div', { class: 'card small' }, h('b', null, r.type === 'refund' ? 'Refund request' : 'Replacement request'), ` · ${r.status}`, h('div', { class: 'muted' }, r.reason)));
     if (o.status === 'delivered') out.append(o.all_no_return ? h('p', { class: 'muted small' }, 'These items are sold without return. If something arrived damaged or wrong, please contact us.') : h('p', { class: 'muted small' }, `Damaged or defective? You can ask for ${(o.allowed_requests || []).length === 1 ? (o.allowed_requests[0] === 'refund' ? 'a refund' : 'a replacement') : 'a replacement or refund'} within ${o.return_window_days} days of delivery.`));
     return out;
   }
   function requestForm(o, token) {
-    const okT = o.allowed_requests && o.allowed_requests.length ? o.allowed_requests : ['replace', 'refund'], type = h('select', { class: 'inp' }, ...okT.map(x => h('option', { value: x }, x === 'refund' ? 'Refund' : 'Replacement'))), reason = h('textarea', { class: 'inp', placeholder: 'What is wrong? (damaged, not working, wrong item…)', maxlength: 800 }), files = h('input', { type: 'file', accept: 'image/*', multiple: true, class: 'inp' });
-    const m = modal(h('div', { class: 'stack' }, h('h3', null, t('request')), h('p', { class: 'muted small' }, 'Add clear photos. An unboxing video link can be written in the message.'), type, reason, files, h('button', { class: 'btn', onclick: async e => { const f = new FormData(); f.append('type', type.value); f.append('reason', reason.value); [...files.files].slice(0, 3).forEach(x => f.append('photos', x)); try { const r = await busy(e.currentTarget, () => api(`/orders/${o.number}/request?t=${token}`, { method: 'POST', form: f })); m.close(); toast(r.message); load(); } catch (x) { toast(x.message, { err: true }); } } }, t('send'))));
+    const okT = o.allowed_requests && o.allowed_requests.length ? o.allowed_requests : ['replace', 'refund'], type = glassSelect({ label: 'Request type', value: okT[0], options: okT.map(x => [x, x === 'refund' ? 'Refund' : 'Replacement']) }), reason = h('textarea', { class: 'inp', placeholder: 'What is wrong? (damaged, not working, wrong item…)', maxlength: 800 }), files = h('input', { type: 'file', accept: 'image/*', multiple: true, class: 'inp' });
+    const m = modal(h('div', { class: 'stack' }, h('h3', null, t('request')), h('p', { class: 'muted small' }, 'Add clear photos. An unboxing video link can be written in the message.'), type, reason, files, h('button', { class: 'btn', onclick: async e => { const f = new FormData(); f.append('type', type.value); f.append('reason', reason.value); [...files.files].slice(0, 3).forEach(x => f.append('photos', x)); try { const r = await busy(e.currentTarget, () => api(`/orders/${o.number}/request?t=${token}`, { method: 'POST', form: f })); m.close(); toast(r.message); load(); } catch (x) { toast(x.message, { err: true }); } } }, t('send'))), { guard: () => !!reason.value.trim() });
   }
   async function upiPanel(o, token) {
     let pay; try { pay = await api(`/orders/${o.number}/pay?t=${token}`); } catch (e) { box.append(h('div', { class: 'card box-note warn' }, icon('warn'), h('span', null, e.message))); return; }
@@ -297,7 +313,7 @@ route(/^\/(account|login)$/, async view => {
 route(/^\/profile$/, async view => {
   setTitle(t('profile')); if (!me.customer) return loginView(view);
   const body = h('div', { class: 'seg-body' });
-  const logout = h('button', { class: 'btn ghost sm', onclick: async () => { await api('/auth/logout', { method: 'POST' }); me.customer = null; ls.del('sy_wish'); wish.ids.clear(); location.href = '/'; } }, t('logout'));
+  const logout = h('button', { class: 'btn ghost sm', onclick: async () => { if (!await confirmBox({ title: 'Log out?', text: 'You can log back in anytime with your email.', ok: 'Log out', cancel: 'Stay logged in' })) return; await api('/auth/logout', { method: 'POST' }); me.customer = null; ls.del('sy_wish'); draft.del('checkout'); draft.del('login'); wish.ids.clear(); guardOff(); location.href = '/'; } }, t('logout'));
   const show = async k => {
     if (k === 'addresses') addresses();
     else { profile(); }
@@ -335,33 +351,33 @@ route(/^\/profile$/, async view => {
       const list = await api('/account/addresses');
       swap(body, h('div', { class: 'stack' }, h('div', { class: 'row between' }, h('p', { class: 'muted small', style: { margin: 0 } }, list.length ? `${list.length} saved address${list.length > 1 ? 'es' : ''}` : 'No saved address yet'), h('button', { class: 'btn sm', onclick: () => openForm(null) }, '+ Add new address')),
         list.map(a => h('div', { class: 'card glass-card addr' }, h('div', { class: 'small' }, h('div', { class: 'row', style: { gap: '8px' } }, h('b', null, a.name), a.is_default ? h('span', { class: 'badge soft' }, 'Default') : null), h('div', null, `${a.line1}${a.line2 ? ', ' + a.line2 : ''}, ${a.city}${a.district && a.district !== a.city ? ', ' + a.district : ''}, ${a.state} - ${a.pincode}`), h('div', { class: 'muted' }, a.phone)),
-          h('div', { class: 'row', style: { gap: '8px', marginTop: '10px', flexWrap: 'wrap' } }, h('button', { class: 'btn ghost sm', onclick: () => openForm(a) }, 'Edit'), a.is_default ? null : h('button', { class: 'btn ghost sm', onclick: async () => { await api('/account/addresses/' + a.id + '/default', { method: 'POST' }); addresses(); } }, 'Make default'), h('button', { class: 'btn ghost sm', style: { color: 'var(--err)' }, onclick: async () => { await api('/account/addresses/' + a.id, { method: 'DELETE' }); addresses(); } }, t('remove')))))));
+          h('div', { class: 'row', style: { gap: '8px', marginTop: '10px', flexWrap: 'wrap' } }, h('button', { class: 'btn ghost sm', onclick: () => openForm(a) }, 'Edit'), a.is_default ? null : h('button', { class: 'btn ghost sm', onclick: async () => { await api('/account/addresses/' + a.id + '/default', { method: 'POST' }); addresses(); } }, 'Make default'), h('button', { class: 'btn ghost sm', style: { color: 'var(--err)' }, onclick: async () => { if (!await confirmBox({ title: 'Remove this address?', text: 'It will be deleted from your saved addresses.', ok: 'Remove', cancel: 'Keep it', danger: true })) return; await api('/account/addresses/' + a.id, { method: 'DELETE' }); addresses(); } }, t('remove')))))));
     } catch (e) { swap(body, h('p', { class: 'muted' }, e.message)); }
   }
   show(location.hash === '#addresses' ? 'addresses' : 'profile');
 });
-function loginView(view) {
+function loginView(view, opt = {}) {
   // 4 steps: 1 email -> 2 code -> 3 name + mobile -> 4 address (can be skipped). Each step has its own glass card.
-  let step = 1, tick = null; const keep = { email: '' };
+  let step = 1, tick = null, prevStep = 1; const keep = { email: (draft.get('login') || {}).email || '' };
   const wrapEl = h('div', { class: 'auth-wrap' }, h('div', { class: 'auth-orb o1' }), h('div', { class: 'auth-orb o2' }));
   const card = h('div', { class: 'auth-card' }); const prog = h('div', { class: 'auth-prog' });
   wrapEl.append(h('div', { class: 'auth-col' }, prog, card));
-  const finish = () => { nav('/orders', true); location.reload(); };
+  const finish = () => { const nx = afterLogin.take(); draft.del('login'); guardOff(); nav(nx && !/^\/(login|account)/.test(nx) ? nx : '/orders', true); location.reload(); };
   const afterAuth = async r => { me.customer = r.customer; await wish.sync(); const c = r.customer; if (!c.first_name || !c.phone) { step = 3; paint(); } else finish(); };
   const bar = () => { clear(prog); for (let k = 1; k <= 4; k++) prog.append(h('i', { class: k < step ? 'done' : k === step ? 'on' : '' })); };
   const head = (title, sub) => h('div', { class: 'auth-head' }, h('div', { class: 'auth-mark' }, icon('user')), h('h2', null, title), sub ? h('p', { class: 'muted' }, sub) : null);
   const fld = (label, input) => h('label', { class: 'fl' }, input, h('span', null, label));
   const mk = (type, ph, extra) => h('input', Object.assign({ class: 'fl-in', type, placeholder: ' ' }, extra || {}));
   const paint = () => {
-    clear(card); if (tick) { clearInterval(tick); tick = null; } bar(); card.className = 'auth-card gl' + step; card.style.animation = 'none'; void card.offsetWidth; card.style.animation = '';
+    clear(card); if (tick) { clearInterval(tick); tick = null; } bar(); card.className = 'auth-card gl' + step; slideIn(card, step >= prevStep ? 1 : -1); prevStep = step;
     if (step === 1) {
       const email = mk('email', '', { autocomplete: 'email', inputmode: 'email', value: keep.email });
       const send = async btn => { keep.email = email.value.trim().toLowerCase(); if (!/^\S+@\S+\.\S+$/.test(keep.email)) return toast('Enter a valid email address.', { err: true });
         try { await busy(btn, () => api('/auth/otp/send', { method: 'POST', body: { email: keep.email } })); step = 2; paint(); } catch (x) { toast(x.message, { err: true }); } };
-      card.append(head('Welcome to ' + BOOT.brand.name, 'Log in or create your account with just your email. No password needed.'), fld('Email address', email),
+      card.append(head(opt.gate ? 'Log in to place your order' : 'Welcome to ' + BOOT.brand.name, opt.gate ? 'Your cart is safe. Log in with your email and you will come straight back to checkout.' : 'Log in or create your account with just your email. No password needed.'), fld('Email address', email),
         h('button', { class: 'btn auth-btn', onclick: e => send(e.currentTarget) }, 'Continue'),
         h('p', { class: 'auth-fine' }, 'By continuing you agree to our ', h('a', { class: 'link', href: '/policy/terms', target: '_blank' }, 'Terms'), ' and ', h('a', { class: 'link', href: '/policy/privacy', target: '_blank' }, 'Privacy Policy'), '.'));
-      email.addEventListener('keydown', e => { if (e.key === 'Enter') send(card.querySelector('.auth-btn')); }); setTimeout(() => email.focus(), 60);
+      email.addEventListener('input', () => { const v = email.value.trim(); if (v) draft.set('login', { email: v }); else draft.del('login'); }); email.addEventListener('keydown', e => { if (e.key === 'Enter') send(card.querySelector('.auth-btn')); }); setTimeout(() => email.focus(), 60);
     } else if (step === 2) {
       const boxes = Array.from({ length: 6 }, () => h('input', { class: 'otp-b', inputmode: 'numeric', maxlength: 1, autocomplete: 'one-time-code' }));
       const row = h('div', { class: 'otp-row' }, boxes); let busyNow = false;
@@ -402,7 +418,7 @@ function loginView(view) {
     }
   };
   if (me.customer && (!me.customer.first_name || !me.customer.phone)) step = 3;
-  paint(); view.append(wrapEl);
+  paint(); view.append(wrapEl); guardWatch(wrapEl, () => step === 2);
 }
 route(/^\/reset$/, async (view, m, q) => {
   const pw = h('input', { class: 'inp', type: 'password', autocomplete: 'new-password' });
@@ -420,8 +436,10 @@ function contactForm(kind, q) {
   const B = BOOT.brand, c = me.customer || {};
   const f = { name: h('input', { class: 'inp', value: c.name || '', autocomplete: 'name' }), email: h('input', { class: 'inp', type: 'email', value: c.email || '', autocomplete: 'email' }), phone: h('input', { class: 'inp', inputmode: 'numeric', maxlength: 10, value: c.phone || '' }), order: h('input', { class: 'inp', value: q.get('order') || '' }), subject: h('input', { class: 'inp' }), message: h('textarea', { class: 'inp', maxlength: 3000, rows: 5 }) };
   const out = h('div');
+  let touched = false; const root = (() => {
   return h('div', { class: 'card stack' }, field(t('name'), f.name), h('div', { class: 'grid2' }, field('Email', f.email), field(t('phone'), f.phone)), h('div', { class: 'grid2' }, field(t('order_no') + ' (optional)', f.order), field('Subject', f.subject)), field(t('msg'), f.message),
-    h('button', { class: 'btn', onclick: async e => { try { const r = await busy(e.currentTarget, () => api('/contact', { method: 'POST', body: { kind, name: f.name.value, email: f.email.value, phone: f.phone.value, order_number: f.order.value, subject: f.subject.value, message: f.message.value } })); clear(out).append(h('div', { class: 'box-note' }, icon('check'), h('span', null, r.message + ' Reference: ', h('b', null, r.ref)))); Object.values(f).forEach(x => { x.value = ''; }); } catch (x) { toast(x.message, { err: true }); } } }, t('send')), out);
+    h('button', { class: 'btn', onclick: async e => { try { touched = false; const r = await busy(e.currentTarget, () => api('/contact', { method: 'POST', body: { kind, name: f.name.value, email: f.email.value, phone: f.phone.value, order_number: f.order.value, subject: f.subject.value, message: f.message.value } })); clear(out).append(h('div', { class: 'box-note' }, icon('check'), h('span', null, r.message + ' Reference: ', h('b', null, r.ref)))); Object.values(f).forEach(x => { x.value = ''; }); } catch (x) { toast(x.message, { err: true }); } } }, t('send')), out);
+  })(); root.addEventListener('input', () => { touched = true; }); guardWatch(root, () => touched, true); return root;
 }
 route(/^\/contact$/, async (view, m, q) => {
   setTitle(t('support')); const B = BOOT.brand;

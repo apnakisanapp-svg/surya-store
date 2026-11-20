@@ -177,15 +177,16 @@ export function overlayPopped(e) {
   return false;
 }
 try { if (history.state && history.state.ov) history.replaceState({}, '', location.href); } catch { /* */ }
-export function modal(content, { onClose } = {}) {
+export function modal(content, { onClose, guard } = {}) {
   const scrim = h('div', { class: 'scrim' }), wrap = h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true' });
   const box = h('div', { class: 'box' }, content); wrap.append(box);
   let done = false;
   const vis = () => { if (done) return; done = true; scrim.classList.remove('on'); setTimeout(() => { scrim.remove(); wrap.remove(); }, 200); document.removeEventListener('keydown', esc); onClose && onClose(); };
   const ov = pushOverlay(vis);
   const close = () => { vis(); releaseOverlay(ov); };
-  const esc = e => { if (e.key === 'Escape') close(); };
-  scrim.addEventListener('click', close); document.addEventListener('keydown', esc);
+  const ask = async () => { if (guard && guard()) { if (!await confirmBox({ title: 'Close without sending?', text: 'What you wrote here will be lost.', ok: 'Close', cancel: 'Keep writing' })) return; } close(); };
+  const esc = e => { if (e.key === 'Escape' && !document.querySelector('.gc')) ask(); };
+  scrim.addEventListener('click', ask); document.addEventListener('keydown', esc);
   document.body.append(scrim, wrap); requestAnimationFrame(() => scrim.classList.add('on'));
   return { close, box };
 }
@@ -206,10 +207,70 @@ export function drawer(title, body, footer, { side = 'right', cls = '', onClose 
   return api_;
 }
 
+/* ---------- glass confirm dialog (replaces the browser's confirm box) ---------- */
+export function confirmBox({ title = 'Are you sure?', text = '', ok = 'Yes', cancel = 'No', danger = false, reasons = null } = {}) {
+  return new Promise(res => {
+    let done = false, pick = reasons ? reasons[0] : null, other = null;
+    const scrim = h('div', { class: 'scrim gc-scrim' }), box = h('div', { class: 'gc', role: 'alertdialog', 'aria-modal': 'true', 'aria-label': title });
+    const fin = v => { if (done) return; done = true; scrim.classList.remove('on'); box.classList.remove('on'); document.removeEventListener('keydown', esc); setTimeout(() => { scrim.remove(); box.remove(); }, 220); res(v); };
+    let ov; const close = v => { fin(v); releaseOverlay(ov); };
+    const esc = e => { if (e.key === 'Escape') close(false); };
+    const list = reasons ? h('div', { class: 'gc-reasons' }, ...reasons.map((r, k) => h('button', { type: 'button', class: 'gc-r' + (k === 0 ? ' on' : ''), onclick: e => { pick = r; $$('.gc-r', list).forEach(b => b.classList.toggle('on', b === e.currentTarget)); if (other) other.classList.toggle('hide', !/^other/i.test(r)); } }, r))) : null;
+    if (reasons && reasons.some(r => /^other/i.test(r))) other = h('textarea', { class: 'inp hide', placeholder: 'Tell us a little more (optional)', maxlength: 200 });
+    box.append(h('div', { class: 'gc-ic' + (danger ? ' bad' : '') }, icon(danger ? 'warn' : 'info')), h('h3', null, title), text ? h('p', { class: 'muted' }, text) : null, list, other,
+      h('div', { class: 'gc-btns' }, h('button', { class: 'btn ghost', onclick: () => close(false) }, cancel), h('button', { class: 'btn' + (danger ? ' danger' : ''), onclick: () => close(reasons ? ((/^other/i.test(pick) && other && other.value.trim()) ? 'Other: ' + other.value.trim() : pick) : true) }, ok)));
+    ov = pushOverlay(() => fin(false));
+    scrim.addEventListener('click', () => close(false)); document.addEventListener('keydown', esc);
+    document.body.append(scrim, box); requestAnimationFrame(() => { scrim.classList.add('on'); box.classList.add('on'); });
+  });
+}
+
+/* ---------- glass dropdown (replaces the plain browser <select>) ---------- */
+export function glassSelect({ options, value, label, onchange }) {
+  let cur = value; const wrap = h('div', { class: 'gsel' });
+  const btn = h('button', { type: 'button', class: 'gsel-b', 'aria-haspopup': 'listbox', 'aria-expanded': 'false', 'aria-label': label || 'Choose' });
+  const list = h('div', { class: 'gsel-l', role: 'listbox' });
+  const close = () => { wrap.classList.remove('open'); btn.setAttribute('aria-expanded', 'false'); document.removeEventListener('click', away); document.removeEventListener('keydown', key); };
+  const away = e => { if (!wrap.contains(e.target)) close(); };
+  const key = e => { if (e.key === 'Escape') { close(); btn.focus(); } };
+  const paint = () => {
+    clear(btn).append(h('span', null, (options.find(o => o[0] === cur) || options[0])[1]), icon('chev'));
+    clear(list).append(...options.map(([v, l]) => h('button', { type: 'button', role: 'option', class: 'gsel-o' + (v === cur ? ' on' : ''), 'aria-selected': String(v === cur), onclick: () => { const ch = v !== cur; cur = v; paint(); close(); if (ch && onchange) onchange(v); } }, h('span', null, l), v === cur ? icon('check') : null)));
+  };
+  btn.addEventListener('click', () => { if (wrap.classList.contains('open')) return close(); wrap.classList.add('open'); btn.setAttribute('aria-expanded', 'true'); setTimeout(() => { document.addEventListener('click', away); document.addEventListener('keydown', key); }, 0); });
+  paint(); wrap.append(btn, list);
+  Object.defineProperty(wrap, 'value', { get: () => cur, set: v => { cur = v; paint(); } });
+  return wrap;
+}
+
+/* ---------- leave guard: asks before a half-filled form is thrown away ---------- */
+let guardFn = null, curUrl = location.pathname + location.search;
+export function guardWatch(root, extra, only) { guardFn = () => (extra && extra()) || (only ? false :  [...root.querySelectorAll('input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=hidden]),textarea')].some(e => e.value.trim())); }
+export function guardOff() { guardFn = null; }
+const dirty = () => { try { return !!(guardFn && guardFn()); } catch { return false; } };
+const leaveAsk = () => confirmBox({ title: 'Leave this page?', text: 'You have started filling this in. If you leave now, anything not saved will be lost.', ok: 'Leave', cancel: 'Stay' });
+window.addEventListener('beforeunload', e => { if (dirty()) { e.preventDefault(); e.returnValue = ''; } });
+
+/* ---------- drafts (24 h, this device only) and "after login go back here" ---------- */
+export const draft = {
+  get(k) { const o = ls.get('sy_dr_' + k, null); if (!o || !o.t || Date.now() - o.t > 864e5) { if (o) ls.del('sy_dr_' + k); return null; } return o.v; },
+  set(k, v) { ls.set('sy_dr_' + k, { t: Date.now(), v }); },
+  del(k) { ls.del('sy_dr_' + k); },
+};
+export const afterLogin = {
+  set(u) { try { sessionStorage.setItem('sy_next', u); } catch { /* */ } },
+  peek() { try { return sessionStorage.getItem('sy_next') || ''; } catch { return ''; } },
+  take() { const u = this.peek(); try { sessionStorage.removeItem('sy_next'); } catch { /* */ } return u; },
+};
+/* slide a freshly painted step in: dir 1 = from the right, -1 = from the left */
+export function slideIn(el, dir) { if (!el) return; el.classList.remove('sl-f', 'sl-b'); void el.offsetWidth; el.classList.add(dir < 0 ? 'sl-b' : 'sl-f'); }
+
 /* ---------- router ---------- */
 const routes = [];
 export const route = (re, fn) => routes.push([re, fn]);
 export const nav = (url, replace) => {
+  if (dirty()) { leaveAsk().then(ok => { if (ok) { guardOff(); nav(url, replace); } }); return; }
+  if (!me.customer && /^\/(login|account)$/.test(url.split(/[?#]/)[0]) && !/^\/(login|account)$/.test(location.pathname) && !afterLogin.peek()) afterLogin.set(location.pathname + location.search);
   if (pendingBack > 0) { queuedNav = () => nav(url, replace); return; } // an overlay is still stepping back: go after it
   let open = 0;
   if (ovStack.length) { const o = ovStack.splice(0); open = o.length; o.reverse().forEach(x => x.onPop()); replace = true; } // reuse the overlay's history entry
@@ -302,12 +363,13 @@ export function startRouter(el) {
     if (u.origin !== location.origin || /^\/(api|media|sitemap|robots)/.test(u.pathname) || u.hash && u.pathname === location.pathname) return;
     e.preventDefault(); nav(u.pathname + u.search + u.hash);
   });
-  window.addEventListener('popstate', e => { if (overlayPopped(e)) return; backNav = true; render(); });
+  window.addEventListener('popstate', e => { if (overlayPopped(e)) return; if (dirty()) { try { history.pushState({}, '', curUrl); } catch { /* */ } leaveAsk().then(ok => { if (ok) { guardOff(); history.go(-1); } }); return; } backNav = true; render(); });
   render();
 }
 let token = 0;
 export async function render() {
   const my = ++token, path = location.pathname.replace(/\/+$/, '') || '/', key = location.pathname + location.search, goBack = backNav;
+  guardFn = null; curUrl = key; // each page registers its own guard
   scrKey = null; // the new page's own scrolling must not overwrite the old page's saved position
   bus.emit('route', path);
   for (const [re, fn] of routes) {

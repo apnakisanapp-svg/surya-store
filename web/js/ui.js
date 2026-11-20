@@ -1,4 +1,4 @@
-import { BOOT, h, $, $$, clear, icon, t, tr, lang, setLang, bus, api, money, cart, wish, me, ls, toast, drawer, modal, nav, debounce, sid, pushOverlay, releaseOverlay } from './core.js';
+import { BOOT, h, $, $$, clear, icon, t, tr, lang, setLang, bus, api, money, cart, wish, me, ls, toast, drawer, modal, nav, debounce, sid, pushOverlay, releaseOverlay, confirmBox, guardOff } from './core.js';
 
 /* ---------- logo ---------- */
 let LOGO_N = 0;
@@ -163,7 +163,7 @@ function acctMenu() {
   const hl = h('span', { class: 'am-hl', 'aria-hidden': 'true' });
   const list = h('div', { class: 'am-list' }, hl,
     item('/profile', 'My profile', 'user'), item('/orders', 'My orders', 'box'), item('/orders#track', 'Track order', 'search'), BOOT.store.wishlist ? item('/wishlist', 'Wishlist', 'heart') : null, item('/profile#addresses', 'Addresses', 'home'));
-  const out = h('button', { class: 'am-i out', onclick: async () => { try { await api('/auth/logout', { method: 'POST' }); } catch (e) { /* ignore */ } location.href = '/'; } }, 'Log out');
+  const out = h('button', { class: 'am-i out', onclick: async () => { if (!await confirmBox({ title: 'Log out?', text: 'You can log back in anytime with your email.', ok: 'Log out', cancel: 'Stay logged in' })) return; guardOff(); try { await api('/auth/logout', { method: 'POST' }); } catch (e) { /* ignore */ } location.href = '/'; } }, 'Log out');
   const menu = h('div', { class: 'am', role: 'menu' }, h('div', { class: 'am-head' }, h('span', { class: 'am-av' }, (first[0] || '?').toUpperCase()), h('div', null, h('b', null, first), h('span', null, c.email))), list, out);
   // sliding glass highlight that follows the pointer / keyboard focus
   const moveHl = el => { hl.style.opacity = '1'; hl.style.height = el.offsetHeight + 'px'; hl.style.transform = `translateY(${el.offsetTop}px)`; };

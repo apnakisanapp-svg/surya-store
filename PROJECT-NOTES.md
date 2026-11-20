@@ -146,3 +146,9 @@ GST/BIS advice, final policy wording, real photos and logo, payment gateway KYC.
 - Customer messages rewritten in a warm VIP tone (settings.js messages) + new `cod_advance` message; vars {{advance}} {{balance}} {{brand}}. NOTE: if the owner already saved templates in Admin > Message templates, those saved texts stay; delete/reset them there to get the new wording.
 - Messages to send: "Sab Done" button, per-message Done, record on the order ("Message sent to customer"), cards on phones. API: POST /outbox/done-all.
 - Orders list: cards on phones with product photo + name (+N more), total, payment line, status colour, next action; table on PC has a photo column.
+
+## Release 3 (login gate, drafts, glass dialogs)
+- Checkout needs login (store.guest_checkout default false; one-time migration in start.js turns it off once; admin Features switch can turn it on).
+- core.js: confirmBox (glass popup, reasons), guardWatch/guardOff (leave confirm: nav, back, beforeunload), draft (24h), afterLogin (return page), slideIn, glassSelect.
+- Checkout draft key sy_dr_checkout; login email draft sy_dr_login; cleared on order/logout.
+- CSS block "Release 3" at end of app.css; .hscroll has scroll-padding so first card keeps its gap.

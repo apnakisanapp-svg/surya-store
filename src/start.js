@@ -15,6 +15,14 @@ async function main() {
   const { now } = require('./shared/util');
   const { makeBackup } = require('./admin/routes-core');
   const created = seed.ensureBaseline();
+  // Release 3, one time only: checkout now needs login. Turn guest checkout off once (the owner can switch it on again in Settings).
+  try {
+    const db0 = require('./shared/db');
+    if (!db0.prepare("SELECT 1 FROM settings WHERE key='migr_login_gate'").get()) {
+      settings.patch('store', { guest_checkout: false });
+      db0.prepare("INSERT INTO settings(key,value,updated_at) VALUES('migr_login_gate','1',?)").run(now());
+    }
+  } catch (e) { console.error('login-gate migration:', e.message); }
   const pub = await require('./public/server').start();
   const adm = await require('./admin/server').start();
   if (created) {

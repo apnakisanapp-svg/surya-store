@@ -18,7 +18,7 @@ const DEFAULTS = {
   announcement: { enabled: true, text: 'Free shipping on orders above ₹499', text_hi: '₹499 se upar ke orders par free shipping', link: '/shop', bg: '', fg: '' },
   store: {
     maintenance: false, maintenance_message: 'We will be back shortly.', default_lang: 'en', language_toggle: true, dark_toggle: true,
-    guest_checkout: true, currency: '₹', cart_expiry_days: 14, low_stock_default: 3, show_stock_below: 5,
+    guest_checkout: false, currency: '₹', cart_expiry_days: 14, low_stock_default: 3, show_stock_below: 5,
     recently_viewed: true, wishlist: true, reviews: true, show_sold_out: true, pwa: true,
   },
   payments: {
