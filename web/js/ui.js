@@ -188,30 +188,7 @@ function newsletterBox() {
 }
 
 /* ---------- search overlay ---------- */
-export function openSearch() {
-  const scrim = h('div', { class: 'scrim on' }), list = h('div', { class: 'sug' });
-  const inp = h('input', { class: 'inp', type: 'search', placeholder: t('search'), 'aria-label': t('search'), autocomplete: 'off', enterkeyhint: 'search' });
-  const vis = () => { pan.remove(); scrim.remove(); document.removeEventListener('keydown', esc); };
-  const ov = pushOverlay(vis);
-  const close = () => { vis(); releaseOverlay(ov); };
-  const esc = e => { if (e.key === 'Escape') close(); };
-  const go = q => { close(); nav('/shop?q=' + encodeURIComponent(q)); };
-  const pan = h('div', { class: 'search-pan', role: 'dialog', 'aria-label': t('search') }, h('div', { class: 'wrap' }, h('form', { class: 'row', style: { flexWrap: 'nowrap' }, onsubmit: e => { e.preventDefault(); if (inp.value.trim()) go(inp.value.trim()); } }, h('div', { class: 'grow' }, inp), h('button', { type: 'button', class: 'ibtn', 'aria-label': t('close'), onclick: close }, icon('x'))), list));
-  scrim.addEventListener('click', close); document.addEventListener('keydown', esc); document.body.append(scrim, pan); inp.focus();
-  const popular = (BOOT.search && BOOT.search.popular) || [];
-  if (popular.length) list.append(h('div', { class: 'row' }, popular.map(q => h('button', { class: 'chip', onclick: () => go(q) }, q))));
-  const run = debounce(async () => {
-    const q = inp.value.trim(); if (q.length < 2) return;
-    try {
-      const r = await api('/suggest?q=' + encodeURIComponent(q)); clear(list);
-      if (r.fallback) list.append(h('p', { class: 'fb-sug muted small' }, `${t('fb_title')} “${q}” · ${t('fb_text')}`));
-      for (const c of r.categories) list.append(h('a', { href: `/shop?category=${c.slug}`, onclick: close }, h('b', null, tr(c, 'name')), h('span', { class: 'muted small' }, 'Category')));
-      for (const p of r.products) list.append(h('a', { href: `/p/${p.slug}`, onclick: close }, p.image ? h('img', { src: p.image, alt: '', width: 44, height: 44 }) : h('span', { style: { width: '44px' } }), h('span', { class: 'grow' }, tr(p, 'name')), h('b', null, money(p.price))));
-      if (r.products.length || r.categories.length) list.append(h('a', { href: '/shop?q=' + encodeURIComponent(q), onclick: close }, h('span', { class: 'link' }, `${t('all')} → "${q}"`)));
-    } catch { /* ignore */ }
-  }, 220);
-  inp.addEventListener('input', run);
-}
+export function openSearch() { nav('/search'); }
 
 /* ---------- cart drawer ---------- */
 export async function priceNow(extra = {}) {

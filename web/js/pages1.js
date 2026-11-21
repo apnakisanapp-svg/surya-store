@@ -82,13 +82,58 @@ route(/^\/shop$/, async (view, m, q) => {
   const chips = h('div', { class: 'chips' });
   const sync = () => { clear(chips).append(h('button', { class: 'chip' + (!st.category ? ' on' : ''), onclick: () => { st.category = ''; sync(); load(true); } }, t('all')), ...BOOT.categories.filter(c => !c.parent_id).map(c => h('button', { class: 'chip' + (st.category === c.slug ? ' on' : ''), onclick: () => { st.category = c.slug; sync(); load(true); } }, tr(c, 'name')))); minI.value = st.min; maxI.value = st.max; };
   sync();
-  view.append(h('div', { class: 'wrap', style: { paddingTop: '24px', paddingBottom: '20px' } }, h('div', { class: 'row between' }, h('h1', { class: 'h1', style: { fontSize: 'clamp(1.8rem,5vw,3rem)' } }, st.q ? `“${st.q}”` : cat ? tr(cat, 'name') : t('shop')), count),
+  view.append(h('div', { class: 'wrap', style: { paddingTop: '24px', paddingBottom: '20px' } }, st.q ? h('a', { class: 'sp-pill', href: '/search?q=' + encodeURIComponent(st.q), 'aria-label': 'Change search' }, icon('search'), h('span', null, st.q), h('span', { class: 'sp-pill-x' }, icon('x'))) : null, h('div', { class: 'row between' }, h('h1', { class: 'h1', style: { fontSize: 'clamp(1.8rem,5vw,3rem)' } }, st.q ? `“${st.q}”` : cat ? tr(cat, 'name') : t('shop')), count),
     h('div', { class: 'shop-top' }, BOOT.filters.category ? chips : null),
     h('div', { class: 'filters' }, h('div', null, sortSel), BOOT.filters.price ? h('div', { class: 'row', style: { flexWrap: 'nowrap', gap: '8px' } }, minI, maxI) : null, BOOT.filters.stock ? h('div', { class: 'row' }, stock) : null, h('div', { class: 'row' }, offers)), grid, more));
   const back = wasBack(), want = back ? pagesSeen() : 1;
   if (!back) pagesSeen(1);
   await load(true);
   for (let i = 2; i <= want; i++) { st.page = i; await load(false); } // coming back: bring the earlier 'Load more' pages back too, so the scroll spot exists
+});
+
+
+/* ================= SEARCH PAGE (full page, like a shopping app) ================= */
+const recents = {
+  get() { const l = ls.get('sy_recent', []); return Array.isArray(l) ? l.filter(x => typeof x === 'string').slice(0, 8) : []; },
+  add(q) { ls.set('sy_recent', [q, ...this.get().filter(x => x.toLowerCase() !== q.toLowerCase())].slice(0, 8)); },
+  del(q) { ls.set('sy_recent', this.get().filter(x => x !== q)); },
+  clear() { ls.del('sy_recent'); },
+};
+route(/^\/search$/, async (view, m, params) => {
+  setTitle(t('search'));
+  const inp = h('input', { class: 'sp-in', type: 'search', value: params.get('q') || '', placeholder: t('search'), 'aria-label': t('search'), autocomplete: 'off', enterkeyhint: 'search' });
+  const clr = h('button', { type: 'button', class: 'sp-x hide', 'aria-label': 'Clear', onclick: () => { inp.value = ''; inp.focus(); onType(); } }, icon('x'));
+  const body = h('div', { class: 'sp-body wrap' });
+  const go = q => { q = (q || '').trim(); if (!q) return; recents.add(q); nav('/shop?q=' + encodeURIComponent(q)); };
+  const back = h('button', { type: 'button', class: 'sp-back', 'aria-label': t('close'), onclick: () => (history.length > 1 ? history.back() : nav('/')) }, icon('chevl'));
+  const bar = h('form', { class: 'sp-bar' }, back, h('div', { class: 'sp-field' }, icon('search'), inp, clr), h('button', { class: 'sp-go', type: 'submit' }, 'Search'));
+  bar.addEventListener('submit', e => { e.preventDefault(); go(inp.value); });
+  view.append(h('div', { class: 'sp' }, bar, body));
+  function idle() {
+    clear(body);
+    const rec = recents.get(), popular = (BOOT.search && BOOT.search.popular) || [];
+    if (rec.length) body.append(h('div', { class: 'sp-sec' }, h('div', { class: 'row between' }, h('b', null, 'Recent searches'), h('button', { class: 'link small', onclick: () => { recents.clear(); idle(); } }, 'Clear all')),
+      h('div', { class: 'sp-list' }, rec.map(q => h('div', { class: 'sp-row' }, h('button', { class: 'sp-rt', onclick: () => go(q) }, icon('clock'), h('span', null, q)), h('button', { class: 'sp-rm', 'aria-label': 'Remove', onclick: () => { recents.del(q); idle(); } }, icon('x')))))));
+    if (popular.length) body.append(h('div', { class: 'sp-sec' }, h('b', null, 'Popular searches'), h('div', { class: 'row', style: { marginTop: '10px' } }, popular.map(q => h('button', { class: 'chip', onclick: () => go(q) }, q)))));
+    if (!rec.length && !popular.length) body.append(h('p', { class: 'muted center', style: { marginTop: '40px' } }, 'Type what you are looking for.'));
+  }
+  let seq = 0;
+  const run = debounce(async () => {
+    const q = inp.value.trim(), my = ++seq; if (q.length < 2) return;
+    try {
+      const r = await api('/suggest?q=' + encodeURIComponent(q)); if (my !== seq) return; clear(body);
+      const list = h('div', { class: 'sp-sug' });
+      if (r.fallback) body.append(h('p', { class: 'fb-sug muted small' }, `${t('fb_title')} “${q}” · ${t('fb_text')}`));
+      for (const c of r.categories) list.append(h('a', { href: `/shop?category=${c.slug}` }, h('b', null, tr(c, 'name')), h('span', { class: 'muted small' }, 'Category')));
+      for (const p of r.products) list.append(h('a', { href: `/p/${p.slug}`, onclick: () => recents.add(q) }, p.image ? h('img', { src: p.image, alt: '', width: 48, height: 48 }) : h('span', { style: { width: '48px' } }), h('span', { class: 'grow' }, tr(p, 'name')), h('b', null, money(p.price))));
+      list.append(h('a', { href: '/shop?q=' + encodeURIComponent(q), onclick: () => recents.add(q) }, h('span', { class: 'link' }, `${t('all')} → "${q}"`)));
+      body.append(list);
+      if (!r.products.length && !r.categories.length) { clear(body).append(h('div', { class: 'center muted', style: { marginTop: '40px' } }, h('p', null, `Nothing found for “${q}”.`), h('p', { class: 'small' }, 'Check the spelling or try a shorter word.')), ...[]); }
+    } catch { /* ignore */ }
+  }, 200);
+  function onType() { clr.classList.toggle('hide', !inp.value); if (inp.value.trim().length < 2) { seq++; idle(); } else run(); }
+  inp.addEventListener('input', onType); onType(); if (!inp.value) idle();
+  setTimeout(() => { try { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); } catch { /* */ } }, 60);
 });
 
 /* ================= PRODUCT ================= */

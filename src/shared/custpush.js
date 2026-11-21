@@ -6,6 +6,7 @@ const { now, itemImage } = require('./util');
 
 db.exec(`CREATE TABLE IF NOT EXISTS push_cust(id INTEGER PRIMARY KEY, endpoint TEXT UNIQUE NOT NULL, p256dh TEXT NOT NULL, auth TEXT NOT NULL, customer_id INTEGER NOT NULL, ua TEXT, offers INTEGER DEFAULT 1, consent_at TEXT, created_at TEXT NOT NULL, last_ok TEXT, last_offer_at TEXT)`);
 db.exec(`CREATE INDEX IF NOT EXISTS idx_pushcust_c ON push_cust(customer_id)`);
+db.exec(`CREATE TABLE IF NOT EXISTS cart_snap(customer_id INTEGER PRIMARY KEY, items TEXT NOT NULL, updated_at TEXT NOT NULL, reminded_at TEXT)`);
 db.exec(`CREATE TABLE IF NOT EXISTS push_sent(kind TEXT NOT NULL, key TEXT NOT NULL, at TEXT NOT NULL, PRIMARY KEY(kind,key))`);
 
 function subscribe(customerId, sub, ua) {
@@ -55,6 +56,8 @@ const buyActions = [{ action: 'view', title: 'View' }, { action: 'buy', title: '
 const COPY = {
   confirmed: o => ({ title: `Order confirmed ✨`, body: `Hi ${first(o.name)}, your order ${o.number} is confirmed. We are getting it ready for you.` }),
   shipped: o => ({ title: `On its way 🚚`, body: `Hi ${first(o.name)}, your order ${o.number} has been shipped.${o.tracking_no ? ' Tracking: ' + o.tracking_no : ''}` }),
+  cancelled: o => ({ title: `Order cancelled`, body: `Hi ${first(o.name)}, your order ${o.number} has been cancelled. If you had paid, we will get in touch about your refund.` }),
+  payment_rejected: o => ({ title: `Payment needs a check`, body: `Hi ${first(o.name)}, we could not match the payment for order ${o.number}. Please open the order and send the transaction ID again.` }),
   delivered: o => ({ title: `Delivered 🎉`, body: `Hi ${first(o.name)}, your order ${o.number} has arrived. We hope you love it!` }),
 };
 const orderUpdate = (o, kind) => later(async () => {
@@ -84,6 +87,35 @@ const newProduct = p => later(async () => {
   await deliver(rows, { title: `Just arrived ✨`, body: `${p.name}, now at ${inr(p.price)}. Be the first to see it.`, ...prodCard(p), actions: buyActions }, { offer: true });
 });
 
+
+/* ---- cart reminder: one gentle nudge ~3 hours after a cart is left (offer rules apply) ---- */
+function saveCart(customerId, list) {
+  const items = (Array.isArray(list) ? list : []).slice(0, 30).map(i => ({ p: Math.trunc(Number(i.product_id)), v: i.variant_id ? Math.trunc(Number(i.variant_id)) : null, q: Math.max(1, Math.min(99, Math.trunc(Number(i.qty) || 1))) })).filter(i => i.p > 0);
+  if (!items.length) { db.prepare('DELETE FROM cart_snap WHERE customer_id=?').run(customerId); return; }
+  const cur = db.prepare('SELECT items FROM cart_snap WHERE customer_id=?').get(customerId);
+  if (cur && cur.items === JSON.stringify(items)) return; // unchanged: keep the timer
+  db.prepare('INSERT INTO cart_snap(customer_id,items,updated_at,reminded_at) VALUES(?,?,?,NULL) ON CONFLICT(customer_id) DO UPDATE SET items=excluded.items, updated_at=excluded.updated_at, reminded_at=NULL').run(customerId, JSON.stringify(items), now());
+}
+const clearCart = customerId => { try { db.prepare('DELETE FROM cart_snap WHERE customer_id=?').run(customerId); } catch { /* */ } };
+async function cartSweep(afterHours = 3) {
+  if (quiet()) return 0;
+  const cutoff = new Date(Date.now() - afterHours * 3600e3).toISOString(), oldest = new Date(Date.now() - 72 * 3600e3).toISOString();
+  const snaps = db.prepare('SELECT * FROM cart_snap WHERE reminded_at IS NULL AND updated_at<=? AND updated_at>=?').all(cutoff, oldest);
+  let n = 0;
+  for (const sn of snaps) {
+    const rows = offerOk(db.prepare('SELECT * FROM push_cust WHERE customer_id=?').all(sn.customer_id));
+    db.prepare('UPDATE cart_snap SET reminded_at=? WHERE customer_id=?').run(now(), sn.customer_id); // one nudge per cart, even if we cannot send
+    if (!rows.length) continue;
+    let items = []; try { items = JSON.parse(sn.items); } catch { /* */ }
+    const prods = items.map(i => db.prepare("SELECT * FROM products WHERE id=? AND status='published' AND deleted_at IS NULL AND stock>0").get(i.p)).filter(Boolean);
+    if (!prods.length) continue;
+    const c = db.prepare('SELECT first_name,name FROM customers WHERE id=?').get(sn.customer_id) || {}, who = first(c.first_name || c.name);
+    const p0 = prods[0], more = prods.length - 1;
+    n += await deliver(rows, { title: `Your cart is waiting 🛍️`, body: `Hi ${who}, ${p0.name}${more > 0 ? ` and ${more} more` : ''} ${more > 0 ? 'are' : 'is'} still in your cart. Ready when you are.`, ...prodCard(p0), url: '/cart', tag: 'cart', actions: [{ action: 'view', title: 'View cart' }] }, { offer: true }) ? 1 : 0;
+  }
+  return n;
+}
+
 /* ---- owner broadcast ---- */
 async function broadcast({ title, body, url, productId }) {
   const p = productId ? db.prepare('SELECT * FROM products WHERE id=?').get(productId) : null;
@@ -93,4 +125,4 @@ async function broadcast({ title, body, url, productId }) {
   return { sent, skipped: all.length - rows.length, quiet: quiet() };
 }
 
-module.exports = { subscribe, unsubscribe, setOffers, status, countAll, orderUpdate, priceDrop, backInStock, newProduct, broadcast, quiet, offerOk };
+module.exports = { saveCart, clearCart, cartSweep, subscribe, unsubscribe, setOffers, status, countAll, orderUpdate, priceDrop, backInStock, newProduct, broadcast, quiet, offerOk };

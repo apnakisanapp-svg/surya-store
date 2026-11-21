@@ -1,3 +1,4 @@
 1. Zip ko fresh khali folder me extract karo.
-2. https://github.com/apnakisanapp-svg/surya-store/upload/main kholo, FOLDER web + file PROJECT-NOTES.md drag karo (path web/css/app.css dikhna chahiye). Commit.
+2. https://github.com/apnakisanapp-svg/surya-store/upload/main kholo, FOLDERS src, web + file PROJECT-NOTES.md drag karo (src/shared/custpush.js jaise paths dikhne chahiye). Commit.
 3. AWS terminal: cd ~/surya-store && git pull && sudo systemctl restart surya && sudo systemctl is-active surya
+(Release 4 pehle upload ho chuka ho. npm install nahi chahiye.)

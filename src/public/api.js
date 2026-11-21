@@ -370,6 +370,7 @@ acct.post('/addresses/:id/default', (req, res) => {
   db.prepare('UPDATE addresses SET is_default=0 WHERE customer_id=?').run(req.customer.id); db.prepare('UPDATE addresses SET is_default=1 WHERE id=?').run(id); res.json({ ok: true });
 });
 acct.delete('/addresses/:id', (req, res) => { db.prepare('DELETE FROM addresses WHERE id=? AND customer_id=?').run(int(req.params.id), req.customer.id); res.json({ ok: true }); });
+acct.post('/push/cart', (req, res) => { custpush.saveCart(req.customer.id, req.body?.items); res.json({ ok: true }); });
 acct.get('/push/info', (req, res) => res.json({ key: push.publicKey(), ...custpush.status(req.customer.id) }));
 acct.post('/push/subscribe', (req, res) => { if (!custpush.subscribe(req.customer.id, req.body?.subscription, req.get('user-agent'))) throw bad('This phone could not be registered for notifications.'); res.json({ ok: true, ...custpush.status(req.customer.id) }); });
 acct.post('/push/unsubscribe', (req, res) => { custpush.unsubscribe(req.customer.id, req.body?.endpoint); res.json({ ok: true, ...custpush.status(req.customer.id) }); });

@@ -288,6 +288,7 @@ function verifyPayment(orderId, actor, ok, note) {
   }
   db.prepare("UPDATE orders SET payment_status='rejected', utr=NULL, updated_at=? WHERE id=?").run(now(), orderId);
   addEvent(orderId, o.status, 'Payment rejected' + (note ? ': ' + note : ''), actor);
+  try { custpush.orderUpdate(o, 'payment_rejected'); } catch (e) { /* alerts are optional */ }
   mail.queueOrderMessage(db.prepare('SELECT * FROM orders WHERE id=?').get(orderId), 'payment_rejected');
   return db.prepare('SELECT * FROM orders WHERE id=?').get(orderId);
 }

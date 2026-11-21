@@ -35,6 +35,7 @@ async function main() {
   // background jobs
   const safe = (name, fn) => async () => { try { await fn(); } catch (e) { console.error(`[job ${name}]`, e.message); } };
   setInterval(safe('expire', () => { const n = orders.expireUnpaid(); if (n) console.log(`  ${n} unpaid UPI order(s) cancelled and stock released`); }), 60 * 1000);
+  setInterval(safe('cart-reminder', () => require('./shared/custpush').cartSweep()), 10 * 60 * 1000).unref();
   setInterval(safe('sessions', () => auth.cleanupSessions()), 60 * 60 * 1000);
   setInterval(safe('review-ask', () => {
     const days = settings.get('returns').auto_review_days;

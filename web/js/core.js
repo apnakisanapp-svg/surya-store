@@ -34,7 +34,7 @@ export const sid = (() => { let s = ls.get('sy_sid'); if (!s) { s = Math.random(
 /* ---------- icons (inline, currentColor) ---------- */
 const P = {
   bag: 'M6 7h12l1 13H5L6 7zM9 7a3 3 0 016 0', search: 'M11 4a7 7 0 100 14 7 7 0 000-14zM21 21l-5-5', user: 'M12 12a4 4 0 100-8 4 4 0 000 8zM4 21c0-4 4-6 8-6s8 2 8 6', heart: 'M12 21s-8-5.5-8-11a4.5 4.5 0 018-2.8A4.5 4.5 0 0120 10c0 5.5-8 11-8 11z',
-  menu: 'M4 7h16M4 12h16M4 17h16', x: 'M6 6l12 12M18 6L6 18', card: 'M3 6h18v12H3zM3 10h18', refresh: 'M20 12a8 8 0 10-2.3 5.7M20 5v5h-5', chat: 'M4 5h16v11H9l-5 4V5z',
+  clock: 'M12 7v5l3 2M12 3a9 9 0 100 18 9 9 0 000-18z', menu: 'M4 7h16M4 12h16M4 17h16', x: 'M6 6l12 12M18 6L6 18', card: 'M3 6h18v12H3zM3 10h18', refresh: 'M20 12a8 8 0 10-2.3 5.7M20 5v5h-5', chat: 'M4 5h16v11H9l-5 4V5z',
   truck: 'M2 6h11v9H2zM13 9h4l4 3v3h-8zM6 18a2 2 0 100-.1M17 18a2 2 0 100-.1', check: 'M5 12l5 5 9-10', warn: 'M12 4l9 16H3L12 4zM12 10v4M12 17v.5', info: 'M12 3a9 9 0 100 18 9 9 0 000-18zM12 11v6M12 7.5v.5',
   chev: 'M9 6l6 6-6 6', chevl: 'M15 6l-6 6 6 6', up: 'M6 14l6-6 6 6', share: 'M12 3v12M7 8l5-5 5 5M5 14v6h14v-6', wa: 'M4 20l1.3-4.2A8 8 0 1112 20a8 8 0 01-3.6-.9L4 20zM9 9c0 3 3 6 6 6l1.2-1.5-2-1-1 .6a4 4 0 01-1.8-1.8l.6-1-1-2L9 9z',
   home: 'M4 11l8-7 8 7v9h-5v-6H9v6H4v-9z', grid: 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z',

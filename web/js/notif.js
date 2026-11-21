@@ -1,5 +1,5 @@
 // Customer phone notifications: a friendly glass card first, Chrome's own prompt only after the customer says yes.
-import { h, api, me, bus, ls, icon, toast, BOOT } from './core.js';
+import { h, api, me, bus, ls, icon, toast, BOOT, cart, debounce } from './core.js';
 
 const DAY = 864e5, SNOOZE = 7 * DAY;
 export const supported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
@@ -52,6 +52,9 @@ export async function ask(reason, force, tries = 0) {
     sheet({ title, text, yes: 'Yes, notify me', no: 'Not now', onNo: later, onYes: async () => { try { const r = await enable(); if (r === 'granted') toast('Done! You will hear from us.'); else later(); } catch { toast('Could not turn on notifications. Try again later.', { err: true }); } } });
   } catch { /* optional */ }
 }
+// the server keeps a copy of a logged-in, notification-enabled customer's cart so it can send one gentle reminder
+const syncCart = debounce(() => { try { if (me.customer && supported() && Notification.permission === 'granted') api('/account/push/cart', { method: 'POST', body: { items: cart.payload() } }).catch(() => {}); } catch { /* */ } }, 4000);
+bus.on('cart', syncCart); setTimeout(syncCart, 3000);
 bus.on('ordered', () => ask('order'));
 bus.on('wished', () => ask('heart'));
 
