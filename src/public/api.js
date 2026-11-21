@@ -134,29 +134,37 @@ api.post('/cart/price', asyncH((req, res) => {
   const r = pricing.priceCart(b.items, { coupon: b.coupon, pincode: b.pincode, method: b.method, gift: !!b.gift, identity: { email: b.email, phone: b.phone, customer_id: req.customer?.id } });
   res.json(r);
 }));
-api.get('/pincode/:pin', (req, res) => {
+api.get('/pincode/:pin', lim(1, 40), asyncH(async (req, res) => {
   const battery = req.query.product ? !!db.prepare('SELECT has_battery h FROM products WHERE id=?').get(int(req.query.product))?.h : false;
-  res.json(pricing.checkPincode(req.params.pin, { battery }));
-});
+  const r = pricing.checkPincode(req.params.pin, { battery });
+  if (!r.ok || !r.valid) return res.json(r);
+  // Real check: the pincode must exist in India Post's list. If their service is down we still answer, but only as an estimate.
+  const info = await pinLookup(String(req.params.pin));
+  if (!info.found && !info.unknown) return res.json({ ok: false, valid: false, cod: false, message: 'We could not find this pincode. Please check the 6 digits.' });
+  res.json({ ...r, estimated: true, place: info.found ? [info.city || info.district, info.state].filter(Boolean).join(', ') : '' });
+}));
 api.get('/coupons', (req, res) => res.json(db.prepare("SELECT code,type,value,min_cart,max_discount,description,expires_at FROM coupons WHERE active=1 AND show_public=1 AND deleted_at IS NULL AND (expires_at IS NULL OR expires_at>?) AND (starts_at IS NULL OR starts_at<=?)").all(now(), now())));
 
 /* ---------- checkout ---------- */
 const ctxOf = req => ({ customer: req.customer, ip: ipOf(req), ua: req.headers['user-agent'] });
 /* pincode -> district/state helper. Only the 6-digit pincode leaves our server (India Post's free public data); answers are cached. */
-api.get('/pincode-info/:pin', lim(1, 30), asyncH(async (req, res) => {
-  const pin = String(req.params.pin || '');
-  if (!/^[1-9]\d{5}$/.test(pin)) throw bad('Enter a valid 6-digit pincode.');
+async function pinLookup(pin) {
   const hit = db.prepare('SELECT * FROM pin_cache WHERE pin=?').get(pin);
-  if (hit && (hit.found || Date.now() - new Date(hit.at).getTime() < 86400000)) return res.json(hit.found ? { found: true, district: hit.district, state: hit.state, city: hit.city } : { found: false });
+  if (hit && (hit.found || Date.now() - new Date(hit.at).getTime() < 86400000)) return hit.found ? { found: true, district: hit.district, state: hit.state, city: hit.city } : { found: false };
   let out = { found: false };
   try {
     const r = await fetch(`https://api.postalpincode.in/pincode/${pin}`, { signal: AbortSignal.timeout(4000) });
     const j = await r.json();
     const po = j && j[0] && j[0].Status === 'Success' && Array.isArray(j[0].PostOffice) ? j[0].PostOffice : [];
-    if (po.length) out = { found: true, district: String(po[0].District || '').slice(0, 60), state: String(po[0].State || '').slice(0, 60), city: String(po[0].Block && po[0].Block !== 'NA' ? po[0].Block : po[0].District || '').slice(0, 60) };
-  } catch { /* the service may be down; the customer simply types it */ return res.json({ found: false }); }
+    if (po.length) out = { found: true, district: String(po[0].District || '').slice(0, 60), state: String(po[0].State || '').slice(0, 60), city: String(po[0].Block && po[0].Block !== 'NA' ? po[0].Block : po[0].Name || po[0].District || '').slice(0, 60) };
+  } catch { return { found: false, unknown: true }; } // the service may be down: we cannot say the pincode is wrong
   db.prepare('INSERT OR REPLACE INTO pin_cache(pin,district,state,city,found,at) VALUES(?,?,?,?,?,?)').run(pin, out.district || '', out.state || '', out.city || '', out.found ? 1 : 0, new Date().toISOString());
-  res.json(out);
+  return out;
+}
+api.get('/pincode-info/:pin', lim(1, 30), asyncH(async (req, res) => {
+  const pin = String(req.params.pin || '');
+  if (!/^[1-9]\d{5}$/.test(pin)) throw bad('Enter a valid 6-digit pincode.');
+  const o = await pinLookup(pin); res.json(o.unknown ? { found: false } : o);
 }));
 api.post('/orders', lim(10, +process.env.ORDER_RATE_MAX || 12, 'Too many orders from this device. Please wait a few minutes.'), asyncH((req, res) => {
   if (process.env.CATALOGUE_ONLY === '1') { const B = settings.get('brand'); const wa = String(B.whatsapp || B.phone || '').replace(/\D/g, '').slice(-10); throw bad('Orders are not taken on this preview website. Please order on WhatsApp' + (wa ? ': +91 ' + wa : '') + '.'); }

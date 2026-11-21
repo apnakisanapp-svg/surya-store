@@ -135,15 +135,17 @@ export function buildChrome(root) {
 
   // footer
   const B = BOOT.brand, pol = BOOT.policies.filter(p => p.in_footer);
-  const cols = (BOOT.menu.footer || []).map(c => h('div', null, h('h4', null, tr(c, 'title')), h('ul', null, c.links.map(l => h('li', null, h('a', { href: l.url }, tr(l, 'label')))))));
+  const fcol = (title, ul) => h('details', { class: 'fcol' }, h('summary', null, h('h4', null, title), icon('chev')), ul);
+  const cols = (BOOT.menu.footer || []).map(c => fcol(tr(c, 'title'), h('ul', null, c.links.map(l => h('li', null, h('a', { href: l.url }, tr(l, 'label')))))));
   const ftr = h('footer', { class: 'ftr' }, h('div', { class: 'wrap' }, h('div', { class: 'ftr-g' },
     h('div', null, logo(), h('p', { class: 'muted', style: { marginTop: '12px', maxWidth: '28em' } }, B.tagline), h('p', { class: 'small', style: { marginTop: '12px' } }, [B.phone && h('a', { href: 'tel:' + B.phone }, B.phone), B.phone && B.email ? ' · ' : null, B.email && h('a', { href: 'mailto:' + B.email }, B.email)]), B.support_hours ? h('p', { class: 'small muted' }, B.support_hours) : null,
       newsletterBox()),
     ...cols,
-    h('div', null, h('h4', null, 'Policies'), h('ul', null, pol.map(p => h('li', null, h('a', { href: `/policy/${p.slug}` }, tr(p, 'title')))), h('li', null, h('a', { href: '/grievance' }, t('grievance'))), h('li', null, h('a', { href: '#', onclick: e => { e.preventDefault(); ls.del('sy_cookie'); cookieBanner(true); } }, 'Cookie settings'))))),
+    fcol('Policies', h('ul', null, pol.map(p => h('li', null, h('a', { href: `/policy/${p.slug}` }, tr(p, 'title')))), h('li', null, h('a', { href: '/grievance' }, t('grievance'))), h('li', null, h('a', { href: '#', onclick: e => { e.preventDefault(); ls.del('sy_cookie'); cookieBanner(true); } }, 'Cookie settings'))))),
     h('div', { class: 'ftr-b' }, h('span', null, `© ${new Date().getFullYear()} ${B.legal_name || B.name}${B.gstin ? ' · GSTIN ' + B.gstin : ''}`), h('span', null, [B.address, B.city].filter(Boolean).join(', ')))));
   const slim = h('nav', { class: 'slimf hide', 'aria-label': 'Legal' }, ...[['terms', 'Terms'], ['privacy', 'Privacy'], ['returns', 'Refund']].map(([k, l]) => h('a', { href: '/policy/' + k }, l)), h('a', { href: '/contact' }, 'Contact'));
   const fmark = path => { const home = path === '/' || path === ''; ftr.classList.toggle('hide', !home); slim.classList.toggle('hide', home); };
+  const fmq = matchMedia('(min-width:860px)'), fsync = () => $$('.fcol', ftr).forEach(d => { d.open = fmq.matches; }); fmq.addEventListener('change', fsync); fsync();
   bus.on('route', fmark); fmark(location.pathname);
   root.append(ftr, slim);
   // floating buttons

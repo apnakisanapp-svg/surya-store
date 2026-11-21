@@ -82,7 +82,7 @@ route(/^\/shop$/, async (view, m, q) => {
   const chips = h('div', { class: 'chips' });
   const sync = () => { clear(chips).append(h('button', { class: 'chip' + (!st.category ? ' on' : ''), onclick: () => { st.category = ''; sync(); load(true); } }, t('all')), ...BOOT.categories.filter(c => !c.parent_id).map(c => h('button', { class: 'chip' + (st.category === c.slug ? ' on' : ''), onclick: () => { st.category = c.slug; sync(); load(true); } }, tr(c, 'name')))); minI.value = st.min; maxI.value = st.max; };
   sync();
-  view.append(h('div', { class: 'wrap', style: { paddingTop: '24px', paddingBottom: '20px' } }, st.q ? h('a', { class: 'sp-pill', href: '/search?q=' + encodeURIComponent(st.q), 'aria-label': 'Change search' }, icon('search'), h('span', null, st.q), h('span', { class: 'sp-pill-x' }, icon('x'))) : null, h('div', { class: 'row between' }, h('h1', { class: 'h1', style: { fontSize: 'clamp(1.8rem,5vw,3rem)' } }, st.q ? `“${st.q}”` : cat ? tr(cat, 'name') : t('shop')), count),
+  view.append(h('div', { class: 'wrap', style: { paddingTop: '24px', paddingBottom: '20px' } }, st.q ? h('a', { class: 'srch-pill', href: '/search?q=' + encodeURIComponent(st.q), 'aria-label': 'Change search' }, icon('search'), h('span', null, st.q), h('span', { class: 'srch-pill-x' }, icon('x'))) : null, h('div', { class: 'row between' }, h('h1', { class: 'h1', style: { fontSize: 'clamp(1.8rem,5vw,3rem)' } }, st.q ? `“${st.q}”` : cat ? tr(cat, 'name') : t('shop')), count),
     h('div', { class: 'shop-top' }, BOOT.filters.category ? chips : null),
     h('div', { class: 'filters' }, h('div', null, sortSel), BOOT.filters.price ? h('div', { class: 'row', style: { flexWrap: 'nowrap', gap: '8px' } }, minI, maxI) : null, BOOT.filters.stock ? h('div', { class: 'row' }, stock) : null, h('div', { class: 'row' }, offers)), grid, more));
   const back = wasBack(), want = back ? pagesSeen() : 1;
@@ -101,20 +101,20 @@ const recents = {
 };
 route(/^\/search$/, async (view, m, params) => {
   setTitle(t('search'));
-  const inp = h('input', { class: 'sp-in', type: 'search', value: params.get('q') || '', placeholder: t('search'), 'aria-label': t('search'), autocomplete: 'off', enterkeyhint: 'search' });
-  const clr = h('button', { type: 'button', class: 'sp-x hide', 'aria-label': 'Clear', onclick: () => { inp.value = ''; inp.focus(); onType(); } }, icon('x'));
-  const body = h('div', { class: 'sp-body wrap' });
+  const inp = h('input', { class: 'srch-in', type: 'search', value: params.get('q') || '', placeholder: t('search'), 'aria-label': t('search'), autocomplete: 'off', enterkeyhint: 'search' });
+  const clr = h('button', { type: 'button', class: 'srch-x hide', 'aria-label': 'Clear', onclick: () => { inp.value = ''; inp.focus(); onType(); } }, icon('x'));
+  const body = h('div', { class: 'srch-body wrap' });
   const go = q => { q = (q || '').trim(); if (!q) return; recents.add(q); nav('/shop?q=' + encodeURIComponent(q)); };
-  const back = h('button', { type: 'button', class: 'sp-back', 'aria-label': t('close'), onclick: () => (history.length > 1 ? history.back() : nav('/')) }, icon('chevl'));
-  const bar = h('form', { class: 'sp-bar' }, back, h('div', { class: 'sp-field' }, icon('search'), inp, clr), h('button', { class: 'sp-go', type: 'submit' }, 'Search'));
+  const back = h('button', { type: 'button', class: 'srch-back', 'aria-label': t('close'), onclick: () => (history.length > 1 ? history.back() : nav('/')) }, icon('chevl'));
+  const bar = h('form', { class: 'srch-bar' }, back, h('div', { class: 'srch-field' }, icon('search'), inp, clr), h('button', { class: 'srch-go', type: 'submit' }, 'Search'));
   bar.addEventListener('submit', e => { e.preventDefault(); go(inp.value); });
-  view.append(h('div', { class: 'sp' }, bar, body));
+  view.append(h('div', { class: 'srch' }, bar, body));
   function idle() {
     clear(body);
     const rec = recents.get(), popular = (BOOT.search && BOOT.search.popular) || [];
-    if (rec.length) body.append(h('div', { class: 'sp-sec' }, h('div', { class: 'row between' }, h('b', null, 'Recent searches'), h('button', { class: 'link small', onclick: () => { recents.clear(); idle(); } }, 'Clear all')),
-      h('div', { class: 'sp-list' }, rec.map(q => h('div', { class: 'sp-row' }, h('button', { class: 'sp-rt', onclick: () => go(q) }, icon('clock'), h('span', null, q)), h('button', { class: 'sp-rm', 'aria-label': 'Remove', onclick: () => { recents.del(q); idle(); } }, icon('x')))))));
-    if (popular.length) body.append(h('div', { class: 'sp-sec' }, h('b', null, 'Popular searches'), h('div', { class: 'row', style: { marginTop: '10px' } }, popular.map(q => h('button', { class: 'chip', onclick: () => go(q) }, q)))));
+    if (rec.length) body.append(h('div', { class: 'srch-sec' }, h('div', { class: 'row between' }, h('b', null, 'Recent searches'), h('button', { class: 'link small', onclick: () => { recents.clear(); idle(); } }, 'Clear all')),
+      h('div', { class: 'srch-list' }, rec.map(q => h('div', { class: 'srch-row' }, h('button', { class: 'srch-rt', onclick: () => go(q) }, icon('clock'), h('span', null, q)), h('button', { class: 'srch-rm', 'aria-label': 'Remove', onclick: () => { recents.del(q); idle(); } }, icon('x')))))));
+    if (popular.length) body.append(h('div', { class: 'srch-sec' }, h('b', null, 'Popular searches'), h('div', { class: 'row', style: { marginTop: '10px' } }, popular.map(q => h('button', { class: 'chip', onclick: () => go(q) }, q)))));
     if (!rec.length && !popular.length) body.append(h('p', { class: 'muted center', style: { marginTop: '40px' } }, 'Type what you are looking for.'));
   }
   let seq = 0;
@@ -122,7 +122,7 @@ route(/^\/search$/, async (view, m, params) => {
     const q = inp.value.trim(), my = ++seq; if (q.length < 2) return;
     try {
       const r = await api('/suggest?q=' + encodeURIComponent(q)); if (my !== seq) return; clear(body);
-      const list = h('div', { class: 'sp-sug' });
+      const list = h('div', { class: 'srch-sug' });
       if (r.fallback) body.append(h('p', { class: 'fb-sug muted small' }, `${t('fb_title')} “${q}” · ${t('fb_text')}`));
       for (const c of r.categories) list.append(h('a', { href: `/shop?category=${c.slug}` }, h('b', null, tr(c, 'name')), h('span', { class: 'muted small' }, 'Category')));
       for (const p of r.products) list.append(h('a', { href: `/p/${p.slug}`, onclick: () => recents.add(q) }, p.image ? h('img', { src: p.image, alt: '', width: 48, height: 48 }) : h('span', { style: { width: '48px' } }), h('span', { class: 'grow' }, tr(p, 'name')), h('b', null, money(p.price))));
@@ -182,7 +182,7 @@ route(/^\/p\/([^/]+)$/, async (view, m) => {
   }
   const varEl = ins.length ? h('div', { class: 'stack' }, h('div', { class: 'small muted' }, 'Choose option'), h('div', { class: 'opts' }, ins.map(v => h('button', { class: 'chip' + (v.id === S.vid ? ' on' : '') + (!v.in_stock ? ' off' : ''), onclick: e => { S.vid = v.id; $$('.opts .chip', info).forEach(c => c.classList.remove('on')); e.currentTarget.classList.add('on'); paint(); } }, v.color ? h('span', { style: { width: '12px', height: '12px', borderRadius: '50%', background: v.color, border: '1px solid var(--line)', marginRight: '8px' } }) : null, (lang() === 'hi' && v.name_hi) || v.name)))) : null;
   const pinInp = h('input', { class: 'inp', inputmode: 'numeric', maxlength: 6, placeholder: t('pincode'), 'aria-label': t('pincode'), value: ls.get('sy_pin', '') });
-  const checkPin = async () => { const v = pinInp.value.trim(); if (!/^\d{6}$/.test(v)) { pinOut.textContent = 'Enter a valid 6-digit pincode.'; pinOut.style.color = 'var(--err)'; return; } ls.set('sy_pin', v); try { const r = await api(`/pincode/${v}?product=${p.id}`); pinOut.style.color = r.ok ? 'var(--ok)' : 'var(--err)'; pinOut.textContent = r.ok ? `${t('delivery_by')} ${r.eta.text}${r.cod ? ' · ' + t('cod') : ''}` : r.message; } catch (e) { pinOut.textContent = e.message; } };
+  const checkPin = async () => { const v = pinInp.value.trim(); if (!/^\d{6}$/.test(v)) { pinOut.textContent = 'Enter a valid 6-digit pincode.'; pinOut.style.color = 'var(--err)'; return; } ls.set('sy_pin', v); try { const r = await api(`/pincode/${v}?product=${p.id}`); pinOut.style.color = r.ok ? 'var(--ok)' : 'var(--err)'; pinOut.textContent = r.ok ? `${r.place ? 'Delivering to ' + r.place + '. ' : ''}${r.estimated ? 'Estimated delivery' : t('delivery_by')} ${r.eta.text}${r.cod ? ' · ' + t('cod') : ''}` : r.message; } catch (e) { pinOut.textContent = e.message; } };
   pinInp.addEventListener('keydown', e => { if (e.key === 'Enter') checkPin(); });
   const heartB = h('button', { class: 'ibtn' + (wish.has(p.id) ? ' on' : ''), style: { border: '1px solid var(--line)' }, 'aria-label': 'Wishlist', onclick: async () => { const on = await wish.toggle(p.id); heartB.style.color = on ? '#d6336c' : ''; toast(on ? 'Saved to wishlist' : 'Removed from wishlist'); } }, icon('heart'));
   if (wish.has(p.id)) heartB.style.color = '#d6336c';
@@ -191,10 +191,10 @@ route(/^\/p\/([^/]+)$/, async (view, m) => {
   const RU = p.rules || {};
   const retShort = RU.ret_rule === 'none' ? 'No return (damaged items still handled)' : ({ replacement: 'replacement', refund: 'refund', either: 'replacement or refund', exchange: 'exchange' }[RU.ret_rule] ? `${RU.ret_days}-day ${({ replacement: 'replacement', refund: 'refund', either: 'replacement or refund', exchange: 'exchange' })[RU.ret_rule]}` : `Easy ${BOOT.returns.window_days || 7}-day replacement`);
   const svc = [];
-  if (RU.cod === 'off') svc.push('Online payment only'); else if (RU.cod === 'advance') svc.push(`Cash on delivery (₹${RU.adv} advance)`); else if (RU.cod === 'cod') svc.push('Cash on delivery');
-  if (RU.ship === 'free') svc.push('Free delivery');
-  if (RU.gift_ok) svc.push('Gift wrap available');
-  const svcRow = svc.length ? h('div', { class: 'row svc-row' }, ...svc.map(x => h('span', { class: 'chip svc-chip' }, x))) : null;
+  if (RU.cod === 'off') svc.push(['card', 'Online payment', 'Pay safely by UPI']); else if (RU.cod === 'advance') svc.push(['card', 'Cash on delivery', `Pay ₹${RU.adv} now, rest on delivery`]); else if (RU.cod === 'cod') svc.push(['card', 'Cash on delivery', 'Pay when it arrives']);
+  if (RU.ship === 'free') svc.push(['truck', 'Free delivery', 'No shipping charge']);
+  if (RU.gift_ok) svc.push(['box', 'Gift wrap', 'Available at checkout']);
+  const svcRow = svc.length ? h('div', { class: 'svc-cards' }, ...svc.map(([ic, ti, su]) => h('div', { class: 'svc-card' }, h('span', { class: 'svc-ic' }, icon(ic)), h('div', null, h('b', null, ti), h('span', null, su))))) : null;
   info.append(h('div', { class: 'stack' }, h('div', { class: 'row between', style: { alignItems: 'start', flexWrap: 'nowrap' } }, h('h1', null, tr(p, 'name')), h('div', { class: 'row', style: { flexWrap: 'nowrap', gap: '6px' } }, BOOT.store.wishlist ? heartB : null, shareB)),
     p.tagline ? h('p', { class: 'muted' }, tr(p, 'tagline')) : null,
     p.rating.count ? h('a', { href: '#reviews', class: 'row', style: { gap: '8px', textDecoration: 'none' } }, stars(p.rating.avg), h('span', { class: 'small' }, `${p.rating.avg} (${p.rating.count})`)) : null,
@@ -263,13 +263,44 @@ function reviewsSection(p) {
 }
 
 function lightbox(imgs, start) {
-  let i = start, z = 1;
-  const im = h('img', { alt: '' }), wrap = h('div', { class: 'lightbox', role: 'dialog', 'aria-label': 'Photo viewer' }, h('button', { class: 'ibtn x', 'aria-label': t('close'), onclick: () => close() }, icon('x')), im);
-  const set = () => { im.src = imgs[i].gal; z = 1; im.style.transform = ''; };
-  const vis = () => { wrap.remove(); document.removeEventListener('keydown', key); }; const ov = pushOverlay(vis); const close = () => { vis(); releaseOverlay(ov); }; const key = e => { if (e.key === 'Escape') close(); if (e.key === 'ArrowRight') { i = (i + 1) % imgs.length; set(); } if (e.key === 'ArrowLeft') { i = (i - 1 + imgs.length) % imgs.length; set(); } };
+  let i = start, sc = 1, tx = 0, ty = 0, pinch0 = null, pan0 = null, lastTap = 0, moved = 0;
+  const pts = new Map();
+  const im = h('img', { alt: '', draggable: 'false' }), stage = h('div', { class: 'lb-stage' }, im), cnt = h('div', { class: 'lb-count' });
+  const mk = (cls, d, ic) => h('button', { class: 'ibtn lb-nav ' + cls, 'aria-label': d < 0 ? 'Previous photo' : 'Next photo', onclick: () => go(d) }, icon(ic));
+  const wrap = h('div', { class: 'lightbox', role: 'dialog', 'aria-label': 'Photo viewer' }, h('button', { class: 'ibtn x', 'aria-label': t('close'), onclick: () => close() }, icon('x')), stage, cnt, imgs.length > 1 ? mk('l', -1, 'chevl') : null, imgs.length > 1 ? mk('r', 1, 'chev') : null);
+  const apply = anim => { im.style.transition = anim ? 'transform .24s cubic-bezier(.2,.9,.3,1)' : 'none'; im.style.transform = `translate(${tx}px,${ty}px) scale(${sc})`; };
+  const clampPan = () => { const r = stage.getBoundingClientRect(), mx = Math.max(0, (im.offsetWidth * sc - r.width) / 2), my = Math.max(0, (im.offsetHeight * sc - r.height) / 2); tx = Math.max(-mx, Math.min(mx, tx)); ty = Math.max(-my, Math.min(my, ty)); };
+  const set = () => { im.src = imgs[i].gal; cnt.textContent = imgs.length > 1 ? `${i + 1} / ${imgs.length}` : ''; sc = 1; tx = 0; ty = 0; apply(); };
+  const go = d => { i = (i + d + imgs.length) % imgs.length; set(); };
+  const dist = () => { const [a, b] = [...pts.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
+  const vis = () => { wrap.remove(); document.removeEventListener('keydown', key); };
+  const ov = pushOverlay(vis); const close = () => { vis(); releaseOverlay(ov); };
+  const key = e => { if (e.key === 'Escape') close(); else if (e.key === 'ArrowLeft' && sc === 1) go(-1); else if (e.key === 'ArrowRight' && sc === 1) go(1); };
   document.addEventListener('keydown', key);
-  im.addEventListener('dblclick', () => { z = z > 1 ? 1 : 2.4; im.style.transform = `scale(${z})`; });
-  let sx = null; wrap.addEventListener('pointerdown', e => { sx = e.clientX; }); wrap.addEventListener('pointerup', e => { if (sx != null && z === 1 && Math.abs(e.clientX - sx) > 50) { i = (i + (e.clientX < sx ? 1 : -1) + imgs.length) % imgs.length; set(); } else if (e.target === wrap && Math.abs(e.clientX - sx) < 6) close(); sx = null; });
+  stage.addEventListener('pointerdown', e => { try { stage.setPointerCapture(e.pointerId); } catch { /* */ } pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); moved = 0; if (pts.size === 2) { pinch0 = { d: dist(), sc }; pan0 = null; } else if (pts.size === 1) pan0 = { x: e.clientX, y: e.clientY, tx, ty, t: Date.now() }; });
+  stage.addEventListener('pointermove', e => {
+    if (!pts.has(e.pointerId)) return; pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.size === 2 && pinch0) { sc = Math.max(1, Math.min(4, pinch0.sc * dist() / pinch0.d)); moved = 99; clampPan(); apply(); return; }
+    if (pts.size !== 1 || !pan0) return;
+    const dx = e.clientX - pan0.x, dy = e.clientY - pan0.y; moved = Math.max(moved, Math.hypot(dx, dy));
+    if (sc > 1) { tx = pan0.tx + dx; ty = pan0.ty + dy; clampPan(); apply(); }
+    else { const h2 = Math.abs(dx) > Math.abs(dy); im.style.transition = 'none'; im.style.transform = h2 ? `translateX(${dx}px)` : `translateY(${Math.max(0, dy)}px)`; wrap.style.setProperty('--lbo', h2 ? 1 : Math.max(.35, 1 - Math.max(0, dy) / 400)); }
+  });
+  const end = e => {
+    if (!pts.has(e.pointerId)) return; const one = pts.size === 1; pts.delete(e.pointerId); if (pts.size < 2) pinch0 = null;
+    if (pts.size === 1) { const p = [...pts.values()][0]; pan0 = { x: p.x, y: p.y, tx, ty, t: Date.now() }; return; }
+    if (!one || !pan0) return;
+    const dx = e.clientX - pan0.x, dy = e.clientY - pan0.y; wrap.style.removeProperty('--lbo'); const p0 = pan0; pan0 = null;
+    if (sc > 1) { if (sc < 1.05) { sc = 1; tx = 0; ty = 0; } apply(true); }
+    else if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.2 && imgs.length > 1) go(dx < 0 ? 1 : -1);
+    else if (dy > 90 && dy > Math.abs(dx)) { close(); return; }
+    else apply(true);
+    if (moved < 10 && Date.now() - p0.t < 300) { // tap: a second tap within 0.3 s zooms in or back out
+      const now = Date.now(); if (now - lastTap < 320) { sc = sc > 1 ? 1 : 2.6; if (sc === 1) { tx = 0; ty = 0; } else { const r = stage.getBoundingClientRect(); tx = (r.left + r.width / 2 - e.clientX) * (sc - 1); ty = (r.top + r.height / 2 - e.clientY) * (sc - 1); clampPan(); } apply(true); lastTap = 0; } else lastTap = now;
+    }
+  };
+  stage.addEventListener('pointerup', end); stage.addEventListener('pointercancel', end);
+  stage.addEventListener('wheel', e => { e.preventDefault(); sc = Math.max(1, Math.min(4, sc * (e.deltaY < 0 ? 1.18 : 1 / 1.18))); if (sc === 1) { tx = 0; ty = 0; } clampPan(); apply(); }, { passive: false });
   set(); document.body.append(wrap);
 }
 function spinViewer(frames) {

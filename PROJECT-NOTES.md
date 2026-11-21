@@ -168,3 +168,14 @@ GST/BIS advice, final policy wording, real photos and logo, payment gateway KYC.
 - All @media(prefers-color-scheme:dark) rules removed from app.css; :root{color-scheme:light}. Site is light on every phone (html.dark toggle rules kept).
 - New route /search (pages1.js): sticky glass bar, recent searches (localStorage sy_recent, 8), popular, live suggestions, Enter -> /shop?q=. Shop results show a tappable search pill. ui.js openSearch() now just nav('/search').
 - Glass chips, Min/Max inputs and custom checkboxes in the shop filters.
+
+## Release 5 (cart reminder + small notifications)
+- Client syncs cart (logged in + notifications allowed) to POST /api/account/push/cart; table cart_snap. Job every 10 min (start.js) -> custpush.cartSweep: cart idle >=3h and <72h, one nudge per cart state, offer rules (offers ON, 1/day, none 10pm-8am IST), skipped if products gone/out of stock.
+- New order notifications: cancelled, payment_rejected (orders.setStatus / payment reject path).
+
+## Release 7
+- Fix: search page classes renamed .sp-* -> .srch-* (they collided with splash.css .sp-in, which broke the splash and made typed search text vanish). Never reuse .sp-* names (splash).
+- Pincode check: /api/pincode/:pin now confirms the pincode in India Post data (pinLookup, cached); unknown if their service is down -> still answered as "Estimated". ETA days = settings shipping.eta_min/eta_max (owner sets from Meesho's usual times). Blocked pincodes list = places Meesho cannot serve.
+- Product page: glass service cards (COD / free delivery / gift wrap) from product rules.
+- Photo viewer: pinch zoom 1-4x, double-tap, pan, swipe between photos, swipe down to close, wheel zoom + arrows on desktop.
+- Mobile footer: brand on top, Shop/Help/Policies as folding glass groups with small pills (details.fcol; forced open on desktop).
