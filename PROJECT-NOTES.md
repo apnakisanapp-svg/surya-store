@@ -159,3 +159,7 @@ GST/BIS advice, final policy wording, real photos and logo, payment gateway KYC.
 - Customer API: /api/account/push/{info,subscribe,unsubscribe,offers}. Admin: /broadcast, /broadcast/info (Notifications page, "Broadcast to customers", test goes to owner phone).
 - Front end: web/js/notif.js glass card after order (&new=1 page) and on heart; "Not now"/blocked help = 7 days (sy_pn_snooze/sy_pn_help); Account > Profile card with offers switch. web/sw.js handles push + click (cache v2).
 - iPhone: only works when site is added to Home Screen (card is skipped when unsupported).
+
+## Release 6 part 1 (full glass look)
+- app.css end: --lg-* tokens (html.dark variant), glass popups (.gc), notification card (.pn), dropdown (.gsel-b/.gsel-l), search panel/input. Part 2 (menu, bottom bar, welcome-back, filters, chips, inputs, admin) pending.
+- Note: older rules use @media(prefers-color-scheme:dark) while the page theme uses html.dark (default light): on dark phones some old surfaces turn dark on a light page. Needs a decision/fix.

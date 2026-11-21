@@ -1,8 +1,3 @@
 1. Zip ko fresh khali folder me extract karo.
-2. https://github.com/apnakisanapp-svg/surya-store/upload/main kholo.
-3. FOLDERS drag karo: src, web, admin-web + file PROJECT-NOTES.md (page par src/shared/custpush.js jaise paths dikhne chahiye). Commit karo.
-   (Release 3 pehle upload ho chuka hona chahiye.)
-4. AWS terminal: cd ~/surya-store && git pull && sudo systemctl restart surya && sudo systemctl is-active surya
-   npm install nahi chahiye.
-5. Test: customer account se login -> koi order karo -> order page par glass card aana chahiye -> "Yes, notify me" -> Allow.
-   Admin: Notifications page -> "Broadcast to customers" -> "Send test to me".
+2. https://github.com/apnakisanapp-svg/surya-store/upload/main kholo, FOLDER web + file PROJECT-NOTES.md drag karo (path web/css/app.css dikhna chahiye). Commit.
+3. AWS terminal: cd ~/surya-store && git pull && sudo systemctl restart surya && sudo systemctl is-active surya

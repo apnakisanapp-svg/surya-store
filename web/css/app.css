@@ -739,3 +739,28 @@ img[data-imw]{transition:filter .45s ease,opacity .45s ease}
 .pn-btns{grid-column:1/-1;display:flex;gap:8px;justify-content:flex-end}
 @media(prefers-reduced-motion:reduce){.pn{transition:opacity .2s}}
 @media(max-width:900px){.pn{bottom:calc(96px + env(safe-area-inset-bottom))}}
+
+/* ===== Release 6 (part 1): full glass look for popups, notification card, search bar, dropdown ===== */
+:root{--lg-tint:rgba(255,255,255,.34);--lg-tint2:rgba(255,246,222,.18);--lg-rim:rgba(255,255,255,.85);--lg-rim2:rgba(255,255,255,.28);--lg-sh:rgba(40,25,0,.38)}
+html.dark{--lg-tint:rgba(255,255,255,.11);--lg-tint2:rgba(255,255,255,.04);--lg-rim:rgba(255,255,255,.42);--lg-rim2:rgba(255,255,255,.1);--lg-sh:rgba(0,0,0,.6)}
+.gc,.pn,.gsel-l{background:linear-gradient(155deg,var(--lg-tint),var(--lg-tint2) 55%,var(--lg-tint));-webkit-backdrop-filter:blur(34px) saturate(210%) brightness(1.06);backdrop-filter:blur(34px) saturate(210%) brightness(1.06);border:0;box-shadow:inset 0 0 0 1px var(--lg-rim2),inset 0 1.5px 0 var(--lg-rim),inset 0 -1px 0 var(--lg-rim2),inset 1px 0 0 var(--lg-rim2),0 28px 60px -22px var(--lg-sh),0 4px 14px -6px var(--lg-sh);position:fixed}
+.gsel-l{position:absolute}
+.gc::before,.pn::before,.gsel-l::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;background:radial-gradient(120% 70% at 20% -10%,rgba(255,255,255,.55),transparent 55%),linear-gradient(180deg,transparent 70%,rgba(255,255,255,.12));mix-blend-mode:soft-light}
+.gc>*,.pn>*,.gsel-l>*{position:relative}
+.gc{border-radius:32px;color:var(--ink)}.pn{border-radius:30px}.gsel-l{border-radius:22px}
+.gc .btn.ghost,.pn .btn.ghost{background:linear-gradient(160deg,rgba(255,255,255,.4),rgba(255,255,255,.12));border:0;box-shadow:inset 0 0 0 1px var(--lg-rim2),inset 0 1px 0 var(--lg-rim)}
+.gc .btn,.pn .btn{border-radius:999px}
+.gc-r{border:0;border-radius:18px;background:linear-gradient(160deg,rgba(255,255,255,.34),rgba(255,255,255,.1));box-shadow:inset 0 0 0 1px var(--lg-rim2),inset 0 1px 0 var(--lg-rim)}
+.gc-r.on{background:linear-gradient(160deg,color-mix(in srgb,var(--accent) 38%,transparent),color-mix(in srgb,var(--accent) 12%,transparent));box-shadow:inset 0 0 0 1.5px var(--accent),inset 0 1px 0 var(--lg-rim)}
+.gc-scrim{background:rgba(20,12,0,.28);-webkit-backdrop-filter:blur(10px) saturate(130%);backdrop-filter:blur(10px) saturate(130%)}
+/* pill dropdown button + search bar */
+.gsel-b,.search-pan .inp{border:0;border-radius:999px;background:linear-gradient(155deg,var(--lg-tint),var(--lg-tint2) 60%,var(--lg-tint));-webkit-backdrop-filter:blur(26px) saturate(200%);backdrop-filter:blur(26px) saturate(200%);box-shadow:inset 0 0 0 1px var(--lg-rim2),inset 0 1.5px 0 var(--lg-rim),inset 0 -1px 0 var(--lg-rim2),0 12px 28px -14px var(--lg-sh);padding-inline:18px}
+.gsel.open .gsel-b,.gsel-b:focus-visible,.search-pan .inp:focus{box-shadow:inset 0 0 0 1.5px var(--accent),inset 0 1.5px 0 var(--lg-rim),0 0 0 4px color-mix(in srgb,var(--accent) 22%,transparent),0 12px 28px -14px var(--lg-sh)}
+.search-pan{background:linear-gradient(170deg,var(--lg-tint),var(--lg-tint2));-webkit-backdrop-filter:blur(34px) saturate(210%);backdrop-filter:blur(34px) saturate(210%);border-bottom:0;box-shadow:inset 0 -1px 0 var(--lg-rim2),0 24px 50px -24px var(--lg-sh)}
+.gsel-o{border-radius:16px}.gsel-o:hover,.gsel-o:focus-visible{background:linear-gradient(160deg,rgba(255,255,255,.4),rgba(255,255,255,.1));box-shadow:inset 0 1px 0 var(--lg-rim)}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.gc,.pn,.gsel-l{background:var(--surface)}}
+/* readability pass: lists and the search panel need a firmer frosted base so text behind never shows through */
+.gsel-l,.search-pan{background-color:rgba(255,252,243,.72)}
+.gc,.pn{background-color:rgba(255,252,243,.5)}
+.search-pan .inp,.gsel-b{background-color:rgba(255,255,255,.55)}
+html.dark .gsel-l,html.dark .search-pan{background-color:rgba(28,24,18,.7)}html.dark .gc,html.dark .pn{background-color:rgba(28,24,18,.5)}html.dark .search-pan .inp,html.dark .gsel-b{background-color:rgba(255,255,255,.08)}
