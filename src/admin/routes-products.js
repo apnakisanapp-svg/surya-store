@@ -10,6 +10,7 @@ const images = require('../shared/images');
 const risk = require('../shared/risk');
 const finance = require('../shared/finance');
 const auth = require('../shared/auth');
+const custpush = require('../shared/custpush');
 const { asyncH, bad, notFound, int, num, jparse, jstr, now, uniqueSlug, toCSV, parseCSV, token } = require('../shared/util');
 
 const r = express.Router();
@@ -149,6 +150,7 @@ r.put('/:id', asyncH((req, res) => {
   const cur = db.prepare('SELECT * FROM products WHERE id=?').get(id);
   let demoted = false;
   if (cur.status === 'published') { const rk = risk.checkProduct({ ...cur, tags: jparse(cur.tags, []) }); if (!rk.can_publish) { db.prepare("UPDATE products SET status='draft', updated_at=? WHERE id=?").run(now(), id); demoted = true; } }
+  try { if (cur.status === 'published') { if (ex.price > cur.price) custpush.priceDrop(cur, ex.price, cur.price); if (ex.stock <= 0 && cur.stock > 0) custpush.backInStock(cur); } } catch { /* optional */ }
   auth.logActivity(req.admin.id, 'update', 'product', id, ex.name, req);
   res.json({ ...full(id), demoted });
 }));
@@ -208,7 +210,7 @@ function publish(id, req, publishAt) {
   const imgs = db.prepare('SELECT COUNT(*) c FROM product_images WHERE product_id=?').get(id).c;
   if (!imgs) throw bad('Add at least one photo before publishing.');
   if (publishAt) db.prepare("UPDATE products SET status='scheduled', publish_at=?, updated_at=? WHERE id=?").run(new Date(publishAt).toISOString(), now(), id);
-  else db.prepare("UPDATE products SET status='published', publish_at=NULL, updated_at=? WHERE id=?").run(now(), id);
+  else { db.prepare("UPDATE products SET status='published', publish_at=NULL, updated_at=? WHERE id=?").run(now(), id); try { custpush.newProduct({ ...p, status: 'published' }); } catch { /* optional */ } }
   catalog.reindex(id);
   auth.logActivity(req.admin.id, publishAt ? 'schedule' : 'publish', 'product', id, p.name, req);
 }
@@ -220,6 +222,7 @@ r.post('/:id/stock', asyncH((req, res) => {
   const vid = int(req.body?.variant_id) || null;
   const rr = vid ? db.prepare('UPDATE variants SET stock=stock+? WHERE id=? AND product_id=? AND stock+?>=0').run(delta, vid, id, delta) : db.prepare('UPDATE products SET stock=stock+? WHERE id=? AND stock+?>=0').run(delta, id, delta);
   if (!rr.changes) throw bad('Stock cannot go below zero.');
+  try { const pr = db.prepare('SELECT * FROM products WHERE id=?').get(id); if (delta > 0 && pr && pr.status === 'published' && pr.stock > 0 && pr.stock - delta <= 0) custpush.backInStock(pr); } catch { /* optional */ }
   auth.logActivity(req.admin.id, 'stock', 'product', id, `${delta > 0 ? '+' : ''}${delta} ${req.body?.reason || ''}`, req);
   res.json(full(id));
 }));

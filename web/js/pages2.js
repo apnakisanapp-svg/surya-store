@@ -1,3 +1,4 @@
+import { settingsCard } from './notif.js';
 import { BOOT, h, $, $$, clear, icon, t, tr, lang, bus, api, money, cart, wish, me, ls, toast, modal, nav, route, setTitle, reveal, sid, buyItem, confirmBox, guardWatch, guardOff, draft, afterLogin, slideIn, glassSelect } from './core.js';
 import { productCard, skeletons, lineEl, shipBar, priceNow, syncFromPrice } from './ui.js';
 import { faqList } from './pages1.js';
@@ -205,7 +206,7 @@ route(/^\/order\/([A-Za-z0-9-]+)$/, async (view, m, q) => {
   }
   async function paint(o, token) {
     clear(box); clearInterval(timerId);
-    const isNew = q.get('new') === '1'; if (isNew) { history.replaceState({}, '', `/order/${num}?t=${token}`); q.delete('new'); }
+    const isNew = q.get('new') === '1'; if (isNew) { history.replaceState({}, '', `/order/${num}?t=${token}`); q.delete('new'); } if (isNew) setTimeout(() => bus.emit('ordered'), 2200);
     const cancelled = o.status === 'cancelled', idx = STEPS.findIndex(s => s[0] === (o.status === 'payment_pending' || o.status === 'cod_confirm' ? 'placed' : o.status));
     const needsPay = (o.payment_method === 'upi' || o.advance > 0) && o.status === 'payment_pending';
     const unpaid = needsPay;
@@ -334,6 +335,7 @@ route(/^\/profile$/, async view => {
     const bar = h('div', { class: 'savebar' }, hint, h('div', { class: 'row', style: { gap: '8px' } }, cancelBtn, saveBtn));
     swap(body, h('div', { class: 'co' }, h('div', { class: 'stack-lg' },
       h('div', { class: 'card stack glass-card' }, h('h3', null, t('profile')), h('div', { class: 'fl-two' }, field('First name', fn), field('Last name', ln)), field(t('phone'), phone), h('p', { class: 'muted small' }, 'Email: ' + c.email), h('label', { class: 'check sw' }, mk, h('span', null, t('marketing_ok')))),
+      settingsCard(),
       h('div', { class: 'card stack glass-card' }, h('h3', null, 'Your data'), h('p', { class: 'muted small' }, 'Download what we hold about you, or delete your account. Order records needed for tax and law are kept without your login.'), h('a', { class: 'btn ghost', href: '/api/account/export', download: 'my-data.json' }, 'Download my data'), h('button', { class: 'btn ghost', style: { color: 'var(--err)' }, onclick: () => { const pw = h('input', { class: 'inp', type: c.has_password ? 'password' : 'text', placeholder: c.has_password ? 'Your password' : 'Type DELETE to confirm' }); const m = modal(h('div', { class: 'stack' }, h('h3', null, 'Delete account?'), h('p', { class: 'muted' }, c.has_password ? 'This cannot be undone. Enter your password to confirm.' : 'This cannot be undone. Type the word DELETE below to confirm.'), pw, h('button', { class: 'btn', onclick: async () => { try { const r = await api('/account/delete', { method: 'POST', body: { password: pw.value } }); me.customer = null; m.close(); toast(r.message); nav('/'); } catch (x) { toast(x.message, { err: true }); } } }, 'Delete my account'))); } }, 'Delete account')),
       bar)));
   }

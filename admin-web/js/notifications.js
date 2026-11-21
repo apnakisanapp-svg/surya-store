@@ -1,4 +1,4 @@
-import { h, $, clear, api, toast, card, pageHead, busy } from './lib.js';
+import { h, $, clear, api, toast, card, pageHead, busy, confirmBox } from './lib.js';
 import { reg } from './router.js';
 
 const b64 = s => { const p = '='.repeat((4 - s.length % 4) % 4), r = (s + p).replace(/-/g, '+').replace(/_/g, '/'), raw = atob(r); return Uint8Array.from([...raw].map(c => c.charCodeAt(0))); };
@@ -43,10 +43,20 @@ reg(/^\/notifications$/, async v => {
     prefsBox.append(h('hr', { style: { border: 0, borderTop: '1px solid var(--line)', margin: '8px 0' } }),
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: info.prefs.lock_hide === true, onchange: e => save('lock_hide', e.target.checked) }), h('span', null, 'Hide details on the lock screen ', h('span', { class: 'muted small' }, '· shows only "Open the app to see the details"'))));
   }
+  const bcBox = h('div', { class: 'stack' });
+  (async () => {
+    let bi = { phones: 0, quiet: false }; try { bi = await api('/broadcast/info'); } catch { /* */ }
+    const title = h('input', { class: 'inp', maxlength: 60, placeholder: 'Title, e.g. New arrival ✨' }), body = h('textarea', { class: 'inp', maxlength: 160, rows: 2, placeholder: 'Short, warm message (max 160 letters)' }), pid = h('input', { class: 'inp', type: 'number', placeholder: 'Product ID (optional, adds its photo and Buy now)' });
+    const go = async (btn, test) => { try { const r = await busy(btn, () => api('/broadcast', { method: 'POST', body: { title: title.value, body: body.value, product_id: pid.value, test } })); toast(test ? 'Test sent to your phone' : `Sent to ${r.sent} phones` + (r.skipped ? `, ${r.skipped} skipped (offers off, already got one today, or night time)` : '')); } catch (x) { toast(x.message, true); } };
+    bcBox.append(h('p', { class: 'small muted' }, `${bi.phones} customer phones have offers ON.` + (bi.quiet ? ' It is night time (10 pm to 8 am), so offers will not be sent now.' : ' Each phone gets at most 1 offer a day.')), title, body, pid,
+      h('div', { class: 'row' }, h('button', { class: 'btn', onclick: e => go(e.currentTarget, true) }, 'Send test to me'), h('button', { class: 'btn primary', onclick: async e => { if (!await confirmBox('Send this to all customers who allowed offers?', 'Yes, send')) return; go(e.currentTarget, false); } }, 'Send to customers')));
+  })();
   v.append(pageHead('Phone notifications'),
     card('This phone', state),
     h('div', { style: { height: '14px' } }),
     card('What should buzz your phone?', prefsBox),
+    h('div', { style: { height: '14px' } }),
+    card('Broadcast to customers', bcBox),
     h('div', { style: { height: '14px' } }),
     card('How to set up (Android)', h('ol', { class: 'small', style: { margin: 0, paddingLeft: '20px', lineHeight: 1.7 } },
       h('li', null, 'In Chrome, open the menu (⋮) and choose "Install app" or "Add to Home screen". The Surya icon appears on your home screen.'),

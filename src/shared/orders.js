@@ -6,6 +6,7 @@ const pricing = require('./pricing');
 const mail = require('./mail');
 const notify = require('./notify');
 const push = require('./push');
+const custpush = require('./custpush');
 const { itemImage, now, jstr, jparse, orderNumber, token, normPhone, isPhone, isEmail, isPin, isUTR, bad, HttpError, hashIp, round2 } = require('./util');
 
 const STATUSES = ['placed', 'payment_pending', 'cod_confirm', 'confirmed', 'packed', 'shipped', 'delivered', 'cancelled', 'returned'];
@@ -251,6 +252,7 @@ function setStatus(orderId, to, { actor = 'system', note = '', reason = '', forc
   });
   const o = run();
   if (!silent && MSG_FOR[to]) mail.queueOrderMessage(o, MSG_FOR[to]);
+  try { custpush.orderUpdate(o, to); } catch (e) { /* alerts are optional */ }
   return o;
 }
 

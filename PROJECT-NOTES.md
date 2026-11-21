@@ -152,3 +152,10 @@ GST/BIS advice, final policy wording, real photos and logo, payment gateway KYC.
 - core.js: confirmBox (glass popup, reasons), guardWatch/guardOff (leave confirm: nav, back, beforeunload), draft (24h), afterLogin (return page), slideIn, glassSelect.
 - Checkout draft key sy_dr_checkout; login email draft sy_dr_login; cleared on order/logout.
 - CSS block "Release 3" at end of app.css; .hscroll has scroll-padding so first card keeps its gap.
+
+## Release 4 (customer phone notifications)
+- src/shared/custpush.js: table push_cust (+push_sent). Order updates (confirmed/shipped/delivered) always; offers (price drop, back in stock, new product, owner broadcast) only if offers ON, max 1/day per phone, never 10pm-8am IST.
+- Hooks: orders.setStatus, admin product PUT (price down / stock 0->in), /:id/stock, publish (new product, once per product).
+- Customer API: /api/account/push/{info,subscribe,unsubscribe,offers}. Admin: /broadcast, /broadcast/info (Notifications page, "Broadcast to customers", test goes to owner phone).
+- Front end: web/js/notif.js glass card after order (&new=1 page) and on heart; "Not now"/blocked help = 7 days (sy_pn_snooze/sy_pn_help); Account > Profile card with offers switch. web/sw.js handles push + click (cache v2).
+- iPhone: only works when site is added to Home Screen (card is skipped when unsupported).

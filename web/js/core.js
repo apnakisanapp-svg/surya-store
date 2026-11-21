@@ -147,6 +147,7 @@ export const wish = {
     ls.set('sy_wish', [...this.ids]); bus.emit('wish');
     if (me.customer) { try { await api(`/account/wishlist/${id}`, { method: on ? 'PUT' : 'DELETE' }); } catch { /* ignore */ } }
     if (on) api('/events', { method: 'POST', body: { type: 'wish', product_id: id, sid } }).catch(() => {});
+    if (on && me.customer) bus.emit('wished');
     return on;
   },
   async sync() { if (!me.customer) return; try { const list = await api('/account/wishlist'); for (const p of list) this.ids.add(p.id); for (const id of [...this.ids]) if (!list.some(p => p.id === id)) await api(`/account/wishlist/${id}`, { method: 'PUT' }).catch(() => {}); ls.set('sy_wish', [...this.ids]); bus.emit('wish'); } catch { /* */ } },

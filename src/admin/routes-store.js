@@ -9,6 +9,7 @@ const catalog = require('../shared/catalog');
 const auth = require('../shared/auth');
 const mail = require('../shared/mail');
 const push = require('../shared/push');
+const custpush = require('../shared/custpush');
 const { crud } = require('./crud');
 const { itemImage, asyncH, bad, notFound, int, num, jparse, now, uniqueSlug, toCSV, isEmail } = require('../shared/util');
 
@@ -168,6 +169,14 @@ r.delete('/outbox/:id', (req, res) => { db.prepare('DELETE FROM outbox WHERE id=
 
 /* ---- phone notifications (web push) ---- */
 r.get('/push/info', (req, res) => res.json({ key: push.publicKey(), devices: push.count(), prefs: settings.get('push') }));
+r.get('/broadcast/info', (req, res) => res.json({ phones: custpush.countAll(), quiet: custpush.quiet() }));
+r.post('/broadcast', asyncH(async (req, res) => {
+  const b = req.body || {}, title = String(b.title || '').trim().slice(0, 60), body = String(b.body || '').trim().slice(0, 160);
+  if (!title || !body) throw bad('Write a title and a short message.');
+  if (b.test) { const n = await push.send('test', { title, body, url: '#/notifications', tag: 'bc-test' }); return res.json({ ok: true, test: true, sent: n }); }
+  const out = await custpush.broadcast({ title, body, url: String(b.url || '').slice(0, 200) || undefined, productId: int(b.product_id) || null });
+  res.json({ ok: true, ...out });
+}));
 r.post('/push/subscribe', (req, res) => { if (!push.subscribe(req.body?.subscription, req.get('user-agent'))) throw bad('This phone could not be registered. Try again.'); res.json({ ok: true, devices: push.count() }); });
 r.post('/push/unsubscribe', (req, res) => { push.unsubscribe(req.body?.endpoint); res.json({ ok: true, devices: push.count() }); });
 r.post('/push/test', asyncH(async (req, res) => {

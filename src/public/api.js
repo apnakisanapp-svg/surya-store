@@ -13,6 +13,7 @@ const orders = require('../shared/orders');
 const images = require('../shared/images');
 const mail = require('../shared/mail');
 const push = require('../shared/push');
+const custpush = require('../shared/custpush');
 const auth = require('../shared/auth');
 const U = require('../shared/util');
 const { asyncH, bad, notFound, HttpError, now, jparse, int, sha256, token, isEmail, normPhone, isPhone, hashIp, ipOf } = U;
@@ -369,6 +370,10 @@ acct.post('/addresses/:id/default', (req, res) => {
   db.prepare('UPDATE addresses SET is_default=0 WHERE customer_id=?').run(req.customer.id); db.prepare('UPDATE addresses SET is_default=1 WHERE id=?').run(id); res.json({ ok: true });
 });
 acct.delete('/addresses/:id', (req, res) => { db.prepare('DELETE FROM addresses WHERE id=? AND customer_id=?').run(int(req.params.id), req.customer.id); res.json({ ok: true }); });
+acct.get('/push/info', (req, res) => res.json({ key: push.publicKey(), ...custpush.status(req.customer.id) }));
+acct.post('/push/subscribe', (req, res) => { if (!custpush.subscribe(req.customer.id, req.body?.subscription, req.get('user-agent'))) throw bad('This phone could not be registered for notifications.'); res.json({ ok: true, ...custpush.status(req.customer.id) }); });
+acct.post('/push/unsubscribe', (req, res) => { custpush.unsubscribe(req.customer.id, req.body?.endpoint); res.json({ ok: true, ...custpush.status(req.customer.id) }); });
+acct.post('/push/offers', (req, res) => { custpush.setOffers(req.customer.id, req.body?.on !== false); res.json({ ok: true, ...custpush.status(req.customer.id) }); });
 acct.get('/wishlist', (req, res) => {
   const ids = db.prepare('SELECT product_id FROM wishlist WHERE customer_id=? ORDER BY created_at DESC').all(req.customer.id).map(r => r.product_id);
   res.json(ids.length ? catalog.listPublic({ ids, limit: 60, sort: 'relevance' }).items : []);

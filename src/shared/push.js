@@ -78,4 +78,4 @@ const contactMessage = (m) => later(() => send('contact', { title: `✉ New mess
 const newReview = (r) => later(() => send('review', { title: `⭐ New review ${r.rating || ''}/5`, body: String(r.text || r.body || '').slice(0, 140), url: '#/reviews', tag: 'review', actions: [], publicBody: 'Open the app to read it.' }));
 const newCustomer = (c) => later(() => send('customer', { title: '👤 New customer account', body: c.name || '', url: '#/customers', tag: 'customer', actions: [], publicBody: 'A new customer signed up.' }));
 
-module.exports = { publicKey, count, subscribe, unsubscribe, send, orderPlaced, paymentSubmitted, orderCancelled, returnRequested, lowStock, contactMessage, newReview, newCustomer };
+module.exports = { _lib: lib, _vapid: vapid, publicKey, count, subscribe, unsubscribe, send, orderPlaced, paymentSubmitted, orderCancelled, returnRequested, lowStock, contactMessage, newReview, newCustomer };

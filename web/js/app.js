@@ -1,6 +1,7 @@
 import { BOOT, $, h, startRouter, bus, wish, me, setLang } from './core.js';
 import './pages1.js';
 import './pages2.js';
+import './notif.js';
 import { buildChrome, cookieBanner, loadAnalytics, welcomePopup, exitIntent, intro } from './ui.js';
 
 // dark mode: owner choice, then the visitor's own choice
