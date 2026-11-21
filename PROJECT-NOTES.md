@@ -168,7 +168,3 @@ GST/BIS advice, final policy wording, real photos and logo, payment gateway KYC.
 - All @media(prefers-color-scheme:dark) rules removed from app.css; :root{color-scheme:light}. Site is light on every phone (html.dark toggle rules kept).
 - New route /search (pages1.js): sticky glass bar, recent searches (localStorage sy_recent, 8), popular, live suggestions, Enter -> /shop?q=. Shop results show a tappable search pill. ui.js openSearch() now just nav('/search').
 - Glass chips, Min/Max inputs and custom checkboxes in the shop filters.
-
-## Release 5 (cart reminder + small notifications)
-- Client syncs cart (logged in + notifications allowed) to POST /api/account/push/cart; table cart_snap. Job every 10 min (start.js) -> custpush.cartSweep: cart idle >=3h and <72h, one nudge per cart state, offer rules (offers ON, 1/day, none 10pm-8am IST), skipped if products gone/out of stock.
-- New order notifications: cancelled, payment_rejected (orders.setStatus / payment reject path).
