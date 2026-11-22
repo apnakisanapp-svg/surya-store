@@ -145,6 +145,7 @@ route(/^\/p\/([^/]+)$/, async (view, m) => {
   const S = { vid: null, qty: 1, img: 0, mode: 'photo' };
   const ins = p.variants.filter(v => v.active);
   if (ins.length) S.vid = (ins.find(v => v.in_stock) || ins[0]).id;
+  { const qv = Number(new URLSearchParams(location.search).get('v')); if (qv && ins.some(v => v.id === qv)) S.vid = qv; }
   const curV = () => ins.find(v => v.id === S.vid) || null;
   const info = h('div', { class: 'pd-info stack-lg' }), galBox = h('div');
 

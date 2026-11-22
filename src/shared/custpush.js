@@ -54,17 +54,18 @@ const buyActions = [{ action: 'view', title: 'View' }, { action: 'buy', title: '
 
 /* ---- order updates: the customer's own phones, no limits ---- */
 const COPY = {
-  confirmed: o => ({ title: `Order confirmed ✨`, body: `Hi ${first(o.name)}, your order ${o.number} is confirmed. We are getting it ready for you.` }),
-  shipped: o => ({ title: `On its way 🚚`, body: `Hi ${first(o.name)}, your order ${o.number} has been shipped.${o.tracking_no ? ' Tracking: ' + o.tracking_no : ''}` }),
-  cancelled: o => ({ title: `Order cancelled`, body: `Hi ${first(o.name)}, your order ${o.number} has been cancelled. If you had paid, we will get in touch about your refund.` }),
-  payment_rejected: o => ({ title: `Payment needs a check`, body: `Hi ${first(o.name)}, we could not match the payment for order ${o.number}. Please open the order and send the transaction ID again.` }),
-  delivered: o => ({ title: `Delivered 🎉`, body: `Hi ${first(o.name)}, your order ${o.number} has arrived. We hope you love it!` }),
+  confirmed: o => ({ title: `Order confirm ho gaya ✅`, body: `Hi ${first(o.name)}, aapka order ${o.number}${o.pname ? ' (' + o.pname + ')' : ''} confirm hai. Hum use taiyaar kar rahe hain.` }),
+  shipped: o => ({ title: `Order ship ho gaya 🚚`, body: `Hi ${first(o.name)}, ${o.pname ? o.pname + ' ka order' : 'aapka order'} ${o.number} bhej diya gaya hai.${o.tracking_no ? ' Tracking: ' + o.tracking_no : ''}` }),
+  cancelled: o => ({ title: `Order cancel ho gaya ❌`, body: `Hi ${first(o.name)}, maaf kijiye, order ${o.number}${o.pname ? ' (' + o.pname + ')' : ''} cancel ho gaya hai. Payment kiya tha to wo wapas milega.` }),
+  payment_rejected: o => ({ title: `Payment check karna hai ⚠️`, body: `Hi ${first(o.name)}, order ${o.number} ka payment match nahi hua. Order kholkar transaction ID dobara bhejein.` }),
+  delivered: o => ({ title: `Order deliver ho gaya 🎉`, body: `Hi ${first(o.name)}, ${o.pname ? o.pname + ' ' : 'aapka order '}${o.number} pahunch gaya hai. Umeed hai pasand aayega!` }),
 };
 const orderUpdate = (o, kind) => later(async () => {
   if (!o || !o.customer_id || !COPY[kind]) return;
   const rows = db.prepare('SELECT * FROM push_cust WHERE customer_id=?').all(o.customer_id); if (!rows.length) return;
   const row = db.prepare('SELECT * FROM orders WHERE id=?').get(o.id) || o;
-  const it = db.prepare('SELECT product_id, image FROM order_items WHERE order_id=? ORDER BY id LIMIT 1').get(row.id);
+  const it = db.prepare('SELECT product_id, image, name, variant_name FROM order_items WHERE order_id=? ORDER BY id LIMIT 1').get(row.id);
+  if (it) row.pname = it.name + (it.variant_name ? ' (' + it.variant_name + ')' : '');
   const url = `/order/${row.number}?t=${row.access_token}`;
   await deliver(rows, { ...COPY[kind](row), image: it && it.image ? cfg.SITE_URL + itemImage(it.image).replace(/-thumb\.webp$/, '-card.webp') : undefined, url, tag: 'order-' + row.id, actions: [{ action: 'view', title: 'Track order' }] });
 });

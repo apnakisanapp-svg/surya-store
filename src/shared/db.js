@@ -174,6 +174,7 @@ db.exec(SCHEMA);
 db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS products_fts USING fts5(name, name_hi, tagline, description, tags, category, tokenize='unicode61 remove_diacritics 2', prefix='2 3 4');`);
 
 try { db.exec('ALTER TABLE orders ADD COLUMN upi_adjust REAL DEFAULT 0'); } catch { /* already there */ }
+db.exec('CREATE TABLE IF NOT EXISTS short_links(code TEXT PRIMARY KEY, target TEXT NOT NULL UNIQUE, created_at TEXT)');
 for (const c of ['variants ADD COLUMN size TEXT', 'variants ADD COLUMN colour_name TEXT', 'products ADD COLUMN size_guide TEXT', 'product_images ADD COLUMN colour TEXT']) { try { db.exec('ALTER TABLE ' + c); } catch { /* already there */ } }
 try { db.exec("ALTER TABLE products ADD COLUMN pay_rule TEXT DEFAULT ''"); } catch { /* already there */ }
 try { db.exec("ALTER TABLE addresses ADD COLUMN district TEXT DEFAULT ''"); } catch { /* already there */ }

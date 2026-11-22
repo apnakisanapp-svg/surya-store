@@ -16,13 +16,25 @@ function render(tpl, vars) {
   return String(tpl || '').replace(/\{\{\s*(\w+)\s*\}\}/g, (_, k) => (vars[k] == null ? '' : String(vars[k])));
 }
 
+const shortlink = require('./shortlink');
 function orderVars(o) {
   const b = settings.get('brand');
   const base = cfg.SITE_URL;
+  const its = o.id ? db.prepare('SELECT oi.name, oi.variant_name, oi.qty, oi.product_id, oi.variant_id, p.slug FROM order_items oi LEFT JOIN products p ON p.id=oi.product_id WHERE oi.order_id=? ORDER BY oi.id').all(o.id) : [];
+  const first = its[0];
+  const label = i => i.name + (i.variant_name ? ` (${i.variant_name})` : '');
+  const productLink = first && first.slug ? shortlink.make(`/p/${first.slug}` + (first.variant_id ? `?v=${first.variant_id}` : '')) : base;
+  const orderPath = `/order/${o.number}?t=${o.access_token}`;
+  const track = o.tracking_url && /^https:\/\//i.test(o.tracking_url) ? shortlink.make(o.tracking_url) : shortlink.make(`/track?order=${encodeURIComponent(o.number)}`);
   return {
     name: (o.name || '').split(' ')[0] || 'there', order: o.number, total: rupee(o.total), courier: o.courier || '', tracking: o.tracking_no || '',
-    track_url: o.tracking_url || `${base}/track?order=${encodeURIComponent(o.number)}`, days: settings.get('returns').window_days,
-    reason: o.cancel_reason || '', advance: rupee(o.advance_amount || 0), balance: rupee(Math.max(0, Number(o.total) - Number(o.advance_amount || 0))), review_url: `${base}/order/${o.number}?t=${o.access_token}#review`, brand: b.name, url: base,
+    track_url: track, days: settings.get('returns').window_days,
+    reason: o.cancel_reason || '', advance: rupee(o.advance_amount || 0), balance: rupee(Math.max(0, Number(o.total) - Number(o.advance_amount || 0))),
+    review_url: shortlink.make(orderPath + '#review'), brand: b.name, url: base,
+    product: first ? label(first) + (its.length > 1 ? ` +${its.length - 1} more` : '') : '',
+    items: its.length ? its.map(i => `${label(i)} × ${i.qty}`).join('\n🛍️ ') : '',
+    product_link: productLink, order_link: shortlink.make(orderPath),
+    support: b.whatsapp || b.phone || b.email || base,
   };
 }
 
@@ -37,16 +49,16 @@ function queueOrderMessage(order, kind) {
   const tpl = settings.get('messages')[kind];
   if (!tpl) return;
   const vars = orderVars(order);
-  const subject = render(tpl.subject, vars), body = render(tpl.body, vars);
+  const subject = render(tpl.subject, vars), body = render(tpl.body, vars), waBody = render(tpl.wa || tpl.body, vars);
   const ts = now();
   if (order.email) {
     const info = db.prepare("INSERT INTO outbox(channel,to_addr,subject,body,status,order_id,kind,created_at) VALUES('email',?,?,?,?,?,?,?)")
       .run(order.email, subject, body, getTransport() ? 'queued' : 'manual', order.id, kind, ts);
     if (getTransport()) sendEmail(info.lastInsertRowid).catch(() => {});
   }
-  const link = waLink(order.phone, body);
+  const link = waLink(order.phone, waBody);
   if (link) db.prepare("INSERT INTO outbox(channel,to_addr,subject,body,link,status,order_id,kind,created_at) VALUES('whatsapp',?,?,?,?,'manual',?,?,?)")
-    .run(order.phone, subject, body, link, order.id, kind, ts);
+    .run(order.phone, subject, waBody, link, order.id, kind, ts);
 }
 
 function queueEmail(to, subject, body, kind = 'misc') {

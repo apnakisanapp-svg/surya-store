@@ -138,7 +138,7 @@ r.post('/notify/send/:productId', asyncH((req, res) => {
   const cfg = require('../shared/config'), B = settings.get('messages').back_in_stock;
   let n = 0;
   for (const q of db.prepare('SELECT * FROM notify_requests WHERE product_id=? AND notified=0').all(pid)) {
-    const vars = { product: p.name, url: `${cfg.SITE_URL}/p/${p.slug}` }, body = mail.render(B.body, vars);
+    const pl = require('../shared/shortlink').make(`/p/${p.slug}`), vars = { product: p.name, url: pl, product_link: pl, brand: settings.get('brand').name, support: settings.get('brand').whatsapp || settings.get('brand').phone || cfg.SITE_URL }, body = mail.render(B.body, vars);
     if (isEmail(q.contact)) mail.queueEmail(q.contact, mail.render(B.subject, vars), body, 'back_in_stock');
     else { const link = mail.waLink(q.contact, body); db.prepare("INSERT INTO outbox(channel,to_addr,subject,body,link,status,kind,created_at) VALUES('whatsapp',?,?,?,?,'manual','back_in_stock',?)").run(q.contact, mail.render(B.subject, vars), body, link, now()); }
     db.prepare('UPDATE notify_requests SET notified=1 WHERE id=?').run(q.id); n++;

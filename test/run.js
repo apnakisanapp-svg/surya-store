@@ -172,7 +172,11 @@ const order = (pid, qty, method = 'upi') => pj('/orders', { method: 'POST', body
   const pi2 = await A('/push/info'); ok(pi2.prefs.lock_hide === true && pi2.prefs.stock === false, 'push: switches are saved');
   await A('/settings/push', { method: 'PUT', body: { lock_hide: false, stock: true } });
   const ob = await A('/outbox'); const rowW = ob.find(x => x.channel === 'whatsapp' && x.order_id);
-  ok(rowW && /^Hi \w+/.test(rowW.body) && !/\{\{/.test(rowW.body), 'messages: customer message is queued with the new warm wording');
+  ok(rowW && /Hi \w+/.test(rowW.body) && !/\{\{/.test(rowW.body), 'messages: customer message is queued with the new warm wording');
+  ok(rowW && /\/s\/[A-Za-z0-9]{6,}/.test(rowW.body) && !/[?&]t=/.test(rowW.body), 'messages: links are short and never show the order token');
+  const sl = rowW && rowW.body.match(/https?:\/\/[^\s]+\/s\/([A-Za-z0-9]+)/); const rd = sl ? await fetch(PUB + '/s/' + sl[1], { redirect: 'manual' }) : null;
+  ok(rd && rd.status === 302 && /^\/(order|p)\//.test(rd.headers.get('location') || ''), 'messages: a short link opens the right page');
+  ok((await fetch(PUB + '/s/nope1234', { redirect: 'manual' })).status === 404, 'messages: an unknown short link shows a friendly 404');
   if (rowW) {
     const done = await A('/outbox/done-all', { method: 'POST', body: { ids: [rowW.id] } });
     ok(done.done === 1, 'Sab Done: marks the chosen messages as sent');

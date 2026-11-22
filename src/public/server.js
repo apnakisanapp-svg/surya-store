@@ -101,6 +101,15 @@ function createApp() {
       icons: T.favicon_url ? [{ src: T.favicon_url, sizes: '512x512', type: 'image/png' }] : [{ src: '/img/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' }, { src: '/img/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' }, { src: '/img/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }] });
   });
 
+  // short links used in customer messages: /s/abc123 -> the real page
+  app.get('/s/:code', (req, res) => {
+    const t = require('../shared/shortlink').resolve(req.params.code);
+    res.set('Cache-Control', 'no-store');
+    if (t) return res.redirect(302, t);
+    const B = settings.get('brand');
+    res.status(404).type('html').send(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Link not found | ${esc(B.name)}</title></head><body style="margin:0;font-family:system-ui,Segoe UI,Roboto,sans-serif;background:#f6f7f9;color:#14181f;display:grid;place-items:center;min-height:100vh"><div style="max-width:380px;margin:16px;padding:28px;background:#fff;border-radius:20px;box-shadow:0 10px 30px rgba(18,28,48,.1);text-align:center"><h1 style="font-size:1.3rem;margin:0 0 8px">This link does not work any more</h1><p style="color:#5a6270;line-height:1.5;margin:0 0 18px">It may be old or typed wrongly. You can still find everything on our website.</p><a href="/" style="display:inline-block;padding:12px 22px;border-radius:14px;background:#14181f;color:#fff;text-decoration:none;font-weight:600">Go to ${esc(B.name)}</a></div></body></html>`);
+  });
+
   // static front-end
   // code files (js/css/html) are checked with the server on every load (a tiny 304 when unchanged), so a new release is picked up at once; pictures/fonts stay cached
   app.use(express.static(cfg.WEB, { maxAge: cfg.PRODUCTION ? '1h' : 0, index: false, extensions: ['html'], setHeaders: (res, p) => { if (/\.(js|css|html|json|webmanifest)$/i.test(p)) res.set('Cache-Control', 'no-cache'); } }));
