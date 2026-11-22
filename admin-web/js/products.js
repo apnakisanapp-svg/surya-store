@@ -157,7 +157,7 @@ reg(/^\/products\/(new|\d+)$/, async (v, m) => {
   async function save(e) {
     const btn = e && e.currentTarget;
     try {
-      const body = { ...form.get(), variants: variants.filter(x => x.name) };
+      const body = { ...form.get(), variants: variants.filter(x => x.name || x.size || x.colour_name) };
       delete body.risk_ack; // acks are saved by their own tick boxes; never overwrite them with the old copy loaded with the page
       body.similar_ids = p.similar_ids; body.similar_mode = p.similar_mode;
       const r = await busy(btn || $('#savebtn'), () => api(isNew ? '/products' : '/products/' + id, { method: isNew ? 'POST' : 'PUT', body }));

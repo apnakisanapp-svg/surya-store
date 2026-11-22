@@ -1,8 +1,6 @@
-1. Extract this zip into a NEW EMPTY folder. You will see 3 folders: src, web, admin-web.
-2. Open https://github.com/apnakisanapp-svg/surya-store/upload/main
-3. Drag the 3 FOLDERS (src, web, admin-web) - not loose files. The page must show paths like src/shared/db.js, web/js/pages1.js, admin-web/js/products.js.
-4. Commit changes.
-5. AWS terminal (ubuntu@...):
-   cd ~/surya-store && git pull && sudo systemctl restart surya && sudo systemctl is-active surya
-   (no npm install needed)
-6. Admin: Ctrl+F5. Website: Ctrl+F5.
+Only 1 file changed: admin-web/js/products.js
+1. Extract into a NEW EMPTY folder (you get the folder admin-web).
+2. https://github.com/apnakisanapp-svg/surya-store/upload/main -> drag the FOLDER admin-web (page must show admin-web/js/products.js) -> Commit.
+3. AWS terminal: cd ~/surya-store && git pull
+   (restart not needed, this is an admin page file; but you may run: sudo systemctl restart surya)
+4. Admin: Ctrl+F5, open the jacket, make options again, Save.
