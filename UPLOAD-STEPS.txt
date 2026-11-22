@@ -1,3 +1,3 @@
-Upload: drag the FOLDER admin-web into https://github.com/apnakisanapp-svg/surya-store/upload/main (path must show admin-web/js/products.js) -> Commit.
+Upload: drag the FOLDER admin-web into https://github.com/apnakisanapp-svg/surya-store/upload/main (page must show admin-web/js/products.js) -> Commit.
 AWS terminal: cd ~/surya-store && git pull && sudo systemctl restart surya && sudo systemctl is-active surya
-Then Admin -> Products -> open a product: "Paste from AI" card at top (Ctrl+F5 once).
+Then Admin Ctrl+F5.

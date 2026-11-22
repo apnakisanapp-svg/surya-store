@@ -10,12 +10,16 @@ reg(/^\/products$/, async (v, m, q) => {
     const p = new URLSearchParams({ page: st.page }); if (st.status) p.set('status', st.status); if (st.q) p.set('q', st.q); if (st.low) p.set('low', '1'); if (st.trash) p.set('trash', '1');
     const r = await api('/products?' + p), c = r.counts;
     clear(tabBar).append(tabs([['', 'All', Object.values(c).reduce((a, b) => a + b, 0) || ''], ['published', 'Live', c.published || ''], ['draft', 'Drafts', c.draft || ''], ['scheduled', 'Scheduled', c.scheduled || ''], ['low', 'Low stock'], ['trash', 'Trash']], st.trash ? 'trash' : st.low ? 'low' : st.status, k => { st.status = ['published', 'draft', 'scheduled'].includes(k) ? k : ''; st.low = k === 'low' ? '1' : ''; st.trash = k === 'trash' ? '1' : ''; st.page = 1; load(); }));
-    const sel = new Set(), bulk = h('div', { class: 'row hide', style: { marginBottom: '10px' } });
-    const upd = () => { bulk.classList.toggle('hide', !sel.size); };
+    const sel = new Set(), cbs = [], bulk = h('div', { class: 'row hide', style: { marginBottom: '10px' } });
+    const allCb = h('input', { type: 'checkbox', style: { width: '20px', height: '20px' }, onchange: e => { cbs.forEach(c => { c.checked = e.target.checked; e.target.checked ? sel.add(c._id) : sel.delete(c._id); }); upd(); } });
+    const cnt = h('b', null, ''), clr = h('button', { class: 'btn sm ghost', onclick: () => { cbs.forEach(c => { c.checked = false; }); sel.clear(); upd(); } }, 'Clear');
+    const selBar = h('div', { class: 'row', style: { marginBottom: '10px', alignItems: 'center' } }, h('label', { class: 'row', style: { gap: '8px', cursor: 'pointer', alignItems: 'center', padding: '6px 0' } }, allCb, h('span', null, 'Select all on this page')), cnt, clr);
+    const upd = () => { bulk.classList.toggle('hide', !sel.size); cnt.textContent = sel.size ? sel.size + ' selected' : ''; clr.classList.toggle('hide', !sel.size); allCb.checked = !!cbs.length && sel.size === cbs.length; };
+    upd();
     const doBulk = async (action, value) => { try { const out = await api('/products/bulk', { method: 'POST', body: { ids: [...sel], action, value } }); toast(`${out.done.length} done` + (out.failed.length ? `. Not done: ${out.failed.map(f => f.error).slice(0, 2).join(' | ')}` : ''), !!out.failed.length); load(); } catch (x) { toast(x.message, true); } };
     bulk.append(h('b', null, 'With selected:'), h('button', { class: 'btn sm', onclick: () => doBulk('publish') }, 'Publish'), h('button', { class: 'btn sm', onclick: () => doBulk('unpublish') }, 'Hide'), h('button', { class: 'btn sm', onclick: async () => { const n = await promptBox('Change prices', 'Percent change (e.g. 10 or -5)'); if (n) doBulk('price_pct', n); } }, 'Change price %'), h('button', { class: 'btn sm bad', onclick: async () => { if (await confirmBox('Move selected products to trash?')) doBulk('trash'); } }, 'Trash'));
-    clear(box).append(bulk, table([
-      { l: '', f: r => h('input', { type: 'checkbox', onchange: e => { e.target.checked ? sel.add(r.id) : sel.delete(r.id); upd(); } }) },
+    clear(box).append(r.items.length ? selBar : '', bulk, table([
+      { l: '', f: r => { const cb = h('input', { type: 'checkbox', style: { width: '20px', height: '20px' }, onchange: e => { e.target.checked ? sel.add(r.id) : sel.delete(r.id); upd(); } }); cb._id = r.id; cbs.push(cb); return h('label', { style: { display: 'block', padding: '12px 14px', margin: '-12px -14px', cursor: 'pointer' } }, cb); } },
       { l: '', f: r => r.thumb ? h('img', { src: r.thumb, width: 44, height: 44, alt: '', style: { borderRadius: '8px', objectFit: 'cover' } }) : h('div', { style: { width: '44px', height: '44px', background: 'var(--bg)', borderRadius: '8px' } }) },
       { l: 'Product', f: r => h('div', null, h('a', { href: '#/products/' + r.id }, h('b', null, r.name)), h('div', { class: 'small muted' }, `${r.category_name || 'No category'}${r.sku ? ' · ' + r.sku : ''}`)) },
       { l: 'Price', f: r => money(r.price), r: 1 }, { l: 'Stock', f: r => h('span', { style: { color: r.stock <= 0 ? 'var(--bad)' : '' } }, r.stock), r: 1 }, { l: 'Sold', k: 'sold_count', r: 1 },
@@ -83,38 +87,54 @@ reg(/^\/products\/(new|\d+)$/, async (v, m) => {
   v.append(head, h('div', { class: 'grid g21' }, h('div', { class: 'stack-lg' }, card('Paste from AI', aiBox()), card('', form.el), card('Photos', isNew ? h('p', { class: 'muted' }, 'Save the product first, then add photos.') : imgs), card('Options (size, colour…)', h('p', { class: 'muted small' }, 'Optional. Each option can have its own price and stock. Leave empty if the product has no options.'), vbox), card('Similar products shown at the bottom', simBox), isNew ? null : card('360° spin and 3D model (optional)', advanced())),
     h('div', { class: 'stack-lg' }, card('Save & publish', status, h('div', { class: 'row', style: { marginTop: '10px' } }, h('button', { class: 'btn primary', id: 'savebtn', onclick: save }, 'Save'))), card('Risk checker', risk), card('Profit calculator', econ))));
   window.onbeforeunload = null;
+  const AI_TXT = { NAME: 'name', NAME_HI: 'name_hi', TAGLINE: 'tagline', TAGLINE_HI: 'tagline_hi', DESCRIPTION: 'description', DESCRIPTION_HI: 'description_hi', SAFETY: 'safety', SAFETY_HI: 'safety_hi', SEO_TITLE: 'seo_title', SEO_DESC: 'seo_desc', BADGE: 'badge', SKU: 'sku', SIZE_CM: 'dims', HSN: 'hsn' };
+  const AI_NUM = { PRICE: 'price', MRP: 'mrp', STOCK: 'stock', WEIGHT_G: 'weight_g' };
+  const AI_FLAG = { BATTERY: 'has_battery', ELECTRONIC: 'is_electronic', SHARP: 'has_blade', LIQUID: 'is_liquid', COSMETIC_FOOD: 'is_cosmetic_food' };
   function aiParse(t) {
-    const out = { sku: '', specs: [], faq: [] }; let mode = '', q = null, a = null;
+    const out = { f: {}, tags: null, category: '', specs: [], faq: [] }; let mode = '', cur = '', q = null, a = null;
     const flush = () => { if (q && a != null) out.faq.push({ q: q.trim(), a: a.trim() }); q = null; a = null; };
     for (const raw of String(t || '').split(/\r?\n/)) {
       const ln = raw.trim(); if (!ln) continue;
       let m;
-      if ((m = ln.match(/^sku\s*[:=-]\s*(.+)$/i))) { out.sku = m[1].trim(); continue; }
-      if (/^(details?|specs?|specifications?)( table)?\s*:?\s*$/i.test(ln)) { flush(); mode = 'd'; continue; }
-      if (/^(questions?( (&|and) answers?)?|faqs?|q ?& ?a)\s*:?\s*$/i.test(ln)) { flush(); mode = 'q'; continue; }
+      if (/^(details?|specs?|specifications?)( table)?\s*:?\s*$/i.test(ln)) { flush(); mode = 'd'; cur = ''; continue; }
+      if (/^(questions?( (&|and) answers?)?|faqs?|q ?& ?a)\s*:?\s*$/i.test(ln)) { flush(); mode = 'q'; cur = ''; continue; }
+      if (!mode && (m = ln.match(/^([A-Za-z_]{2,20})\s*[:=]\s*(.*)$/))) {
+        const K = m[1].toUpperCase(), val = m[2].trim();
+        if (K in AI_TXT) { out.f[AI_TXT[K]] = val; cur = AI_TXT[K]; continue; }
+        if (K in AI_NUM) { const n = parseFloat(val.replace(/[^\d.]/g, '')); if (!isNaN(n)) out.f[AI_NUM[K]] = n; cur = ''; continue; }
+        if (K in AI_FLAG) { out.f[AI_FLAG[K]] = /^(yes|y|true|haan|ha|1)\b/i.test(val); cur = ''; continue; }
+        if (K === 'SEARCH_WORDS' || K === 'TAGS') { out.tags = val.split(/[,|]/).map(x => x.trim()).filter(Boolean); cur = ''; continue; }
+        if (K === 'CATEGORY') { out.category = val; cur = ''; continue; }
+      }
+      if (!mode && cur) { out.f[cur] = (out.f[cur] ? out.f[cur] + '\n' : '') + ln; continue; }
       if ((m = ln.match(/^q(?:uestion)?\s*\d*\s*[:.)-]\s*(.+)$/i))) { flush(); mode = 'q'; q = m[1]; a = null; continue; }
       if ((m = ln.match(/^a(?:nswer)?\s*\d*\s*[:.)-]\s*(.*)$/i)) && q != null) { a = m[1]; continue; }
       if (mode === 'q' && q != null && a != null) { a += ' ' + ln; continue; }
-      if (mode === 'd' && (m = ln.match(/^[-*\u2022\s]*([^:|]{1,60})\s*[:|]\s*(.+)$/))) out.specs.push({ k: m[1].trim(), v: m[2].trim() });
+      if (mode === 'd' && (m = ln.match(/^[-*•\s]*([^:|]{1,60})\s*[:|]\s*(.+)$/))) out.specs.push({ k: m[1].trim(), v: m[2].trim() });
     }
     flush(); return out;
   }
   function aiBox() {
-    const ta = h('textarea', { class: 'inp', rows: 7, placeholder: 'SKU: SU-KIT-002\nDETAILS:\nMaterial: Stainless steel\nCapacity: 750 ml\nQUESTIONS:\nQ: Can I put hot water?\nA: Yes, normal hot water is fine.' });
+    const ta = h('textarea', { class: 'inp', rows: 8, placeholder: 'NAME: ...\nTAGLINE: ...\nCATEGORY: Kitchen\nDESCRIPTION: ...\nSEARCH_WORDS: a, b, c\nPRICE: 399\nSKU: SU-KIT-002\nDETAILS:\nMaterial: Steel\nQUESTIONS:\nQ: ...\nA: ...' });
     const rep = h('input', { type: 'checkbox' }), note = h('small', { class: 'muted' }, 'Paste the AI answer, then press Fill. Nothing is saved until you press Save.');
-    const prompt = () => { const d = form.get(); return `Product: ${d.name || '(product name)'}${d.category_id ? '' : ''}\nWrite in simple English, own words, no brand names, no claims I cannot verify.\nReply ONLY in this exact format:\nSKU: <short code like SU-KIT-002>\nDETAILS:\n<Label>: <Value>   (6 to 8 lines, only facts true for this product)\nQUESTIONS:\nQ: <question a buyer would ask>\nA: <honest short answer>\n(5 questions)`; };
+    const prompt = () => {
+      const d = form.get(), cat = (cats.find(c => String(c.id) === String(d.category_id)) || {}).name || '';
+      const known = [d.name && 'Product: ' + d.name, cat && 'Category: ' + cat, d.price && 'Selling price: Rs ' + d.price, d.sku && 'SKU: ' + d.sku].filter(Boolean).join('\n') || 'Product: (write the product name or details here)';
+      return `${known}\n\nWrite a professional online-store listing for this product. Simple English, own words, no brand names, no claims that cannot be verified (no "3x", "nano", "best", "100% safe"). Use no fake MRP. Add honest usage cautions.\nReply ONLY in this exact format, one field per line (DESCRIPTION and SAFETY may take several lines):\nNAME: <clear product name>\nNAME_HI: <Hinglish name>\nTAGLINE: <one line, max 120 characters>\nTAGLINE_HI: <Hinglish one line>\nCATEGORY: <choose ONE of: ${cats.map(c => c.name).join(', ')}>\nDESCRIPTION: <3 short paragraphs: what it is, how it helps, care/cautions>\nDESCRIPTION_HI: <same in Hinglish>\nSEARCH_WORDS: <40 keywords, comma separated, Hindi/English/Hinglish/spelling mistakes>\nPRICE: <number>\nMRP: <leave empty>\nSTOCK: <number>\nSKU: <short code like SU-KIT-002>\nWEIGHT_G: <number>\nSIZE_CM: <L x W x H>\nHSN: <code if you are sure, else empty>\nBATTERY: yes or no\nELECTRONIC: yes or no\nSHARP: yes or no\nLIQUID: yes or no\nCOSMETIC_FOOD: yes or no\nSAFETY: <honest safety and use instructions>\nSAFETY_HI: <same in Hinglish>\nSEO_TITLE: <max 60 characters>\nSEO_DESC: <max 150 characters>\nDETAILS:\n<Label>: <Value>   (6 to 8 lines, only facts true for this product)\nQUESTIONS:\nQ: <question a buyer would ask>\nA: <honest short answer>\n(5 questions)\nDo NOT write manufacturer, warranty, importer or GST.`;
+    };
     const copy = async () => { const t = prompt(); try { await navigator.clipboard.writeText(t); toast('Prompt copied. Paste it in any AI.'); } catch { window.prompt('Copy this prompt:', t); } };
     const fill = () => {
-      const r = aiParse(ta.value);
-      if (!r.sku && !r.specs.length && !r.faq.length) return toast('Nothing found. Check the format.', true);
-      const cur = form.get(), next = { ...cur };
-      if (r.sku) next.sku = r.sku;
+      const r = aiParse(ta.value), n = Object.keys(r.f).length + (r.tags ? 1 : 0) + (r.category ? 1 : 0);
+      if (!n && !r.specs.length && !r.faq.length) return toast('Nothing found. Check the format.', true);
+      const cur = form.get(), next = { ...cur, ...r.f }; let catNote = '';
+      if (r.tags) next.tags = r.tags;
+      if (r.category) { const k = r.category.toLowerCase(), c = cats.find(x => x.name.toLowerCase() === k) || cats.find(x => k.includes(x.name.toLowerCase()) || x.name.toLowerCase().includes(k)); if (c) next.category_id = c.id; else catNote = ` Category "${r.category}" not found, choose it yourself.`; }
       if (r.specs.length) next.specs = rep.checked ? r.specs : [...(cur.specs || []).filter(x => x.k || x.v), ...r.specs];
       if (r.faq.length) next.faq = rep.checked ? r.faq : [...(cur.faq || []).filter(x => x.q || x.a), ...r.faq];
       const old = form.el; form = buildForm(SPEC(cats), next, formOpts); old.replaceWith(form.el); dirty = true;
-      note.textContent = `Filled: ${r.sku ? 'SKU, ' : ''}${r.specs.length} detail rows, ${r.faq.length} questions. Check them, then Save.`; toast('Filled. Check and Save.');
+      note.textContent = `Filled ${n} fields, ${r.specs.length} detail rows, ${r.faq.length} questions.${catNote} Now add manufacturer and warranty yourself, check everything, then Save.`; toast('Filled. Check and Save.');
     };
-    return h('div', { class: 'stack' }, ta, h('label', { class: 'chk' }, rep, h('span', null, 'Replace existing rows (otherwise add below them)')), h('div', { class: 'row' }, h('button', { type: 'button', class: 'btn primary sm', onclick: fill }, 'Fill'), h('button', { type: 'button', class: 'btn sm', onclick: copy }, 'Copy prompt for AI')), note);
+    return h('div', { class: 'stack' }, ta, h('label', { class: 'chk' }, rep, h('span', null, 'Replace existing detail rows and questions (otherwise add below them)')), h('div', { class: 'row' }, h('button', { type: 'button', class: 'btn primary sm', onclick: fill }, 'Fill'), h('button', { type: 'button', class: 'btn sm', onclick: copy }, 'Copy prompt for AI')), note);
   }
   function paintStatus() {
     clear(status);
