@@ -74,14 +74,48 @@ reg(/^\/products\/(new|\d+)$/, async (v, m) => {
   const cats = await api('/categories');
   let p = isNew ? { price: 0, mrp: 0, stock: 0, max_per_order: 10, tags: [], specs: [], faq: [], variants: [], images: [], risk: null, economics: null, similar_mode: 'auto', similar_ids: [] } : await api('/products/' + m[1]);
   const id = p.id;
-  const form = buildForm(SPEC(cats), p, { onChange: () => { dirty = true; liveRisk(); } });
+  const formOpts = { onChange: () => { dirty = true; liveRisk(); } };
+  let form = buildForm(SPEC(cats), p, formOpts);
   let dirty = false, variants = JSON.parse(JSON.stringify(p.variants || []));
   const risk = h('div'), econ = h('div'), imgs = h('div'), vbox = h('div'), simBox = h('div');
   const head = pageHead(isNew ? 'New product' : p.name, h('a', { class: 'btn', href: '#/products' }, '← All products'), !isNew ? h('a', { class: 'btn', href: `${/^4\d{3}$/.test(location.port) ? location.origin.replace(/:\d+$/, '') + ':3000' : ''}/p/${p.slug}`, target: '_blank', id: 'viewlink' }, 'View on website') : null);
   const status = h('div', { class: 'row' });
-  v.append(head, h('div', { class: 'grid g21' }, h('div', { class: 'stack-lg' }, card('', form.el), card('Photos', isNew ? h('p', { class: 'muted' }, 'Save the product first, then add photos.') : imgs), card('Options (size, colour…)', h('p', { class: 'muted small' }, 'Optional. Each option can have its own price and stock. Leave empty if the product has no options.'), vbox), card('Similar products shown at the bottom', simBox), isNew ? null : card('360° spin and 3D model (optional)', advanced())),
+  v.append(head, h('div', { class: 'grid g21' }, h('div', { class: 'stack-lg' }, card('Paste from AI', aiBox()), card('', form.el), card('Photos', isNew ? h('p', { class: 'muted' }, 'Save the product first, then add photos.') : imgs), card('Options (size, colour…)', h('p', { class: 'muted small' }, 'Optional. Each option can have its own price and stock. Leave empty if the product has no options.'), vbox), card('Similar products shown at the bottom', simBox), isNew ? null : card('360° spin and 3D model (optional)', advanced())),
     h('div', { class: 'stack-lg' }, card('Save & publish', status, h('div', { class: 'row', style: { marginTop: '10px' } }, h('button', { class: 'btn primary', id: 'savebtn', onclick: save }, 'Save'))), card('Risk checker', risk), card('Profit calculator', econ))));
   window.onbeforeunload = null;
+  function aiParse(t) {
+    const out = { sku: '', specs: [], faq: [] }; let mode = '', q = null, a = null;
+    const flush = () => { if (q && a != null) out.faq.push({ q: q.trim(), a: a.trim() }); q = null; a = null; };
+    for (const raw of String(t || '').split(/\r?\n/)) {
+      const ln = raw.trim(); if (!ln) continue;
+      let m;
+      if ((m = ln.match(/^sku\s*[:=-]\s*(.+)$/i))) { out.sku = m[1].trim(); continue; }
+      if (/^(details?|specs?|specifications?)( table)?\s*:?\s*$/i.test(ln)) { flush(); mode = 'd'; continue; }
+      if (/^(questions?( (&|and) answers?)?|faqs?|q ?& ?a)\s*:?\s*$/i.test(ln)) { flush(); mode = 'q'; continue; }
+      if ((m = ln.match(/^q(?:uestion)?\s*\d*\s*[:.)-]\s*(.+)$/i))) { flush(); mode = 'q'; q = m[1]; a = null; continue; }
+      if ((m = ln.match(/^a(?:nswer)?\s*\d*\s*[:.)-]\s*(.*)$/i)) && q != null) { a = m[1]; continue; }
+      if (mode === 'q' && q != null && a != null) { a += ' ' + ln; continue; }
+      if (mode === 'd' && (m = ln.match(/^[-*\u2022\s]*([^:|]{1,60})\s*[:|]\s*(.+)$/))) out.specs.push({ k: m[1].trim(), v: m[2].trim() });
+    }
+    flush(); return out;
+  }
+  function aiBox() {
+    const ta = h('textarea', { class: 'inp', rows: 7, placeholder: 'SKU: SU-KIT-002\nDETAILS:\nMaterial: Stainless steel\nCapacity: 750 ml\nQUESTIONS:\nQ: Can I put hot water?\nA: Yes, normal hot water is fine.' });
+    const rep = h('input', { type: 'checkbox' }), note = h('small', { class: 'muted' }, 'Paste the AI answer, then press Fill. Nothing is saved until you press Save.');
+    const prompt = () => { const d = form.get(); return `Product: ${d.name || '(product name)'}${d.category_id ? '' : ''}\nWrite in simple English, own words, no brand names, no claims I cannot verify.\nReply ONLY in this exact format:\nSKU: <short code like SU-KIT-002>\nDETAILS:\n<Label>: <Value>   (6 to 8 lines, only facts true for this product)\nQUESTIONS:\nQ: <question a buyer would ask>\nA: <honest short answer>\n(5 questions)`; };
+    const copy = async () => { const t = prompt(); try { await navigator.clipboard.writeText(t); toast('Prompt copied. Paste it in any AI.'); } catch { window.prompt('Copy this prompt:', t); } };
+    const fill = () => {
+      const r = aiParse(ta.value);
+      if (!r.sku && !r.specs.length && !r.faq.length) return toast('Nothing found. Check the format.', true);
+      const cur = form.get(), next = { ...cur };
+      if (r.sku) next.sku = r.sku;
+      if (r.specs.length) next.specs = rep.checked ? r.specs : [...(cur.specs || []).filter(x => x.k || x.v), ...r.specs];
+      if (r.faq.length) next.faq = rep.checked ? r.faq : [...(cur.faq || []).filter(x => x.q || x.a), ...r.faq];
+      const old = form.el; form = buildForm(SPEC(cats), next, formOpts); old.replaceWith(form.el); dirty = true;
+      note.textContent = `Filled: ${r.sku ? 'SKU, ' : ''}${r.specs.length} detail rows, ${r.faq.length} questions. Check them, then Save.`; toast('Filled. Check and Save.');
+    };
+    return h('div', { class: 'stack' }, ta, h('label', { class: 'chk' }, rep, h('span', null, 'Replace existing rows (otherwise add below them)')), h('div', { class: 'row' }, h('button', { type: 'button', class: 'btn primary sm', onclick: fill }, 'Fill'), h('button', { type: 'button', class: 'btn sm', onclick: copy }, 'Copy prompt for AI')), note);
+  }
   function paintStatus() {
     clear(status);
     if (isNew) { status.append(h('span', { class: 'muted' }, 'Draft. Save, add photos, then publish.')); return; }
