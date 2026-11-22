@@ -1,7 +1,7 @@
-4 files changed. Extract into a NEW EMPTY folder: you get 2 folders, web and admin-web.
+7 files changed. Extract into a NEW EMPTY folder: you get 3 folders: src, web, admin-web.
 1. Open https://github.com/apnakisanapp-svg/surya-store/upload/main
-2. Drag the 2 FOLDERS (web, admin-web). The page must show: web/js/pages1.js, web/css/app.css, admin-web/js/products.js, admin-web/css/admin.css
+2. Drag the 3 FOLDERS (src, web, admin-web). The page must show paths like src/admin/routes-products.js, web/js/pages1.js, admin-web/js/products.js
 3. Commit changes.
 4. AWS terminal (ubuntu@...): cd ~/surya-store && git pull && sudo systemctl restart surya && sudo systemctl is-active surya
 5. Website and Admin: Ctrl+F5 once.
-(No npm install needed. Server files from the earlier Release 8 zip are already in place.)
+No npm install needed. (Server adds a new photo "colour" column by itself on restart.)

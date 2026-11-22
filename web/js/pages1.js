@@ -149,9 +149,10 @@ route(/^\/p\/([^/]+)$/, async (view, m) => {
   const info = h('div', { class: 'pd-info stack-lg' }), galBox = h('div');
 
   /* gallery */
+  function curImgs() { const c = (curV() || {}).colour_name; const own = c ? p.images.filter(i => i.colour === c) : []; const common = p.images.filter(i => !i.colour); return own.length ? [...own, ...common] : (common.length ? common : p.images); }
   function gallery() {
     clear(galBox);
-    const imgs = p.images;
+    const imgs = curImgs();
     if (S.mode === 'spin' && p.spin.length) { galBox.append(spinViewer(p.spin), modeBar()); return; }
     if (S.mode === '3d' && p.model_glb) { galBox.append(modelViewer(p.model_glb, p.name), modeBar()); return; }
     const main = h('div', { class: 'gal-main', role: 'group', 'aria-label': 'Photos' });
@@ -171,7 +172,9 @@ route(/^\/p\/([^/]+)$/, async (view, m) => {
     const pk = c.price + '|' + c.mrp; if (priceEl.dataset.k !== pk) { priceEl.dataset.k = pk; clear(priceEl); priceEl.classList.remove('pa-init', 'pa-strike'); fillPrice(priceEl, { price: c.price, mrp: c.mrp, pct, mrpText: `${t('mrp')} ${money(c.mrp)}` }); }
     clear(stockEl).append(c.in_stock ? (c.left && c.left <= 5 ? h('span', { class: 'small', style: { color: 'var(--warn)', fontWeight: 600 } }, t('low', { n: c.left })) : h('span', { class: 'small', style: { color: 'var(--ok)', fontWeight: 600 } }, p.preorder ? 'Pre-order' : 'In stock')) : h('span', { class: 'small', style: { color: 'var(--err)', fontWeight: 600 } }, t('oos')));
     qtyEl.textContent = S.qty;
-    const v = curV(); if (v && v.image_id) { const k = p.images.findIndex(i => i.id === v.image_id); if (k >= 0 && k !== S.img && S.mode === 'photo') { S.img = k; gallery(); } }
+    const colNow = (curV() || {}).colour_name || '';
+    if (S.lastCol !== colNow) { S.lastCol = colNow; S.img = 0; if (S.mode === 'photo') gallery(); }
+    else { const v = curV(), gi = curImgs(); if (v && v.image_id) { const k = gi.findIndex(i => i.id === v.image_id); if (k >= 0 && k !== S.img && S.mode === 'photo') { S.img = k; gallery(); } } }
     clear(atcRow);
     if (!c.in_stock) atcRow.append(notifyForm());
     paintBar(c);
@@ -209,7 +212,7 @@ route(/^\/p\/([^/]+)$/, async (view, m) => {
       ring = h('i', { class: 'vc-ring' });
       colLbl = h('span', null, 'Colour: ', h('b', null, ''));
       colRow = h('div', { class: 'vc-row' }, ring, cols.map(c => {
-        const first = ins.find(v => v.colour_name === c && v.image_id) || ins.find(v => v.colour_name === c), im = first && first.image_id ? p.images.find(x => x.id === first.image_id) : null;
+        const first = ins.find(v => v.colour_name === c && v.image_id) || ins.find(v => v.colour_name === c), im = p.images.find(x => x.colour === c) || (first && first.image_id ? p.images.find(x => x.id === first.image_id) : null);
         const sw = (ins.find(v => v.colour_name === c && v.color) || {}).color;
         const el = h('button', { type: 'button', class: 'vcard', 'aria-label': c, onclick: () => pick(cur2().size, c, 'col') },
           h('span', { class: 'vc-img' }, im ? h('img', { src: im.thumb, alt: '', loading: 'lazy', draggable: 'false' }) : h('i', { style: { background: sw || '#d9dce1' } })),

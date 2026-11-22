@@ -53,7 +53,7 @@ function shape(p, images, variants, rating, cat, admin) {
     seo_title: p.seo_title, seo_desc: p.seo_desc, created_at: p.created_at, views: p.views, sold_count: p.sold_count,
     rating: rating ? { avg: round2(rating.a), count: rating.c } : { avg: 0, count: 0 },
     images: images.filter(i => !i.variant_id || true).map(i => ({
-      id: i.id, variant_id: i.variant_id, alt: i.alt, alt_hi: i.alt_hi, w: i.w, h: i.h, focus_x: i.focus_x, focus_y: i.focus_y, file: i.file,
+      id: i.id, variant_id: i.variant_id, colour: i.colour || null, alt: i.alt, alt_hi: i.alt_hi, w: i.w, h: i.h, focus_x: i.focus_x, focus_y: i.focus_y, file: i.file,
       card: mediaUrl(i.file, 'card'), gal: mediaUrl(i.file, 'gal'), thumb: mediaUrl(i.file, 'thumb'),
     })),
     variants: variants.filter(v => admin || v.active).map(v => ({

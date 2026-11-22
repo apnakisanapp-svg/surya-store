@@ -146,6 +146,7 @@ r.put('/:id', asyncH((req, res) => {
   if (d.name && d.name !== ex.name && req.body.regen_slug) d.slug = uniqueSlug(db, 'products', d.name, id);
   save(id, d);
   if (Array.isArray(req.body?.variants)) saveVariants(id, req.body.variants);
+  if (req.body?.image_colours && typeof req.body.image_colours === 'object') for (const [iid, c] of Object.entries(req.body.image_colours)) db.prepare('UPDATE product_images SET colour=? WHERE id=? AND product_id=?').run(String(c || '').trim().slice(0, 40) || null, int(iid), id);
   // a published product that now fails the risk check goes back to draft, so a risky edit can never stay live
   const cur = db.prepare('SELECT * FROM products WHERE id=?').get(id);
   let demoted = false;
@@ -251,12 +252,13 @@ r.post('/:id/images', upload.array('images', 12), asyncH(async (req, res) => {
   if (!db.prepare('SELECT 1 FROM products WHERE id=?').get(id)) throw notFound();
   if (!req.files?.length) throw bad('Choose at least one image.');
   const count = db.prepare('SELECT COUNT(*) c FROM product_images WHERE product_id=?').get(id).c;
-  if (count + req.files.length > 15) throw bad('A product can have up to 15 photos.');
+  if (count + req.files.length > 24) throw bad('A product can have up to 24 photos.');
+  const colour = String(req.body?.colour || '').trim().slice(0, 40) || null;
   let sort = db.prepare('SELECT COALESCE(MAX(sort),-1)+1 s FROM product_images WHERE product_id=?').get(id).s;
   const added = [];
   for (const f of req.files) {
     const out = await images.processProductImage(f.buffer);
-    const iid = db.prepare('INSERT INTO product_images(product_id,file,alt,sort,w,h) VALUES(?,?,?,?,?,?)').run(id, out.file, String(req.body?.alt || '').slice(0, 120) || null, sort++, out.w, out.h).lastInsertRowid;
+    const iid = db.prepare('INSERT INTO product_images(product_id,file,alt,sort,w,h,colour) VALUES(?,?,?,?,?,?,?)').run(id, out.file, String(req.body?.alt || '').slice(0, 120) || null, sort++, out.w, out.h, colour).lastInsertRowid;
     added.push(iid);
   }
   db.prepare('UPDATE products SET updated_at=? WHERE id=?').run(now(), id);
