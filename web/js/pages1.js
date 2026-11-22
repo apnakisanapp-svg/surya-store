@@ -180,7 +180,40 @@ route(/^\/p\/([^/]+)$/, async (view, m) => {
     const inp = h('input', { class: 'inp', placeholder: 'Email or mobile number', 'aria-label': 'Email or mobile number', value: me.customer ? me.customer.email : '' });
     return h('div', { class: 'box-note' }, icon('info'), h('div', { class: 'grow stack' }, h('b', null, t('oos')), h('div', { class: 'row', style: { flexWrap: 'nowrap' } }, h('div', { class: 'grow' }, inp), h('button', { class: 'btn sm', onclick: async () => { try { toast((await api('/notify', { method: 'POST', body: { product_id: p.id, variant_id: S.vid, contact: inp.value } })).message); } catch (e) { toast(e.message, { err: true }); } } }, t('notify')))));
   }
-  const varEl = ins.length ? h('div', { class: 'stack' }, h('div', { class: 'small muted' }, 'Choose option'), h('div', { class: 'opts' }, ins.map(v => h('button', { class: 'chip' + (v.id === S.vid ? ' on' : '') + (!v.in_stock ? ' off' : ''), onclick: e => { S.vid = v.id; $$('.opts .chip', info).forEach(c => c.classList.remove('on')); e.currentTarget.classList.add('on'); paint(); } }, v.color ? h('span', { style: { width: '12px', height: '12px', borderRadius: '50%', background: v.color, border: '1px solid var(--line)', marginRight: '8px' } }) : null, (lang() === 'hi' && v.name_hi) || v.name)))) : null;
+  const hasSC = ins.some(v => v.size || v.colour_name);
+  const varEl = ins.length ? h('div', { class: 'vopts' }) : null;
+  const uniq = k => [...new Set(ins.map(v => v[k]).filter(Boolean))];
+  function sizeGuide() {
+    const rows = String(p.size_guide || '').split(/\r?\n/).map(l => l.split('|').map(c => c.trim())).filter(r => r.some(Boolean));
+    if (!rows.length) return;
+    const tb = h('table', { class: 'vg-tbl' }, h('thead', null, h('tr', null, rows[0].map(c => h('th', null, c)))), h('tbody', null, rows.slice(1).map(r => h('tr', null, r.map(c => h('td', null, c))))));
+    modal(h('div', { class: 'stack' }, h('h3', null, 'Size guide'), h('div', { class: 'vg-wrap' }, tb), h('p', { class: 'small muted' }, 'Measurements are of the garment, in the unit shown. Pick the size by your own measurements.')));
+  }
+  function drawOpts() {
+    if (!varEl) return; clear(varEl);
+    const cv = curV();
+    if (!hasSC) {
+      varEl.append(h('div', { class: 'vo-lbl' }, 'Choose option'), h('div', { class: 'vo-row' }, ins.map(v => h('button', { type: 'button', class: 'vopt' + (v.id === S.vid ? ' on' : '') + (!v.in_stock ? ' off' : ''), onclick: () => { S.vid = v.id; drawOpts(); paint(); } }, v.color ? h('i', { class: 'vsw', style: { background: v.color } }) : null, h('span', null, (lang() === 'hi' && v.name_hi) || v.name)))));
+      return;
+    }
+    const sizes = uniq('size'), cols = uniq('colour_name'), cs = cv && cv.size, cc = cv && cv.colour_name;
+    const find = (size, col) => ins.find(v => (v.size || null) === (size || null) && (v.colour_name || null) === (col || null));
+    const pick = (size, col, changed) => {
+      let v = find(size, col);
+      if (!v) { const pool = ins.filter(x => changed === 'size' ? x.size === size : x.colour_name === col); v = pool.find(x => x.in_stock) || pool[0]; }
+      if (v) { S.vid = v.id; drawOpts(); paint(); }
+    };
+    if (cols.length) {
+      const swatch = c => (ins.find(v => v.colour_name === c && v.color) || {}).color;
+      varEl.append(h('div', { class: 'vo-lbl' }, 'Colour: ', h('b', null, cc || '')), h('div', { class: 'vo-row' }, cols.map(c => { const v = find(cs, c), sw = swatch(c); return h('button', { type: 'button', class: 'vopt' + (c === cc ? ' on' : '') + (v && !v.in_stock ? ' off' : '') + (!v ? ' na' : ''), onclick: () => pick(cs, c, 'col') }, sw ? h('i', { class: 'vsw', style: { background: sw } }) : null, h('span', null, c)); })));
+    }
+    if (sizes.length) {
+      const prices = new Set(ins.filter(v => v.size).map(v => v.price)), showP = prices.size > 1;
+      varEl.append(h('div', { class: 'vo-lbl vo-between' }, h('span', null, 'Size: ', h('b', null, cs || '')), p.size_guide ? h('button', { type: 'button', class: 'vo-link', onclick: sizeGuide }, 'Size guide') : null),
+        h('div', { class: 'vo-row' }, sizes.map(z => { const v = find(z, cc) || ins.find(x => x.size === z); const here = find(z, cc); return h('button', { type: 'button', class: 'vopt' + (z === cs ? ' on' : '') + (here && !here.in_stock ? ' off' : '') + (!here ? ' na' : ''), onclick: () => pick(z, cc, 'size') }, h('span', null, z), showP && v ? h('small', null, money(v.price)) : null, here && here.in_stock && here.stock_left ? h('small', { class: 'vo-left' }, `${here.stock_left} left`) : null); })));
+    }
+  }
+  drawOpts();
   const pinInp = h('input', { class: 'inp', inputmode: 'numeric', maxlength: 6, placeholder: t('pincode'), 'aria-label': t('pincode'), value: ls.get('sy_pin', '') });
   const checkPin = async () => { const v = pinInp.value.trim(); if (!/^\d{6}$/.test(v)) { pinOut.textContent = 'Enter a valid 6-digit pincode.'; pinOut.style.color = 'var(--err)'; return; } ls.set('sy_pin', v); try { const r = await api(`/pincode/${v}?product=${p.id}`); pinOut.style.color = r.ok ? 'var(--ok)' : 'var(--err)'; pinOut.textContent = r.ok ? `${r.place ? 'Delivering to ' + r.place + '. ' : ''}${r.estimated ? 'Estimated delivery' : t('delivery_by')} ${r.eta.text}${r.cod ? ' · ' + t('cod') : ''}` : r.message; } catch (e) { pinOut.textContent = e.message; } };
   pinInp.addEventListener('keydown', e => { if (e.key === 'Enter') checkPin(); });

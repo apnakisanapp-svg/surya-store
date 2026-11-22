@@ -63,6 +63,7 @@ const SPEC = (cats) => [
   { k: 'safety_ack', l: 'Customer must tick "I read the safety instructions" at checkout', t: 'check' },
   { k: 'brand_used', l: 'Brand name you use (if any)', t: 'text', h: 'Do not use another company\'s brand.' },
   { k: 'weight_g', l: 'Weight (grams)', t: 'number', w: 'half' }, { k: 'dims', l: 'Size (L x W x H cm)', t: 'text', w: 'half' },
+  { k: 'size_guide', l: 'Size guide (optional, for clothes)', t: 'textarea', rows: 5, ph: 'Size | Bust (in) | Length (in)\nS | 36 | 25\nM | 38 | 25', h: 'One line per size. First line = column names. Separate columns with |. Customers see it as a table.' },
   { t: 'heading', l: 'Details table & questions' },
   { k: 'specs', l: 'Details table', t: 'list', add: 'Add row', blank: { k: '', v: '' }, sub: [{ k: 'k', l: 'Label', t: 'text', w: 'half' }, { k: 'v', l: 'Value', t: 'text', w: 'half' }] },
   { k: 'faq', l: 'Questions & answers', t: 'list', add: 'Add question', blank: { q: '', a: '' }, sub: [{ k: 'q', l: 'Question', t: 'text' }, { k: 'a', l: 'Answer', t: 'textarea' }] },
@@ -87,17 +88,19 @@ reg(/^\/products\/(new|\d+)$/, async (v, m) => {
   v.append(head, h('div', { class: 'grid g21' }, h('div', { class: 'stack-lg' }, card('Paste from AI', aiBox()), card('', form.el), card('Photos', isNew ? h('p', { class: 'muted' }, 'Save the product first, then add photos.') : imgs), card('Options (size, colour…)', h('p', { class: 'muted small' }, 'Optional. Each option can have its own price and stock. Leave empty if the product has no options.'), vbox), card('Similar products shown at the bottom', simBox), isNew ? null : card('360° spin and 3D model (optional)', advanced())),
     h('div', { class: 'stack-lg' }, card('Save & publish', status, h('div', { class: 'row', style: { marginTop: '10px' } }, h('button', { class: 'btn primary', id: 'savebtn', onclick: save }, 'Save'))), card('Risk checker', risk), card('Profit calculator', econ))));
   window.onbeforeunload = null;
-  const AI_TXT = { NAME: 'name', NAME_HI: 'name_hi', TAGLINE: 'tagline', TAGLINE_HI: 'tagline_hi', DESCRIPTION: 'description', DESCRIPTION_HI: 'description_hi', SAFETY: 'safety', SAFETY_HI: 'safety_hi', SEO_TITLE: 'seo_title', SEO_DESC: 'seo_desc', BADGE: 'badge', SKU: 'sku', SIZE_CM: 'dims', HSN: 'hsn' };
+  const AI_TXT = { NAME: 'name', NAME_HI: 'name_hi', TAGLINE: 'tagline', TAGLINE_HI: 'tagline_hi', DESCRIPTION: 'description', DESCRIPTION_HI: 'description_hi', SAFETY: 'safety', SAFETY_HI: 'safety_hi', SEO_TITLE: 'seo_title', SEO_DESC: 'seo_desc', BADGE: 'badge', SKU: 'sku', SIZE_CM: 'dims', HSN: 'hsn', SIZE_GUIDE: 'size_guide' };
   const AI_NUM = { PRICE: 'price', MRP: 'mrp', STOCK: 'stock', WEIGHT_G: 'weight_g' };
   const AI_FLAG = { BATTERY: 'has_battery', ELECTRONIC: 'is_electronic', SHARP: 'has_blade', LIQUID: 'is_liquid', COSMETIC_FOOD: 'is_cosmetic_food' };
   function aiParse(t) {
-    const out = { f: {}, tags: null, category: '', specs: [], faq: [] }; let mode = '', cur = '', q = null, a = null;
+    const out = { f: {}, tags: null, category: '', specs: [], faq: [], opts: [] }; let mode = '', cur = '', q = null, a = null;
     const flush = () => { if (q && a != null) out.faq.push({ q: q.trim(), a: a.trim() }); q = null; a = null; };
     for (const raw of String(t || '').split(/\r?\n/)) {
       const ln = raw.trim(); if (!ln) continue;
       let m;
       if (/^(details?|specs?|specifications?)( table)?\s*:?\s*$/i.test(ln)) { flush(); mode = 'd'; cur = ''; continue; }
       if (/^(questions?( (&|and) answers?)?|faqs?|q ?& ?a)\s*:?\s*$/i.test(ln)) { flush(); mode = 'q'; cur = ''; continue; }
+      if (/^options?\s*:?\s*$/i.test(ln)) { flush(); mode = 'o'; cur = ''; continue; }
+      if (mode === 'o') { const c = ln.split('|').map(x => x.trim()); if (c.length >= 2 && !/^colou?r$/i.test(c[0])) { const nv = x => { const n = parseFloat(String(x || '').replace(/[^\d.]/g, '')); return isNaN(n) ? '' : n; }; out.opts.push({ colour_name: c[0] === '-' ? '' : c[0], size: c[1] === '-' ? '' : c[1], price: nv(c[2]), cost: nv(c[3]), stock: nv(c[4]) || 0 }); } continue; }
       if (!mode && (m = ln.match(/^([A-Za-z_]{2,20})\s*[:=]\s*(.*)$/))) {
         const K = m[1].toUpperCase(), val = m[2].trim();
         if (K in AI_TXT) { out.f[AI_TXT[K]] = val; cur = AI_TXT[K]; continue; }
@@ -120,15 +123,22 @@ reg(/^\/products\/(new|\d+)$/, async (v, m) => {
     const prompt = () => {
       const d = form.get(), cat = (cats.find(c => String(c.id) === String(d.category_id)) || {}).name || '';
       const known = [d.name && 'Product: ' + d.name, cat && 'Category: ' + cat, d.price && 'Selling price: Rs ' + d.price, d.sku && 'SKU: ' + d.sku].filter(Boolean).join('\n') || 'Product: (write the product name or details here)';
-      return `${known}\n\nWrite a professional online-store listing for this product. Simple English, own words, no brand names, no claims that cannot be verified (no "3x", "nano", "best", "100% safe"). Use no fake MRP. Add honest usage cautions.\nReply ONLY in this exact format, one field per line (DESCRIPTION and SAFETY may take several lines):\nNAME: <clear product name>\nNAME_HI: <Hinglish name>\nTAGLINE: <one line, max 120 characters>\nTAGLINE_HI: <Hinglish one line>\nCATEGORY: <choose ONE of: ${cats.map(c => c.name).join(', ')}>\nDESCRIPTION: <3 short paragraphs: what it is, how it helps, care/cautions>\nDESCRIPTION_HI: <same in Hinglish>\nSEARCH_WORDS: <40 keywords, comma separated, Hindi/English/Hinglish/spelling mistakes>\nPRICE: <number>\nMRP: <leave empty>\nSTOCK: <number>\nSKU: <short code like SU-KIT-002>\nWEIGHT_G: <number>\nSIZE_CM: <L x W x H>\nHSN: <code if you are sure, else empty>\nBATTERY: yes or no\nELECTRONIC: yes or no\nSHARP: yes or no\nLIQUID: yes or no\nCOSMETIC_FOOD: yes or no\nSAFETY: <honest safety and use instructions>\nSAFETY_HI: <same in Hinglish>\nSEO_TITLE: <max 60 characters>\nSEO_DESC: <max 150 characters>\nDETAILS:\n<Label>: <Value>   (6 to 8 lines, only facts true for this product)\nQUESTIONS:\nQ: <question a buyer would ask>\nA: <honest short answer>\n(5 questions)\nDo NOT write manufacturer, warranty, importer or GST.`;
+      return `${known}\n\nWrite a professional online-store listing for this product. Simple English, own words, no brand names, no claims that cannot be verified (no "3x", "nano", "best", "100% safe"). Use no fake MRP. Add honest usage cautions.\nReply ONLY in this exact format, one field per line (DESCRIPTION and SAFETY may take several lines):\nNAME: <clear product name>\nNAME_HI: <Hinglish name>\nTAGLINE: <one line, max 120 characters>\nTAGLINE_HI: <Hinglish one line>\nCATEGORY: <choose ONE of: ${cats.map(c => c.name).join(', ')}>\nDESCRIPTION: <3 short paragraphs: what it is, how it helps, care/cautions>\nDESCRIPTION_HI: <same in Hinglish>\nSEARCH_WORDS: <40 keywords, comma separated, Hindi/English/Hinglish/spelling mistakes>\nPRICE: <number>\nMRP: <leave empty>\nSTOCK: <number>\nSKU: <short code like SU-KIT-002>\nWEIGHT_G: <number>\nSIZE_CM: <L x W x H>\nHSN: <code if you are sure, else empty>\nBATTERY: yes or no\nELECTRONIC: yes or no\nSHARP: yes or no\nLIQUID: yes or no\nCOSMETIC_FOOD: yes or no\nSAFETY: <honest safety and use instructions>\nSAFETY_HI: <same in Hinglish>\nSEO_TITLE: <max 60 characters>\nSEO_DESC: <max 150 characters>\nSIZE_GUIDE: <only for clothes; first line column names, then one line per size, columns separated by |, else leave empty>\nOPTIONS: <only if the product has sizes or colours, else skip this part>\n<Colour> | <Size> | <Selling price> | <My cost> | <Stock>   (one line per combination, use - if none)\nDETAILS:\n<Label>: <Value>   (6 to 8 lines, only facts true for this product)\nQUESTIONS:\nQ: <question a buyer would ask>\nA: <honest short answer>\n(5 questions)\nDo NOT write manufacturer, warranty, importer or GST.`;
     };
     const copy = async () => { const t = prompt(); try { await navigator.clipboard.writeText(t); toast('Prompt copied. Paste it in any AI.'); } catch { window.prompt('Copy this prompt:', t); } };
     const fill = () => {
-      const r = aiParse(ta.value), n = Object.keys(r.f).length + (r.tags ? 1 : 0) + (r.category ? 1 : 0);
+      const r = aiParse(ta.value), n = Object.keys(r.f).length + r.opts.length + (r.tags ? 1 : 0) + (r.category ? 1 : 0);
       if (!n && !r.specs.length && !r.faq.length) return toast('Nothing found. Check the format.', true);
       const cur = form.get(), next = { ...cur, ...r.f }; let catNote = '';
       if (r.tags) next.tags = r.tags;
       if (r.category) { const k = r.category.toLowerCase(), c = cats.find(x => x.name.toLowerCase() === k) || cats.find(x => k.includes(x.name.toLowerCase()) || x.name.toLowerCase().includes(k)); if (c) next.category_id = c.id; else catNote = ` Category "${r.category}" not found, choose it yourself.`; }
+      if (r.opts.length) {
+        for (const o of r.opts) {
+          const ex = variants.find(v => (v.size || '') === o.size && (v.colour_name || '') === o.colour_name);
+          if (ex) Object.assign(ex, { price: o.price, cost: o.cost, stock: o.stock }); else variants.push({ name: '', size: o.size, colour_name: o.colour_name, price: o.price, cost: o.cost, stock: o.stock, active: true });
+        }
+        paintVariants();
+      }
       if (r.specs.length) next.specs = rep.checked ? r.specs : [...(cur.specs || []).filter(x => x.k || x.v), ...r.specs];
       if (r.faq.length) next.faq = rep.checked ? r.faq : [...(cur.faq || []).filter(x => x.q || x.a), ...r.faq];
       const old = form.el; form = buildForm(SPEC(cats), next, formOpts); old.replaceWith(form.el); dirty = true;
@@ -195,8 +205,22 @@ reg(/^\/products\/(new|\d+)$/, async (v, m) => {
   }
   function paintVariants() {
     clear(vbox);
-    variants.forEach((x, i) => { const f = buildForm([{ k: 'name', l: 'Option name', t: 'text', w: 'half', ph: 'Black / Large' }, { k: 'color', l: 'Colour (optional)', t: 'color', w: 'half' }, { k: 'price', l: 'Price (empty = same)', t: 'number', w: 'half' }, { k: 'stock', l: 'Stock', t: 'number', w: 'half' }, { k: 'sku', l: 'SKU', t: 'text', w: 'half' }, { k: 'active', l: 'Active', t: 'check' }], { ...x, active: x.active !== false && x.active !== 0 }, { onChange: d => { variants[i] = { ...variants[i], ...d }; dirty = true; } }); vbox.append(h('div', { class: 'listrow' }, h('div', { class: 'grow' }, f.el), h('button', { class: 'btn sm bad', onclick: () => { variants.splice(i, 1); paintVariants(); } }, '×'))); });
-    vbox.append(h('button', { class: 'btn sm', onclick: () => { variants.push({ name: '', stock: 0, active: true }); paintVariants(); } }, '+ Add option'));
+    const photoOpts = [['', '— none —'], ...(p.images || []).map((im, k) => [im.id, 'Photo ' + (k + 1)])];
+    variants.forEach((x, i) => { const f = buildForm([{ k: 'colour_name', l: 'Colour name', t: 'text', w: 'half', ph: 'Black-White' }, { k: 'size', l: 'Size', t: 'text', w: 'half', ph: 'M' }, { k: 'color', l: 'Colour swatch (optional)', t: 'color', w: 'half' }, { k: 'image_id', l: 'Photo for this option', t: 'select', num: true, opts: photoOpts, w: 'half' }, { k: 'price', l: 'Selling price (empty = same as product)', t: 'number', w: 'half' }, { k: 'mrp', l: 'MRP (empty = none)', t: 'number', w: 'half' }, { k: 'cost', l: 'Your cost (Meesho price)', t: 'number', w: 'half' }, { k: 'stock', l: 'Stock', t: 'number', w: 'half' }, { k: 'sku', l: 'SKU', t: 'text', w: 'half' }, { k: 'name', l: 'Option name (auto = Colour / Size)', t: 'text', w: 'half' }, { k: 'active', l: 'Active', t: 'check' }], { ...x, active: x.active !== false && x.active !== 0 }, { onChange: d => { variants[i] = { ...variants[i], ...d }; dirty = true; } }); vbox.append(h('div', { class: 'listrow' }, h('div', { class: 'grow' }, f.el), h('button', { class: 'btn sm bad', onclick: () => { variants.splice(i, 1); paintVariants(); } }, '×'))); });
+    const gen = async () => {
+      const sz = await promptBox('Sizes', 'Sizes, comma separated (e.g. S, M, L, XL). Leave empty if none.'); if (sz == null) return;
+      const cl = await promptBox('Colours', 'Colours, comma separated (e.g. Black-White, Pink-White). Leave empty if none.'); if (cl == null) return;
+      const S = String(sz).split(',').map(x => x.trim()).filter(Boolean), C = String(cl).split(',').map(x => x.trim()).filter(Boolean);
+      if (!S.length && !C.length) return toast('Write at least one size or colour.', true);
+      let added = 0;
+      for (const c of (C.length ? C : [''])) for (const z of (S.length ? S : [''])) {
+        if (variants.some(v => (v.size || '') === z && (v.colour_name || '') === c)) continue;
+        variants.push({ name: '', size: z, colour_name: c, stock: 0, active: true }); added++;
+      }
+      if (variants.length > 30) { variants.length = 30; toast('Only 30 options are allowed.', true); }
+      paintVariants(); dirty = true; toast(`${added} options added. Now fill price, cost and stock for each, then Save.`);
+    };
+    vbox.append(h('div', { class: 'row' }, h('button', { class: 'btn sm', onclick: () => { variants.push({ name: '', stock: 0, active: true }); paintVariants(); } }, '+ Add option'), h('button', { class: 'btn sm', onclick: gen }, 'Make Size × Colour options')));
   }
   async function paintSim() {
     clear(simBox); const mode = h('select', { class: 'inp', style: { maxWidth: '300px' }, onchange: e => { p.similar_mode = e.target.value; dirty = true; paintSim(); } }, h('option', { value: 'auto', selected: p.similar_mode !== 'manual' }, 'Automatic (same category, best sellers)'), h('option', { value: 'manual', selected: p.similar_mode === 'manual' }, 'I will choose'));

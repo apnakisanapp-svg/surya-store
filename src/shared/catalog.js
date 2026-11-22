@@ -42,7 +42,7 @@ function shape(p, images, variants, rating, cat, admin) {
   const showBelow = settings.get('store').show_stock_below;
   const out = {
     id: p.id, slug: p.slug, sku: p.sku, name: p.name, name_hi: p.name_hi, tagline: p.tagline, tagline_hi: p.tagline_hi,
-    description: p.description, description_hi: p.description_hi, category: cat ? { id: cat.id, slug: cat.slug, name: cat.name, name_hi: cat.name_hi } : null,
+    description: p.description, description_hi: p.description_hi, size_guide: p.size_guide || null, category: cat ? { id: cat.id, slug: cat.slug, name: cat.name, name_hi: cat.name_hi } : null,
     tags: jparse(p.tags, []), price: p.price, mrp: p.mrp > p.price ? p.mrp : 0, discount_pct: discountPct(p.price, p.mrp),
     badge: p.badge, featured: !!p.featured, preorder: !!p.preorder, stock_state: st.state, stock_left: st.state === 'low' || st.total <= showBelow ? st.total : null,
     max_per_order: p.max_per_order, specs: jparse(p.specs, []), safety: p.safety, safety_hi: p.safety_hi, safety_ack: !!p.safety_ack,
@@ -58,7 +58,7 @@ function shape(p, images, variants, rating, cat, admin) {
     })),
     variants: variants.filter(v => admin || v.active).map(v => ({
       id: v.id, name: v.name, name_hi: v.name_hi, sku: v.sku, price: v.price != null ? v.price : p.price, mrp: (v.mrp != null ? v.mrp : p.mrp) > (v.price != null ? v.price : p.price) ? (v.mrp != null ? v.mrp : p.mrp) : 0,
-      color: v.color, image_id: v.image_id, in_stock: v.stock > 0 || !!p.preorder, stock_left: v.stock > 0 && v.stock <= showBelow ? v.stock : null, active: !!v.active,
+      color: v.color, size: v.size || null, colour_name: v.colour_name || null, image_id: v.image_id, in_stock: v.stock > 0 || !!p.preorder, stock_left: v.stock > 0 && v.stock <= showBelow ? v.stock : null, active: !!v.active,
       ...(admin ? { stock: v.stock, cost: v.cost, sort: v.sort } : {}),
     })),
   };

@@ -20,7 +20,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 
 const glbUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024, files: 1 } });
 
 const TEXT = ['sku', 'name', 'name_hi', 'tagline', 'tagline_hi', 'description', 'description_hi', 'safety', 'safety_hi', 'warranty', 'warranty_hi', 'origin_country', 'manufacturer', 'importer', 'hsn', 'brand_used',
-  'seo_title', 'seo_desc', 'video_url', 'badge', 'dims', 'similar_mode', 'publish_at', 'pay_rule', 'adv_type', 'gift_rule', 'ret_rule', 'ship_rule', 'cod_fee_rule'];
+  'seo_title', 'seo_desc', 'video_url', 'badge', 'dims', 'size_guide', 'similar_mode', 'publish_at', 'pay_rule', 'adv_type', 'gift_rule', 'ret_rule', 'ship_rule', 'cod_fee_rule'];
 const NUMS = ['price', 'mrp', 'cost', 'gst_rate', 'packaging_cost', 'ad_cost', 'shipping_cost', 'adv_value', 'gift_price', 'cod_fee_value', 'ship_value'];
 const INTS = ['category_id', 'stock', 'low_stock_limit', 'max_per_order', 'weight_g', 'sort', 'ret_days'];
 const BOOLS = ['preorder', 'sold_out', 'safety_ack', 'has_battery', 'is_electronic', 'has_blade', 'is_liquid', 'is_cosmetic_food', 'featured'];
@@ -157,11 +157,12 @@ r.put('/:id', asyncH((req, res) => {
 function saveVariants(id, list) {
   const keep = [];
   list.slice(0, 30).forEach((v, i) => {
-    const name = String(v.name || '').trim(); if (!name) return;
-    const vals = [name, v.name_hi || null, v.sku || null, v.price === '' || v.price == null ? null : num(v.price), v.mrp === '' || v.mrp == null ? null : num(v.mrp), v.cost === '' || v.cost == null ? null : num(v.cost), Math.max(0, int(v.stock)), v.image_id ? int(v.image_id) : null, v.color || null, i, v.active === false ? 0 : 1];
+    const size = String(v.size || '').trim().slice(0, 30) || null, colourName = String(v.colour_name || '').trim().slice(0, 40) || null;
+    const name = String(v.name || '').trim() || [colourName, size].filter(Boolean).join(' / '); if (!name) return;
+    const vals = [name, v.name_hi || null, v.sku || null, v.price === '' || v.price == null ? null : num(v.price), v.mrp === '' || v.mrp == null ? null : num(v.mrp), v.cost === '' || v.cost == null ? null : num(v.cost), Math.max(0, int(v.stock)), v.image_id ? int(v.image_id) : null, v.color || null, i, v.active === false ? 0 : 1, size, colourName];
     if (v.id && db.prepare('SELECT 1 FROM variants WHERE id=? AND product_id=?').get(int(v.id), id)) {
-      db.prepare('UPDATE variants SET name=?,name_hi=?,sku=?,price=?,mrp=?,cost=?,stock=?,image_id=?,color=?,sort=?,active=? WHERE id=?').run(...vals, int(v.id)); keep.push(int(v.id));
-    } else keep.push(db.prepare('INSERT INTO variants(name,name_hi,sku,price,mrp,cost,stock,image_id,color,sort,active,product_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)').run(...vals, id).lastInsertRowid);
+      db.prepare('UPDATE variants SET name=?,name_hi=?,sku=?,price=?,mrp=?,cost=?,stock=?,image_id=?,color=?,sort=?,active=?,size=?,colour_name=? WHERE id=?').run(...vals, int(v.id)); keep.push(int(v.id));
+    } else keep.push(db.prepare('INSERT INTO variants(name,name_hi,sku,price,mrp,cost,stock,image_id,color,sort,active,size,colour_name,product_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(...vals, id).lastInsertRowid);
   });
   db.prepare(`DELETE FROM variants WHERE product_id=? ${keep.length ? 'AND id NOT IN (' + keep.map(() => '?').join(',') + ')' : ''}`).run(id, ...keep);
 }
@@ -171,7 +172,7 @@ r.post('/:id/duplicate', asyncH((req, res) => {
   const { id: _i, slug: _s, created_at, updated_at, views, sold_count, status, deleted_at, ...rest } = p;
   rest.name = p.name + ' (copy)'; rest.sku = null;
   const nid = createProduct(rest);
-  for (const v of db.prepare('SELECT * FROM variants WHERE product_id=?').all(id)) db.prepare('INSERT INTO variants(product_id,name,name_hi,sku,price,mrp,cost,stock,color,sort,active) VALUES(?,?,?,?,?,?,?,?,?,?,?)').run(nid, v.name, v.name_hi, null, v.price, v.mrp, v.cost, v.stock, v.color, v.sort, v.active);
+  for (const v of db.prepare('SELECT * FROM variants WHERE product_id=?').all(id)) db.prepare('INSERT INTO variants(product_id,name,name_hi,sku,price,mrp,cost,stock,color,sort,active,size,colour_name) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)').run(nid, v.name, v.name_hi, null, v.price, v.mrp, v.cost, v.stock, v.color, v.sort, v.active, v.size, v.colour_name);
   auth.logActivity(req.admin.id, 'duplicate', 'product', nid, p.name, req);
   res.json(full(nid));
 }));

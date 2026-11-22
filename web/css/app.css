@@ -816,3 +816,24 @@ html.dark .gsel-l,html.dark .search-pan{background-color:rgba(28,24,18,.7)}html.
   .ftr-b{flex-direction:column;gap:4px;text-align:center;margin-top:18px;font-size:.78rem}
 }
 @media(min-width:860px){.fcol summary{pointer-events:none;cursor:default}.fcol summary svg{display:none}}
+
+/* ===== Release 8: product options (plain, solid, no glass) ===== */
+.vopts{display:flex;flex-direction:column;gap:14px}
+.vo-lbl{font-size:.9rem;color:var(--muted)}.vo-lbl b{color:var(--ink);font-weight:700}
+.vo-between{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.vo-link{background:none;border:0;padding:6px 0;color:var(--accent);font-weight:600;font-size:.9rem;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.vo-row{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px}
+.vopt{display:inline-flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-width:56px;min-height:48px;padding:6px 16px;border-radius:12px;border:1.5px solid #c9ccd1;background:#fff;color:#16181d;font-size:.95rem;font-weight:600;cursor:pointer;flex-direction:row;flex-wrap:wrap;position:relative}
+.vopt small{display:block;width:100%;text-align:center;font-size:.74rem;font-weight:500;color:#5b6068;line-height:1.2}
+.vopt .vo-left{color:#b4540a}
+.vopt .vsw{width:16px;height:16px;border-radius:50%;border:1px solid #c9ccd1;margin-right:8px;flex:none}
+.vopt:hover{border-color:#16181d}
+.vopt.on{border-color:#16181d;background:#16181d;color:#fff}.vopt.on small{color:#e3e5e8}
+.vopt.on .vo-left{color:#ffd9a8}
+.vopt.off{color:#8a8f97;background:#f1f2f4;border-style:dashed}.vopt.off::after{content:"";position:absolute;left:8px;right:8px;top:50%;border-top:1.5px solid #8a8f97;transform:rotate(-12deg)}
+.vopt.off.on{background:#16181d;color:#fff}
+.vopt.na{opacity:.55}
+.vg-wrap{overflow-x:auto}.vg-tbl{border-collapse:collapse;width:100%;font-size:.95rem}
+.vg-tbl th,.vg-tbl td{border:1px solid #d8dbe0;padding:10px 12px;text-align:center;background:#fff;color:#16181d}.vg-tbl th{background:#f1f2f4;font-weight:700}
+html.dark .vopt,html.dark .vg-tbl td{background:#1d2026;color:#f2f3f5;border-color:#444a54}html.dark .vopt.on{background:#f2f3f5;color:#16181d;border-color:#f2f3f5}html.dark .vopt small{color:#aab0b8}html.dark .vopt.on small{color:#4a4f57}html.dark .vg-tbl th{background:#2a2e36;color:#f2f3f5;border-color:#444a54}
+@media(max-width:480px){.vopt{min-width:52px;padding:6px 14px}}
