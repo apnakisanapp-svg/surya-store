@@ -79,14 +79,33 @@ reg(/^\/products\/(new|\d+)$/, async (v, m) => {
   const cats = await api('/categories');
   let p = isNew ? { price: 0, mrp: 0, stock: 0, max_per_order: 10, tags: [], specs: [], faq: [], variants: [], images: [], risk: null, economics: null, similar_mode: 'auto', similar_ids: [] } : await api('/products/' + m[1]);
   const id = p.id;
-  const formOpts = { onChange: () => { dirty = true; liveRisk(); } };
+  const formOpts = { onChange: () => { dirty = true; liveRisk(); paintBar(); paintCheck(); } };
   let form = buildForm(SPEC(cats), p, formOpts);
+  const secCards = {}, FOLD = ['Search engines & extras', 'Services for this product'];
+  const mkCard = t => { const body = h('div', { class: 'form' }); const c = FOLD.includes(t) ? h('details', { class: 'card fold' }, h('summary', null, t === 'Services for this product' ? 'Services for this product (COD, delivery, return)' : t + ' (optional)'), body) : card(t, body); c._body = body; return c; };
+  function sectionize() {
+    const groups = []; let g = null;
+    [...form.el.children].forEach(n => { if (n.classList && n.classList.contains('fh')) { g = { title: n.textContent, nodes: [] }; groups.push(g); } else if (g) g.nodes.push(n); });
+    groups.forEach(x => { const c = secCards[x.title] || (secCards[x.title] = mkCard(x.title)); clear(c._body); x.nodes.forEach(n => c._body.append(n)); });
+  }
+  sectionize();
   let dirty = false, variants = JSON.parse(JSON.stringify(p.variants || []));
   const risk = h('div'), econ = h('div'), imgs = h('div'), vbox = h('div'), simBox = h('div');
   const head = pageHead(isNew ? 'New product' : p.name, h('a', { class: 'btn', href: '#/products' }, '← All products'), !isNew ? h('a', { class: 'btn', href: `${/^4\d{3}$/.test(location.port) ? location.origin.replace(/:\d+$/, '') + ':3000' : ''}/p/${p.slug}`, target: '_blank', id: 'viewlink' }, 'View on website') : null);
   const status = h('div', { class: 'row' });
-  v.append(head, h('div', { class: 'grid g21' }, h('div', { class: 'stack-lg' }, card('Paste from AI', aiBox()), card('', form.el), card('Photos', isNew ? h('p', { class: 'muted' }, 'Save the product first, then add photos.') : imgs), card('Options (size, colour…)', h('p', { class: 'muted small' }, 'Optional. Each option can have its own price and stock. Leave empty if the product has no options.'), vbox), card('Similar products shown at the bottom', simBox), isNew ? null : card('360° spin and 3D model (optional)', advanced())),
-    h('div', { class: 'stack-lg' }, card('Save & publish', status, h('div', { class: 'row', style: { marginTop: '10px' } }, h('button', { class: 'btn primary', id: 'savebtn', onclick: save }, 'Save'))), card('Risk checker', risk), card('Profit calculator', econ))));
+  const checkEl = h('div'), barState = h('span', { class: 'sb-state' });
+  const savebar = h('div', { class: 'savebar' }, barState, h('button', { class: 'btn primary', onclick: save }, 'Save'));
+  const sc = t => secCards[t];
+  v.append(head, h('div', { class: 'grid g21' }, h('div', { class: 'stack-lg' }, card('Paste from AI', aiBox()), sc('Basics'), card('Photos', isNew ? h('p', { class: 'muted' }, 'Save the product first, then add photos.') : imgs), card('Options (size, colour…)', h('p', { class: 'muted small' }, 'Optional. Add a colour, give it a photo once, then add its sizes with price, cost and stock. Leave empty if the product has no options.'), vbox), sc('Price & stock'), sc('Details table & questions'), sc('Who made it & warranty'), sc('Safety & shipping flags'), sc('Search engines & extras'), sc('Services for this product'), card('Similar products shown at the bottom', simBox), isNew ? null : card('360° spin and 3D model (optional)', advanced())),
+    h('div', { class: 'stack-lg' }, card('Save & publish', status, h('div', { class: 'row', style: { marginTop: '10px' } }, h('button', { class: 'btn primary', id: 'savebtn', onclick: save }, 'Save'))), card('Ready to publish?', checkEl), card('Risk checker', risk), card('Profit calculator', econ))), savebar);
+  function paintBar() { barState.textContent = dirty ? '● Unsaved changes' : '✓ All saved'; barState.className = 'sb-state' + (dirty ? ' dirty' : ''); }
+  function paintCheck() {
+    const d = form.get(), photos = (p.images || []).length;
+    const items = [['Product name', !!(d.name && String(d.name).length > 1)], ['Category', !!d.category_id], ['Price', Number(d.price) > 0 || variants.some(x => Number(x.price) > 0)], ['Stock', Number(d.stock) > 0 || variants.some(x => Number(x.stock) > 0)], ['At least one photo', photos > 0], ['Manufacturer', !!d.manufacturer], ['Country of origin', !!d.origin_country], ['Warranty text', !!d.warranty]];
+    const left = items.filter(x => !x[1]).length;
+    clear(checkEl).append(h('div', { class: 'note ' + (left ? 'warn' : 'ok') }, left ? `${left} thing${left > 1 ? 's' : ''} left before you can publish` : '✓ Everything needed is filled'), h('ul', { class: 'chk-list' }, items.map(([l, ok]) => h('li', { class: ok ? 'ok' : 'no' }, h('span', null, ok ? '✓' : '○'), l))));
+  }
+  paintBar(); paintCheck();
   window.onbeforeunload = null;
   const AI_TXT = { NAME: 'name', NAME_HI: 'name_hi', TAGLINE: 'tagline', TAGLINE_HI: 'tagline_hi', DESCRIPTION: 'description', DESCRIPTION_HI: 'description_hi', SAFETY: 'safety', SAFETY_HI: 'safety_hi', SEO_TITLE: 'seo_title', SEO_DESC: 'seo_desc', BADGE: 'badge', SKU: 'sku', SIZE_CM: 'dims', HSN: 'hsn', SIZE_GUIDE: 'size_guide' };
   const AI_NUM = { PRICE: 'price', MRP: 'mrp', STOCK: 'stock', WEIGHT_G: 'weight_g' };
@@ -141,7 +160,7 @@ reg(/^\/products\/(new|\d+)$/, async (v, m) => {
       }
       if (r.specs.length) next.specs = rep.checked ? r.specs : [...(cur.specs || []).filter(x => x.k || x.v), ...r.specs];
       if (r.faq.length) next.faq = rep.checked ? r.faq : [...(cur.faq || []).filter(x => x.q || x.a), ...r.faq];
-      const old = form.el; form = buildForm(SPEC(cats), next, formOpts); old.replaceWith(form.el); dirty = true;
+      form = buildForm(SPEC(cats), next, formOpts); sectionize(); dirty = true; paintBar(); paintCheck();
       note.textContent = `Filled ${n} fields, ${r.specs.length} detail rows, ${r.faq.length} questions.${catNote} Now add manufacturer and warranty yourself, check everything, then Save.`; toast('Filled. Check and Save.');
     };
     return h('div', { class: 'stack' }, ta, h('label', { class: 'chk' }, rep, h('span', null, 'Replace existing detail rows and questions (otherwise add below them)')), h('div', { class: 'row' }, h('button', { type: 'button', class: 'btn primary sm', onclick: fill }, 'Fill'), h('button', { type: 'button', class: 'btn sm', onclick: copy }, 'Copy prompt for AI')), note);
@@ -161,12 +180,12 @@ reg(/^\/products\/(new|\d+)$/, async (v, m) => {
       delete body.risk_ack; // acks are saved by their own tick boxes; never overwrite them with the old copy loaded with the page
       body.similar_ids = p.similar_ids; body.similar_mode = p.similar_mode;
       const r = await busy(btn || $('#savebtn'), () => api(isNew ? '/products' : '/products/' + id, { method: isNew ? 'POST' : 'PUT', body }));
-      dirty = false;
+      dirty = false; paintBar();
       if (isNew) { toast('Saved. Now add photos.'); return go('/products/' + r.id); }
       p = r; toast(r.demoted ? 'Saved, but the product was hidden because it needs risk checks.' : 'Saved', !!r.demoted); refresh();
     } catch (x) { toast(x.message, true); }
   }
-  function refresh() { paintStatus(); paintRisk(p.risk); paintEcon(p.economics); paintImgs(); }
+  function refresh() { paintBar(); paintCheck(); paintStatus(); paintRisk(p.risk); paintEcon(p.economics); paintImgs(); }
   const liveRisk = debounce(async () => { try { const d = form.get(); d.risk_ack = p.risk_ack || {}; const r = await api('/products/risk-check', { method: 'POST', body: d }); if (!isNew) r.flags.forEach(f => { f.acked = !!(p.risk_ack || {})[f.code] || f.acked; }); paintRisk(r); } catch { /* */ } econLive(); }, 500);
   function paintRisk(r) {
     clear(risk); if (!r) { risk.append(h('p', { class: 'muted' }, 'Fill in the product to see checks.')); return; }
@@ -206,7 +225,26 @@ reg(/^\/products\/(new|\d+)$/, async (v, m) => {
   function paintVariants() {
     clear(vbox);
     const photoOpts = [['', '— none —'], ...(p.images || []).map((im, k) => [im.id, 'Photo ' + (k + 1)])];
-    variants.forEach((x, i) => { const f = buildForm([{ k: 'colour_name', l: 'Colour name', t: 'text', w: 'half', ph: 'Black-White' }, { k: 'size', l: 'Size', t: 'text', w: 'half', ph: 'M' }, { k: 'color', l: 'Colour swatch (optional)', t: 'color', w: 'half' }, { k: 'image_id', l: 'Photo for this option', t: 'select', num: true, opts: photoOpts, w: 'half' }, { k: 'price', l: 'Selling price (empty = same as product)', t: 'number', w: 'half' }, { k: 'mrp', l: 'MRP (empty = none)', t: 'number', w: 'half' }, { k: 'cost', l: 'Your cost (Meesho price)', t: 'number', w: 'half' }, { k: 'stock', l: 'Stock', t: 'number', w: 'half' }, { k: 'sku', l: 'SKU', t: 'text', w: 'half' }, { k: 'name', l: 'Option name (auto = Colour / Size)', t: 'text', w: 'half' }, { k: 'active', l: 'Active', t: 'check' }], { ...x, active: x.active !== false && x.active !== 0 }, { onChange: d => { variants[i] = { ...variants[i], ...d }; dirty = true; } }); vbox.append(h('div', { class: 'listrow' }, h('div', { class: 'grow' }, f.el), h('button', { class: 'btn sm bad', onclick: () => { variants.splice(i, 1); paintVariants(); } }, '×'))); });
+    const groups = [], idx = new Map();
+    variants.forEach(v => { const k = v.colour_name || ''; if (!idx.has(k)) { idx.set(k, { name: k, list: [] }); groups.push(idx.get(k)); } idx.get(k).list.push(v); });
+    const touch = () => { dirty = true; paintBar(); paintCheck(); };
+    const cell = (l, el) => h('label', { class: 'vt-c' }, h('span', null, l), el);
+    const txt = (v, k, ph) => { const i = h('input', { class: 'inp', type: 'text', placeholder: ph || '', oninput: e => { v[k] = e.target.value; touch(); } }); i.value = v[k] == null ? '' : v[k]; return i; };
+    const nm = (v, k, ph) => { const i = h('input', { class: 'inp', type: 'number', step: 'any', placeholder: ph || '', oninput: e => { v[k] = e.target.value === '' ? '' : Number(e.target.value); touch(); } }); i.value = v[k] == null ? '' : v[k]; return i; };
+    groups.forEach(g => {
+      const first = g.list[0], img0 = (p.images || []).find(i => i.id === first.image_id);
+      const thumb = h('img', { class: 'vt-thumb', alt: '', src: img0 ? img0.thumb : '', style: { visibility: img0 ? 'visible' : 'hidden' } });
+      const gname = h('input', { class: 'inp', placeholder: 'Colour name (e.g. Black-White)', oninput: e => { g.list.forEach(v => { v.colour_name = e.target.value; }); touch(); } }); gname.value = g.name;
+      const sw = h('input', { type: 'color', class: 'vt-sw', title: 'Colour swatch (shown when there is no photo)', value: /^#[0-9a-f]{6}$/i.test(first.color || '') ? first.color : '#cccccc', oninput: e => { g.list.forEach(v => { v.color = e.target.value; }); touch(); } });
+      const ph = h('select', { class: 'inp', onchange: e => { const val = e.target.value ? Number(e.target.value) : null; g.list.forEach(v => { v.image_id = val; }); const im = (p.images || []).find(i => i.id === val); thumb.src = im ? im.thumb : ''; thumb.style.visibility = im ? 'visible' : 'hidden'; touch(); } }, photoOpts.map(([val, l]) => h('option', { value: val, selected: String(val) === String(first.image_id || '') }, l)));
+      const rows = g.list.map(v => h('div', { class: 'vt-row' },
+        cell('Size', txt(v, 'size', 'M')), cell('Price (empty = same)', nm(v, 'price')), cell('Your cost', nm(v, 'cost')), cell('Stock', nm(v, 'stock')),
+        h('label', { class: 'chk vt-on' }, h('input', { type: 'checkbox', checked: v.active !== false && v.active !== 0, onchange: e => { v.active = e.target.checked; touch(); } }), h('span', null, 'On')),
+        h('button', { class: 'btn sm bad vt-x', title: 'Remove this size', onclick: () => { variants.splice(variants.indexOf(v), 1); paintVariants(); touch(); } }, '×'),
+        h('details', { class: 'vt-more' }, h('summary', null, 'More'), h('div', { class: 'vt-morebody' }, cell('MRP', nm(v, 'mrp')), cell('SKU', txt(v, 'sku')), cell('Option name (auto)', txt(v, 'name'))))));
+      const addSize = () => { const last = g.list[g.list.length - 1]; variants.splice(variants.indexOf(last) + 1, 0, { name: '', colour_name: g.name, color: first.color, image_id: first.image_id, size: '', stock: 0, active: true }); paintVariants(); touch(); };
+      vbox.append(h('div', { class: 'vt-group' }, h('div', { class: 'vt-head' }, thumb, sw, gname, cell('Photo for this colour', ph)), ...rows, h('button', { class: 'btn sm', onclick: addSize }, '+ Add size')));
+    });
     const gen = async () => {
       const sz = await promptBox('Sizes', 'Sizes, comma separated (e.g. S, M, L, XL). Leave empty if none.'); if (sz == null) return;
       const cl = await promptBox('Colours', 'Colours, comma separated (e.g. Black-White, Pink-White). Leave empty if none.'); if (cl == null) return;
@@ -218,9 +256,9 @@ reg(/^\/products\/(new|\d+)$/, async (v, m) => {
         variants.push({ name: '', size: z, colour_name: c, stock: 0, active: true }); added++;
       }
       if (variants.length > 30) { variants.length = 30; toast('Only 30 options are allowed.', true); }
-      paintVariants(); dirty = true; toast(`${added} options added. Now fill price, cost and stock for each, then Save.`);
+      paintVariants(); touch(); toast(`${added} options added. Give each colour a photo, fill price, cost and stock, then Save.`);
     };
-    vbox.append(h('div', { class: 'row' }, h('button', { class: 'btn sm', onclick: () => { variants.push({ name: '', stock: 0, active: true }); paintVariants(); } }, '+ Add option'), h('button', { class: 'btn sm', onclick: gen }, 'Make Size × Colour options')));
+    vbox.append(h('div', { class: 'row', style: { marginTop: '4px' } }, h('button', { class: 'btn sm', onclick: () => { variants.push({ name: '', colour_name: '', size: '', stock: 0, active: true }); paintVariants(); touch(); } }, '+ Add colour or size'), h('button', { class: 'btn sm', onclick: gen }, 'Make Size × Colour options')));
   }
   async function paintSim() {
     clear(simBox); const mode = h('select', { class: 'inp', style: { maxWidth: '300px' }, onchange: e => { p.similar_mode = e.target.value; dirty = true; paintSim(); } }, h('option', { value: 'auto', selected: p.similar_mode !== 'manual' }, 'Automatic (same category, best sellers)'), h('option', { value: 'manual', selected: p.similar_mode === 'manual' }, 'I will choose'));

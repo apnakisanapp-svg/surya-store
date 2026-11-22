@@ -189,29 +189,70 @@ route(/^\/p\/([^/]+)$/, async (view, m) => {
     const tb = h('table', { class: 'vg-tbl' }, h('thead', null, h('tr', null, rows[0].map(c => h('th', null, c)))), h('tbody', null, rows.slice(1).map(r => h('tr', null, r.map(c => h('td', null, c))))));
     modal(h('div', { class: 'stack' }, h('h3', null, 'Size guide'), h('div', { class: 'vg-wrap' }, tb), h('p', { class: 'small muted' }, 'Measurements are of the garment, in the unit shown. Pick the size by your own measurements.')));
   }
+  let syncSC = () => {};
   function drawOpts() {
     if (!varEl) return; clear(varEl);
-    const cv = curV();
     if (!hasSC) {
       varEl.append(h('div', { class: 'vo-lbl' }, 'Choose option'), h('div', { class: 'vo-row' }, ins.map(v => h('button', { type: 'button', class: 'vopt' + (v.id === S.vid ? ' on' : '') + (!v.in_stock ? ' off' : ''), onclick: () => { S.vid = v.id; drawOpts(); paint(); } }, v.color ? h('i', { class: 'vsw', style: { background: v.color } }) : null, h('span', null, (lang() === 'hi' && v.name_hi) || v.name)))));
       return;
     }
-    const sizes = uniq('size'), cols = uniq('colour_name'), cs = cv && cv.size, cc = cv && cv.colour_name;
+    const sizes = uniq('size'), cols = uniq('colour_name');
     const find = (size, col) => ins.find(v => (v.size || null) === (size || null) && (v.colour_name || null) === (col || null));
     const pick = (size, col, changed) => {
       let v = find(size, col);
       if (!v) { const pool = ins.filter(x => changed === 'size' ? x.size === size : x.colour_name === col); v = pool.find(x => x.in_stock) || pool[0]; }
-      if (v) { S.vid = v.id; drawOpts(); paint(); }
+      if (v) { S.vid = v.id; syncSC(true); paint(); }
     };
+    const colEls = {}, szEls = {};
+    let colRow = null, ring = null, szRow = null, pill = null, colLbl = null, szLbl = null, avail = null;
     if (cols.length) {
-      const swatch = c => (ins.find(v => v.colour_name === c && v.color) || {}).color;
-      varEl.append(h('div', { class: 'vo-lbl' }, 'Colour: ', h('b', null, cc || '')), h('div', { class: 'vo-row' }, cols.map(c => { const v = find(cs, c), sw = swatch(c); return h('button', { type: 'button', class: 'vopt' + (c === cc ? ' on' : '') + (v && !v.in_stock ? ' off' : '') + (!v ? ' na' : ''), onclick: () => pick(cs, c, 'col') }, sw ? h('i', { class: 'vsw', style: { background: sw } }) : null, h('span', null, c)); })));
+      ring = h('i', { class: 'vc-ring' });
+      colLbl = h('span', null, 'Colour: ', h('b', null, ''));
+      colRow = h('div', { class: 'vc-row' }, ring, cols.map(c => {
+        const first = ins.find(v => v.colour_name === c && v.image_id) || ins.find(v => v.colour_name === c), im = first && first.image_id ? p.images.find(x => x.id === first.image_id) : null;
+        const sw = (ins.find(v => v.colour_name === c && v.color) || {}).color;
+        const el = h('button', { type: 'button', class: 'vcard', 'aria-label': c, onclick: () => pick(cur2().size, c, 'col') },
+          h('span', { class: 'vc-img' }, im ? h('img', { src: im.thumb, alt: '', loading: 'lazy', draggable: 'false' }) : h('i', { style: { background: sw || '#d9dce1' } })),
+          h('span', { class: 'vc-name' }, c));
+        colEls[c] = el; return el;
+      }));
     }
     if (sizes.length) {
-      const prices = new Set(ins.filter(v => v.size).map(v => v.price)), showP = prices.size > 1;
-      varEl.append(h('div', { class: 'vo-lbl vo-between' }, h('span', null, 'Size: ', h('b', null, cs || '')), p.size_guide ? h('button', { type: 'button', class: 'vo-link', onclick: sizeGuide }, 'Size guide') : null),
-        h('div', { class: 'vo-row' }, sizes.map(z => { const v = find(z, cc) || ins.find(x => x.size === z); const here = find(z, cc); return h('button', { type: 'button', class: 'vopt' + (z === cs ? ' on' : '') + (here && !here.in_stock ? ' off' : '') + (!here ? ' na' : ''), onclick: () => pick(z, cc, 'size') }, h('span', null, z), showP && v ? h('small', null, money(v.price)) : null, here && here.in_stock && here.stock_left ? h('small', { class: 'vo-left' }, `${here.stock_left} left`) : null); })));
+      pill = h('i', { class: 'vs-pill' });
+      szLbl = h('span', null, 'Size: ', h('b', null, ''));
+      szRow = h('div', { class: 'vs-row' }, pill, sizes.map(z => {
+        const el = h('button', { type: 'button', class: 'vsz', onclick: () => pick(z, cur2().colour_name, 'size') }, h('b', null, z), h('small', { class: 'vs-p' }), h('small', { class: 'vs-l' }));
+        szEls[z] = el; return el;
+      }));
+      avail = h('div', { class: 'vo-avail' });
     }
+    const cur2 = () => curV() || {};
+    const place = (el, box, mark, anim) => {
+      if (!el || !mark) return; const x = el.offsetLeft, y = el.offsetTop;
+      if (!anim) mark.style.transition = 'none';
+      mark.style.width = el.offsetWidth + 'px'; mark.style.height = el.offsetHeight + 'px'; mark.style.transform = `translate(${x}px,${y}px)`;
+      if (!anim) { void mark.offsetWidth; mark.style.transition = ''; }
+      mark.classList.add('ready');
+    };
+    syncSC = anim => {
+      const cv = cur2(), cc = cv.colour_name || null, cs = cv.size || null;
+      if (colRow) { cols.forEach(c => { const v = find(cs, c); colEls[c].classList.toggle('on', c === cc); colEls[c].classList.toggle('off', !!v && !v.in_stock); colEls[c].classList.toggle('na', !v); }); colLbl.lastChild.textContent = cc || ''; place(colEls[cc], colRow, ring, anim); }
+      if (szRow) {
+        sizes.forEach(z => { const v = find(z, cc), el = szEls[z]; el.classList.toggle('on', z === cs); el.classList.toggle('off', !!v && !v.in_stock); el.classList.toggle('na', !v); el.disabled = false;
+          const pr = new Set(ins.filter(x => x.size).map(x => x.price)).size > 1; const pe = $('.vs-p', el), le = $('.vs-l', el);
+          pe.textContent = v && pr ? money(v.price) : ''; le.textContent = v && v.in_stock && v.stock_left ? `${v.stock_left} left` : (v && !v.in_stock ? 'Sold out' : ''); });
+        szLbl.lastChild.textContent = cs || ''; place(szEls[cs], szRow, pill, anim);
+        const ok = sizes.filter(z => { const v = find(z, cc); return v && v.in_stock; });
+        avail.textContent = ok.length ? `Available${cc ? ' in ' + cc : ''}: ${ok.join(', ')}` : `All sizes${cc ? ' in ' + cc : ''} are sold out right now.`;
+        avail.classList.toggle('bad', !ok.length);
+      }
+    };
+    if (colRow) varEl.append(h('div', { class: 'vo-lbl' }, colLbl), colRow);
+    if (szRow) varEl.append(h('div', { class: 'vo-lbl vo-between' }, szLbl, p.size_guide ? h('button', { type: 'button', class: 'vo-link', onclick: sizeGuide }, 'Size guide') : null), szRow, avail);
+    syncSC(false);
+    requestAnimationFrame(() => syncSC(false));
+    if (window.ResizeObserver) { const ro = new ResizeObserver(() => { if (varEl.isConnected) syncSC(false); else ro.disconnect(); }); ro.observe(varEl); }
+    $$('img', varEl).forEach(im => im.addEventListener('load', () => syncSC(false)));
   }
   drawOpts();
   const pinInp = h('input', { class: 'inp', inputmode: 'numeric', maxlength: 6, placeholder: t('pincode'), 'aria-label': t('pincode'), value: ls.get('sy_pin', '') });
