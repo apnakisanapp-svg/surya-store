@@ -269,8 +269,8 @@ export function addToCart(prod, variantId, qty, btn) {
 export function cookieBanner(force) {
   if (!force && ls.get('sy_cookie')) return;
   const C = BOOT.popups.cookie || {};
-  const el = h('div', { class: 'cookie glass', role: 'dialog', 'aria-label': 'Cookies' }, h('p', { class: 'small' }, (lang() === 'hi' && C.text_hi) || C.text || t('cookies_text'), ' ', h('a', { class: 'link', href: '/policy/cookies' }, 'Read more')),
-    h('div', { class: 'row', style: { marginTop: '12px' } }, h('button', { class: 'btn sm grow', onclick: () => { ls.set('sy_cookie', 'all'); el.remove(); loadAnalytics(); } }, t('accept')), h('button', { class: 'btn sm ghost grow', onclick: () => { ls.set('sy_cookie', 'essential'); el.remove(); } }, t('reject'))));
+  const el = h('div', { class: 'cookie glass', role: 'dialog', 'aria-label': 'Cookies' }, h('p', { class: 'small' }, (lang() === 'hi' && C.text_hi) || C.text || t('cookies_text'), ' ', t('track_note'), ' ', h('a', { class: 'link', href: '/policy/cookies' }, 'Read more')),
+    h('div', { class: 'row', style: { marginTop: '12px' } }, h('button', { class: 'btn sm grow', onclick: () => { ls.set('sy_cookie', 'all'); el.remove(); loadAnalytics(); import('./track.js').then(m => m.kick()).catch(() => {}); } }, t('accept')), h('button', { class: 'btn sm ghost grow', onclick: () => { ls.set('sy_cookie', 'essential'); el.remove(); } }, t('reject'))));
   const upd = path => { el.style.display = /^\/(login|checkout|account|profile)/.test(path || location.pathname) ? 'none' : ''; }; upd(); bus.on('route', upd); // never cover the login / checkout forms
   document.body.append(el);
 }

@@ -20,6 +20,7 @@ const DEFAULTS = {
     maintenance: false, maintenance_message: 'We will be back shortly.', default_lang: 'en', language_toggle: true, dark_toggle: true,
     guest_checkout: false, currency: '₹', cart_expiry_days: 14, low_stock_default: 3, show_stock_below: 5,
     recently_viewed: true, wishlist: true, reviews: true, show_sold_out: true, pwa: true,
+    archive_cancel_days: 7, archive_delivered_days: 30, track_all: false,
   },
   payments: {
     upi_enabled: true, upi_id: '', upi_name: 'SURYA', upi_timer_min: 15, upi_grace_min: 15, upi_screenshot: true, upi_unique_paise: true,

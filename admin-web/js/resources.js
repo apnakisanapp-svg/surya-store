@@ -148,7 +148,9 @@ const SETTINGS = {
   store: { title: 'Store options', spec: [
     { t: 'heading', l: 'Open / close' }, { k: 'maintenance', l: 'Close the website for visitors (maintenance mode)', t: 'check' }, { k: 'maintenance_message', l: 'Message', t: 'text' },
     { t: 'heading', l: 'Features' }, { k: 'default_lang', l: 'Default language', t: 'select', opts: [['en', 'English'], ['hi', 'Hinglish']], w: 'half' }, { k: 'language_toggle', l: 'Show language button', t: 'check' }, { k: 'guest_checkout', l: 'Allow buying without an account', t: 'check' }, { k: 'wishlist', l: 'Wishlist (heart)', t: 'check' }, { k: 'reviews', l: 'Customer reviews', t: 'check' }, { k: 'recently_viewed', l: 'Recently viewed row', t: 'check' }, { k: 'show_sold_out', l: 'Show sold-out products', t: 'check' }, { k: 'pwa', l: 'Allow "add to home screen" / offline files', t: 'check' },
-    { k: 'low_stock_default', l: 'Warn me when stock is below', t: 'number', w: 'half' }, { k: 'show_stock_below', l: 'Show "Only N left" to customers below', t: 'number', w: 'half' }], extra: 'ui' },
+    { k: 'low_stock_default', l: 'Warn me when stock is below', t: 'number', w: 'half' }, { k: 'show_stock_below', l: 'Show "Only N left" to customers below', t: 'number', w: 'half' },
+    { t: 'heading', l: 'Orders list' }, { k: 'archive_cancel_days', l: 'Move cancelled / returned orders to Archive after (days)', t: 'number', w: 'half' }, { k: 'archive_delivered_days', l: 'Move delivered orders to Archive after (days)', t: 'number', w: 'half' },
+    { t: 'heading', l: 'Visitor counting' }, { k: 'track_all', l: 'Count every visitor who has not pressed Reject (anonymously, no name or IP). If this is off, only visitors who press Accept on the cookie banner are counted. The cookie banner text tells visitors about counting; check your Cookie policy says it too (Visitors & reels page shows a button).', t: 'check' }], extra: 'ui' },
 };
 SETTINGS.theme.spec = []; // custom screen below
 reg(/^\/settings\/([a-z]+)$/, async (v, m) => {

@@ -1,4 +1,5 @@
 import { settingsCard } from './notif.js';
+import { attr as trackAttr } from './track.js';
 import { BOOT, h, $, $$, clear, icon, t, tr, lang, bus, api, money, cart, wish, me, ls, toast, modal, nav, route, setTitle, reveal, sid, buyItem, confirmBox, guardWatch, guardOff, draft, afterLogin, slideIn, glassSelect } from './core.js';
 import { productCard, skeletons, lineEl, shipBar, priceNow, syncFromPrice } from './ui.js';
 import { faqList } from './pages1.js';
@@ -157,7 +158,7 @@ route(/^\/checkout$/, async (view, m, params) => {
       F.terms = true;
       if (price.needs_safety_ack && !F.safety) { toast('Please confirm the safety instructions.', { err: true }); return; }
       try { await busy(btn, async () => {
-        const r = await api('/orders', { method: 'POST', body: { items: payload(), coupon, method: F.method, gift: F.gift, gift_message: F.gift_message, note: F.note, lang: lang(), email: F.email || undefined, save_address: !!me.customer, address: { name: F.name, phone: F.phone, line1: F.line1, line2: F.line2, landmark: F.line2, pincode: F.pincode, city: F.city, district: F.district, state: F.state }, consents: { terms: true, safety: F.safety, marketing: !!(me.customer && me.customer.marketing_optin) } } });
+        const r = await api('/orders', { method: 'POST', body: { items: payload(), attr: trackAttr(), coupon, method: F.method, gift: F.gift, gift_message: F.gift_message, note: F.note, lang: lang(), email: F.email || undefined, save_address: !!me.customer, address: { name: F.name, phone: F.phone, line1: F.line1, line2: F.line2, landmark: F.line2, pincode: F.pincode, city: F.city, district: F.district, state: F.state }, consents: { terms: true, safety: F.safety, marketing: !!(me.customer && me.customer.marketing_optin) } } });
         if (BUY) buyItem.clear(); else cart.clear(); ls.del('sy_coupon'); draft.del(DKEY); guardOff(); ls.set('sy_last_order', { n: r.number, t: r.token });
         nav(`/order/${r.number}?t=${r.token}&new=1`);
       }); } catch (e) { toast(e.message, { err: true }); if (e.data && e.data.out_of_stock) { dir = 1; step = 3; stepPay(); } }

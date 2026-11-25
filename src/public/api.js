@@ -15,13 +15,14 @@ const mail = require('../shared/mail');
 const push = require('../shared/push');
 const custpush = require('../shared/custpush');
 const auth = require('../shared/auth');
+const track = require('../shared/track');
 const U = require('../shared/util');
 const { asyncH, bad, notFound, HttpError, now, jparse, int, sha256, token, isEmail, normPhone, isPhone, hashIp, ipOf } = U;
 
 const api = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 6 * 1024 * 1024, files: 3 } });
 const lim = (windowMin, max, msg) => rateLimit({ windowMs: windowMin * 60000, limit: max, standardHeaders: true, legacyHeaders: false, message: { error: msg || 'Too many requests. Please wait a little and try again.' } });
-const csrf = (req, res, next) => (['GET', 'HEAD', 'OPTIONS'].includes(req.method) || req.headers['x-sy-csrf'] === '1') ? next() : res.status(403).json({ error: 'Blocked (missing security header).' });
+const csrf = (req, res, next) => (['GET', 'HEAD', 'OPTIONS'].includes(req.method) || req.headers['x-sy-csrf'] === '1' || req.path === '/t/leave') ? next() : res.status(403).json({ error: 'Blocked (missing security header).' });
 
 api.use(csrf);
 api.use(auth.optionalCustomer);
@@ -41,7 +42,7 @@ function bootstrap(req) {
   return {
     v: settings.lastUpdated(), brand: publicBrand(), theme: { preset: T.preset, logo: T.logo_url, logo_dark: T.logo_dark_url, favicon: T.favicon_url, show_logo_text: T.show_logo_text },
     intro: S.intro, announcement: S.announcement, store: { maintenance: ST.maintenance, default_lang: ST.default_lang, language_toggle: ST.language_toggle, dark_toggle: ST.dark_toggle, guest_checkout: ST.guest_checkout,
-      recently_viewed: ST.recently_viewed, wishlist: ST.wishlist, reviews: ST.reviews, pwa: ST.pwa, currency: ST.currency },
+      recently_viewed: ST.recently_viewed, track_all: !!ST.track_all, wishlist: ST.wishlist, reviews: ST.reviews, pwa: ST.pwa, currency: ST.currency },
     payments: { upi: P.upi_enabled && !!P.upi_id, cod: P.cod_enabled, cod_fee: P.cod_fee, cod_min: P.cod_min, cod_max: P.cod_max, upi_timer_min: P.upi_timer_min, upi_screenshot: P.upi_screenshot },
     shipping: { flat: SH.flat, free_above: SH.free_above, eta_min: SH.eta_min, eta_max: SH.eta_max, gift_enabled: SH.gift_enabled, gift_price: SH.gift_price, battery_notice: SH.battery_notice },
     returns: { window_days: S.returns.window_days, text: S.returns.text }, popups: S.popups, menu: S.menu, home: { trust: S.home.trust, eco: S.home.eco }, filters: S.filters, ui: S.ui, search: S.search,
@@ -79,7 +80,7 @@ api.get('/products', asyncH((req, res) => {
     page: q.page, limit: q.limit, offers: q.offers === '1', tag: q.tag, fallback: !!q.q,
     ids: q.ids ? String(q.ids).split(',').slice(0, 40).map(Number).filter(Boolean) : undefined,
   });
-  if (q.q && int(q.page, 1) === 1) db.prepare('INSERT INTO search_log(term,results,created_at) VALUES(?,?,?)').run(String(q.q).toLowerCase().slice(0, 80), r.total, now());
+  if (q.q && int(q.page, 1) === 1) db.prepare('INSERT INTO search_log(term,results,created_at) VALUES(?,?,?)').run(String(q.q).toLowerCase().slice(0, 80), r.fallback ? 0 : r.total, now()); // "similar items" suggestions do not count as a match
   res.json(r);
 }));
 api.get('/suggest', asyncH((req, res) => {
@@ -169,6 +170,7 @@ api.get('/pincode-info/:pin', lim(1, 30), asyncH(async (req, res) => {
 api.post('/orders', lim(10, +process.env.ORDER_RATE_MAX || 12, 'Too many orders from this device. Please wait a few minutes.'), asyncH((req, res) => {
   if (process.env.CATALOGUE_ONLY === '1') { const B = settings.get('brand'); const wa = String(B.whatsapp || B.phone || '').replace(/\D/g, '').slice(-10); throw bad('Orders are not taken on this preview website. Please order on WhatsApp' + (wa ? ': +91 ' + wa : '') + '.'); }
   const r = orders.createOrder(req.body || {}, ctxOf(req));
+  if (!r.duplicate) { try { track.attachOrder(r.order.id, req.headers['x-sy-vk'], req.body && req.body.attr); } catch { /* ignore */ } }
   res.json({ number: r.order.number, token: r.order.access_token, status: r.order.status, method: r.order.payment_method, total: r.order.total, advance: Number(r.order.advance_amount) || 0, duplicate: r.duplicate });
 }));
 
@@ -444,9 +446,13 @@ api.post('/events', lim(1, 120), (req, res) => {
   if (['view', 'atc', 'wish', 'checkout'].includes(type) && pid) {
     db.prepare('INSERT INTO product_events(type,product_id,sid,created_at) VALUES(?,?,?,?)').run(type, pid, sid, now());
     if (type === 'view') db.prepare('UPDATE products SET views=views+1 WHERE id=?').run(pid);
+    if (settings.get('store').track_all || req.headers['x-sy-vk']) { try { track.bump(req.headers['x-sy-vk'], type, pid); } catch { /* tracking must never break the shop */ } }
   }
   res.json({ ok: true });
 });
+/* anonymous visit tracking (the page only sends this when the visitor allowed analytics, or the owner counts everyone) */
+api.post('/t/pv', lim(1, 120), (req, res) => { let r = null; try { r = track.recordPv(req, req.body || {}); } catch { /* ignore */ } res.json({ ok: true, ...(r || {}) }); });
+api.post('/t/leave', lim(1, 240), (req, res) => { try { track.recordLeave(req.body || {}); } catch { /* ignore */ } res.json({ ok: true }); });
 
 /* ---------- pages ---------- */
 function fillPolicy(html) {

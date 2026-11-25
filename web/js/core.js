@@ -59,9 +59,10 @@ const EN = {
   notify: 'Notify me', share: 'Share', copied: 'Link copied', mrp: 'MRP', off: 'off', save: 'Save', send: 'Send', msg: 'Message', order_no: 'Order number', find: 'Find order', logout: 'Log out', register: 'Create account', password: 'Password',
   orders: 'My orders', wishlist: 'Wishlist', addresses: 'Addresses', profile: 'Profile', no_results: 'Nothing found', fb_title: 'No exact match for', fb_text: 'These similar and popular products might help.', try_other: 'Try another word or clear the filters.', load_more: 'Show more', gift: 'Gift wrap', delivery_by: 'Delivery by', pay_now: 'Pay now',
   have_paid: 'I have paid', utr: 'UPI transaction ID (UTR)', cancel_order: 'Cancel order', request: 'Replacement or refund', free_ship_left: 'Add {n} more for free shipping', free_ship_got: 'You get free shipping', size: 'Details', grievance: 'Grievance officer',
-  cookies_text: 'We use cookies to keep your cart and improve the site.', accept: 'Accept', reject: 'Reject', lang: 'हिं', yes: 'Yes', no: 'No', close: 'Close', retry: 'Try again', offline: "You're offline. Check your connection and try again.",
+  cookies_text: 'We use cookies to keep your cart and improve the site.', track_note: 'If you accept, we also count visits anonymously (no name, phone or IP is saved) to make the shop better.', accept: 'Accept', reject: 'Reject', lang: 'हिं', yes: 'Yes', no: 'No', close: 'Close', retry: 'Try again', offline: "You're offline. Check your connection and try again.",
 };
 const HI = {
+  track_note: 'Accept karoge to hum site behtar banane ke liye visit anonymous ginte hain (naam, phone ya IP save nahi hota).',
   empty_cart: 'Cart khaali hai', continue: 'Shopping jaari rakho', added: 'Cart mein add ho gaya', oos: 'Stock khatam', low: 'Sirf {n} bache hain', free: 'Free', remove: 'Hatao', undo: 'Wapas', removed: 'Cart se hata diya',
   pincode: 'Pincode', cod: 'Cash on delivery', upi: 'UPI se pay karo', place: 'Order karo', name: 'Poora naam', phone: 'Mobile number', addr1: 'Ghar, gali, area', city: 'Sheher', state: 'Rajya', fb_title: 'Bilkul wahi nahi mila:', fb_text: 'Par ye milte-julte aur popular products aapko pasand aa sakte hain.', no_results: 'Kuch nahi mila', try_other: 'Dusra shabd try karo ya filter hatao.',
   free_ship_left: 'Free shipping ke liye {n} aur jodo', free_ship_got: 'Aapko free shipping mil gayi', terms_ok: 'Mujhe Terms, Privacy aur Return Policy manzoor hai', safety_ok: 'Maine safety instructions padh li hain', notify: 'Wapas aane par batao', copied: 'Link copy ho gaya',
@@ -99,6 +100,7 @@ function restoreScroll(y) {
 export async function api(path, { method = 'GET', body, form } = {}) {
   if (method === 'GET' && backNav && cacheable(path)) { const hit = GETC.get(path); if (hit && Date.now() - hit.at < 180000) return structuredClone(hit.data); }
   const opt = { method, headers: { 'x-sy-csrf': '1' }, credentials: 'same-origin' };
+  if (method !== 'GET') { const vk = ls.get('sy_vk'); if (vk) opt.headers['x-sy-vk'] = vk; } // lets the shop link a cart / order to the visit (only exists if analytics is allowed)
   if (form) opt.body = form; else if (body !== undefined) { opt.headers['content-type'] = 'application/json'; opt.body = JSON.stringify(body); }
   const end = ldBegin(method, path);
   let res;

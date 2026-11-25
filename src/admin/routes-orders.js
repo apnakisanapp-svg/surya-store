@@ -13,8 +13,21 @@ const { itemImage, asyncH, bad, notFound, int, num, jparse, now, esc, rupee, toC
 const r = express.Router();
 const addr = o => jparse(o.address, {});
 
+/* Archive: finished orders move out of the main list after a few days. Nothing is deleted; search still finds them. */
+function archiveCond() {
+  const S = settings.get('store'), c = Math.max(1, int(S.archive_cancel_days, 7)), d = Math.max(1, int(S.archive_delivered_days, 30));
+  const cc = new Date(Date.now() - c * 864e5).toISOString(), dc = new Date(Date.now() - d * 864e5).toISOString();
+  const last = 'COALESCE((SELECT MAX(created_at) FROM order_events WHERE order_id=orders.id), updated_at, placed_at)';
+  const calm = "NOT EXISTS (SELECT 1 FROM order_requests q WHERE q.order_id=orders.id AND q.status='open') AND COALESCE(advance_status,'') <> 'refund_due'";
+  return { sql: `(((status IN ('cancelled','returned') AND ${last}<?) OR (status='delivered' AND ${last}<?)) AND ${calm})`, args: [cc, dc] };
+}
 function listWhere(q) {
   const where = ['1=1'], args = [];
+  if (!q.q) { // searching looks everywhere, archive included
+    const a = archiveCond();
+    if (q.archive === '1') { where.push(a.sql); args.push(...a.args); }
+    else if (q.archive === '0') { where.push('NOT ' + a.sql); args.push(...a.args); }
+  }
   if (q.status) {
     if (q.status === 'action') where.push("(status='cod_confirm' OR status='confirmed' OR payment_status='submitted')"); // unpaid UPI orders wait in their own tab until a payment is submitted
     else { where.push('status=?'); args.push(q.status); }
@@ -35,8 +48,11 @@ r.get('/', asyncH((req, res) => {
   const rows = db.prepare(`SELECT * FROM orders WHERE ${w} ORDER BY id DESC LIMIT ? OFFSET ?`).all(...args, per, (page - 1) * per);
   const items = db.prepare(`SELECT order_id, name, qty, image FROM order_items WHERE order_id IN (${rows.map(() => '?').join(',') || 'NULL'}) ORDER BY id`).all(...rows.map(x => x.id));
   const by = {}, first = {}, cnt = {}; for (const i of items) { (by[i.order_id] ||= []).push(`${i.name} x${i.qty}`); cnt[i.order_id] = (cnt[i.order_id] || 0) + 1; if (!first[i.order_id]) first[i.order_id] = i; }
-  const counts = db.prepare('SELECT status, COUNT(*) c FROM orders GROUP BY status').all();
-  res.json({ total, page, pages: Math.ceil(total / per), counts: Object.fromEntries(counts.map(c => [c.status, c.c])),
+  const A = archiveCond();
+  const counts = db.prepare(`SELECT status, COUNT(*) c FROM orders WHERE NOT ${A.sql} GROUP BY status`).all(...A.args);
+  const arch = db.prepare(`SELECT status, COUNT(*) c FROM orders WHERE ${A.sql} GROUP BY status`).all(...A.args);
+  res.json({ total, page, pages: Math.ceil(total / per), counts: Object.fromEntries(counts.map(c => [c.status, c.c])), archived: arch.reduce((n, x) => n + x.c, 0), archived_counts: Object.fromEntries(arch.map(c => [c.status, c.c])),
+    archive_days: { cancel: Math.max(1, int(settings.get('store').archive_cancel_days, 7)), delivered: Math.max(1, int(settings.get('store').archive_delivered_days, 30)) },
     items: rows.map(o => ({ id: o.id, number: o.number, name: o.name, phone: o.phone, status: o.status, payment_method: o.payment_method, payment_status: o.payment_status, total: o.total, placed_at: o.placed_at,
       risky: !!o.risky, risk_reason: o.risk_reason, utr: o.utr, has_battery: !!o.has_battery, city: addr(o).city, summary: (by[o.id] || []).join(', '), image_url: first[o.id] ? itemImage(first[o.id].image) : null, first_name: first[o.id] ? first[o.id].name : '', first_qty: first[o.id] ? first[o.id].qty : 0, item_count: cnt[o.id] || 0,
       has_advance: orders.hasAdvance(o), advance_amount: Number(o.advance_amount) || 0, advance_status: o.advance_status, due_on_delivery: orders.dueOnDelivery(o), repeat: false })) });

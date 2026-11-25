@@ -33,6 +33,7 @@ function createApp() {
   api.use('/orders', require('./routes-orders'));
   api.use('/products', require('./routes-products'));
   api.use('/finance', require('./routes-finance'));
+  api.use('/visitors', require('./routes-visitors'));
   api.use('/', require('./routes-store'));
   app.use('/api', api, notFoundApi);
 

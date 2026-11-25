@@ -1,8 +1,25 @@
-10 files changed. Extract into a NEW EMPTY folder: you get 4 folders: src, web, admin-web, test.
-1. Open https://github.com/apnakisanapp-svg/surya-store/upload/main
-2. Drag the 4 FOLDERS (src, web, admin-web, test). The page must show paths like src/shared/shortlink.js, src/shared/mail.js, web/js/pages1.js
-3. Commit changes.
-4. AWS terminal (ubuntu@...): cd ~/surya-store && git pull && sudo systemctl restart surya && sudo systemctl is-active surya
-5. Admin: Settings > Message templates > press "Reset" once to get the new ready-made messages (only if you had saved that page before; otherwise they are already new).
-6. Website and Admin: Ctrl+F5.
-No npm install needed.
+RELEASE 11 - Visitors & reels (poora) + cookie banner aur policy
+(Isme Release 10 ki sab files bhi hain. Release 10 deploy nahi kiya ho to bhi sirf ye zip upload karna kaafi hai.)
+
+Naya:
+- Visitors & reels me naye tabs: Pages, Journeys (ek visitor ki poori kahani), Cart chhode, Search, Log (login aur bina login), Mahina (CSV ke saath)
+- Cookie banner me visit counting ki line
+- Cookie Policy aur Privacy Policy me "Visit counting" hissa (apne aap jud jata hai agar policy tumne badli nahi thi, warna Visitors page par "Policy me jodo" button)
+- Jo Reject dabate hain unhe kabhi nahi ginte
+- Search me jab kuch nahi milta to ab sahi record hota hai
+
+UPLOAD STEPS (ek-ek karke)
+1. Is zip ko ek NAYE KHALI folder me extract karo. Dikhna chahiye: folders admin-web, src, test, web aur file UPLOAD-STEPS.txt
+2. Kholo: https://github.com/apnakisanapp-svg/surya-store/upload/main
+3. Chaaron FOLDERS (admin-web, src, test, web) drag karo. Folder ke andar ki files alag se mat drag karna.
+   Check: page par naam aise dikhne chahiye: src/shared/visitpolicy.js, web/js/track.js, admin-web/js/visitors.js
+4. Commit changes.
+5. AWS terminal (ubuntu@...), ek line ek baar me:
+     cd ~/surya-store && git pull
+     sudo systemctl restart surya
+     sudo systemctl is-active surya        (active likha aana chahiye)
+   (npm install ki zaroorat nahi)
+6. Site aur admin dono par Ctrl+F5.
+7. Check: Admin > Visitors & reels me 10 tabs dikhein; site par cookie banner me nayi line dikhe.
+8. Apna phone ginti se bahar rakhne ke liye site ke link ke aakhir me ?notrack=1 lagakar ek baar kholo.
+9. Policy: Admin > Policies me Cookie Policy aur Privacy Policy dekh lo, aur ek baar vakil ya CA ko dikhwa lena.

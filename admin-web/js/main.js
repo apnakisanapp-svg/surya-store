@@ -4,11 +4,13 @@ import './orders.js';
 import './products.js';
 import './resources.js';
 import './finance.js';
+import './visitors.js';
 import './notifications.js';
 
 const NAV = [
   ['', [['/', 'Dashboard'], ['/orders', 'Orders', 'orders'], ['/products', 'Products']]],
   ['Sell', [['/categories', 'Categories'], ['/coupons', 'Coupons'], ['/reviews', 'Reviews', 'reviews'], ['/customers', 'Customers'], ['/messages', 'Messages & complaints', 'messages'], ['/outbox', 'Messages to send', 'outbox']]],
+  ['Insights', [['/visitors', 'Visitors & reels']]],
   ['Money', [['/profit', 'Profit centre'], ['/purchases', 'Purchases'], ['/suppliers', 'Suppliers & sourcing'], ['/expenses', 'Expenses'], ['/insights', 'Daily insights']]],
   ['Website', [['/content', 'Banners & home page'], ['/testimonials', 'Testimonials'], ['/faqs', 'FAQ'], ['/policies', 'Policies & pages'], ['/settings/theme', 'Look & theme'], ['/settings/seo', 'SEO & redirects']]],
   ['Rules', [['/compliance', 'Compliance centre', 'compliance'], ['/settings/brand', 'Business details'], ['/settings/payments', 'Payments'], ['/settings/shipping', 'Shipping'], ['/settings/returns', 'Returns'], ['/settings/popups', 'Popups'], ['/settings/profit', 'Profit & risk rules'], ['/settings/messages', 'Message templates'], ['/settings/store', 'Store options']]],

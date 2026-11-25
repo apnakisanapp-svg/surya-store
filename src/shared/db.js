@@ -190,6 +190,22 @@ db.exec(`CREATE TABLE IF NOT EXISTS otp_codes(id INTEGER PRIMARY KEY, email TEXT
 db.exec('CREATE INDEX IF NOT EXISTS otp_email ON otp_codes(email, id)');
 try { db.exec('ALTER TABLE customers ADD COLUMN email_verified INTEGER DEFAULT 0'); } catch { /* already there */ }
 
+/* Release 10: visitor insights (anonymous: no IP, no name; the logged-in customer id is kept only for the owner) */
+db.exec(`CREATE TABLE IF NOT EXISTS visits(id INTEGER PRIMARY KEY, vk TEXT UNIQUE NOT NULL, vid TEXT NOT NULL, customer_id INTEGER, started_at TEXT NOT NULL, last_at TEXT NOT NULL,
+  src TEXT, campaign TEXT, landing TEXT, device TEXT, ref_host TEXT, is_new INTEGER DEFAULT 1, pages INTEGER DEFAULT 0, dur INTEGER DEFAULT 0, atc INTEGER DEFAULT 0, checkout INTEGER DEFAULT 0, ordered INTEGER DEFAULT 0)`);
+db.exec('CREATE INDEX IF NOT EXISTS idx_visits_t ON visits(started_at)');
+db.exec('CREATE INDEX IF NOT EXISTS idx_visits_vid ON visits(vid)');
+db.exec(`CREATE TABLE IF NOT EXISTS page_views(id INTEGER PRIMARY KEY, visit_id INTEGER NOT NULL, pk TEXT, path TEXT, kind TEXT, product_id INTEGER, created_at TEXT NOT NULL, dur INTEGER DEFAULT 0, scroll INTEGER DEFAULT 0)`);
+db.exec('CREATE INDEX IF NOT EXISTS idx_pv_visit ON page_views(visit_id)');
+db.exec('CREATE INDEX IF NOT EXISTS idx_pv_t ON page_views(created_at, kind)');
+db.exec('CREATE INDEX IF NOT EXISTS idx_pv_pk ON page_views(pk)');
+db.exec(`CREATE TABLE IF NOT EXISTS campaigns(id INTEGER PRIMARY KEY, name TEXT NOT NULL, code TEXT UNIQUE NOT NULL, platform TEXT, target TEXT, created_at TEXT, archived INTEGER DEFAULT 0)`);
+for (const c of ['src TEXT', 'campaign TEXT', 'vid TEXT']) { try { db.exec('ALTER TABLE orders ADD COLUMN ' + c); } catch { /* already there */ } }
+db.exec('CREATE INDEX IF NOT EXISTS idx_orders_campaign ON orders(campaign)');
+db.exec('CREATE TABLE IF NOT EXISTS visit_events(id INTEGER PRIMARY KEY, visit_id INTEGER NOT NULL, type TEXT NOT NULL, product_id INTEGER, ref TEXT, created_at TEXT NOT NULL)');
+db.exec('CREATE INDEX IF NOT EXISTS idx_ve_visit ON visit_events(visit_id)');
+db.exec('CREATE INDEX IF NOT EXISTS idx_ve_t ON visit_events(type, created_at)');
+
 const tx = fn => db.transaction(fn);
 module.exports = db;
 module.exports.tx = tx;

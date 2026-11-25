@@ -1,17 +1,20 @@
 import { h, $, $$, clear, api, toast, money, dt, ago, card, pageHead, table, statusBadge, badge, busy, kv, tabs, modal, confirmBox, promptBox, buildForm } from './lib.js';
 import { reg, go, S } from './router.js';
 
+const ARCH_TABS = [['', 'All archived'], ['cancelled', 'Cancelled'], ['returned', 'Returned'], ['delivered', 'Delivered']];
 const TABS = [['action', 'Needs action'], ['payment_pending', 'Awaiting payment'], ['cod_confirm', 'COD to confirm'], ['confirmed', 'To pack'], ['packed', 'To ship'], ['shipped', 'Shipped'], ['delivered', 'Delivered'], ['cancelled', 'Cancelled'], ['', 'All']];
 reg(/^\/orders$/, async (v, m, q) => {
-  const st = { status: q.get('status') ?? 'action', q: q.get('q') || '', method: '', page: 1, risky: q.get('risky') || '' };
-  const box = h('div'), tabBar = h('div'), sel = new Set();
-  const search = h('input', { class: 'inp', placeholder: 'Order no., phone, name, UTR…', value: st.q, style: { maxWidth: '320px' }, onkeydown: e => { if (e.key === 'Enter') { st.q = e.target.value; st.page = 1; load(); } } });
+  const st = { status: q.get('status') ?? 'action', q: q.get('q') || '', method: '', page: 1, risky: q.get('risky') || '', arch: q.get('archive') === '1' ? '1' : '0' };
+  if (st.arch === '1' && q.get('status') == null) st.status = '';
+  const box = h('div'), tabBar = h('div'), segBar = h('div', { class: 'row oseg' }), sel = new Set();
+  const search = h('input', { class: 'inp', placeholder: 'Order no., phone, name, UTR…', value: st.q, style: { maxWidth: '320px' }, onkeydown: e => { if (e.key === 'Enter') { st.q = e.target.value; st.page = 1; if (st.q.trim()) st.status = ''; load(); } } });
   const meth = h('select', { class: 'inp', style: { maxWidth: '160px' }, onchange: e => { st.method = e.target.value; st.page = 1; load(); } }, h('option', { value: '' }, 'All payments'), h('option', { value: 'upi' }, 'UPI'), h('option', { value: 'cod' }, 'COD'));
-  v.append(pageHead('Orders', h('button', { class: 'btn primary', onclick: matchPayments }, 'Match payments'), h('a', { class: 'btn', href: 'api/orders/export/csv', download: 'orders.csv' }, 'Export CSV')), h('div', { class: 'row', style: { marginBottom: '12px' } }, search, meth), tabBar, box);
+  v.append(pageHead('Orders', h('button', { class: 'btn primary', onclick: matchPayments }, 'Match payments'), h('a', { class: 'btn', href: 'api/orders/export/csv', download: 'orders.csv' }, 'Export CSV')), h('div', { class: 'row', style: { marginBottom: '12px' } }, search, meth), segBar, tabBar, box);
   async function load() {
-    const p = new URLSearchParams({ page: st.page, per: 25 }); if (st.status) p.set('status', st.status); if (st.q) p.set('q', st.q); if (st.method) p.set('method', st.method); if (st.risky) p.set('risky', st.risky);
+    const p = new URLSearchParams({ page: st.page, per: 25 }); if (st.status) p.set('status', st.status); if (st.q) p.set('q', st.q); if (st.method) p.set('method', st.method); if (st.risky) p.set('risky', st.risky); p.set('archive', st.arch);
     const r = await api('/orders?' + p);
-    clear(tabBar).append(tabs(TABS.map(([k, l]) => [k, l, k === '' ? '' : (k === 'action' ? '' : r.counts[k] || '')]), st.status, k => { st.status = k; st.page = 1; sel.clear(); load(); }));
+    clear(segBar).append(h('button', { class: 'segb' + (st.arch === '0' ? ' on' : ''), onclick: () => { st.arch = '0'; st.status = 'action'; st.page = 1; sel.clear(); load(); } }, 'Active'), h('button', { class: 'segb' + (st.arch === '1' ? ' on' : ''), onclick: () => { st.arch = '1'; st.status = ''; st.page = 1; sel.clear(); load(); } }, 'Archive', r.archived ? h('span', { class: 'cnt' }, r.archived) : null), st.arch === '1' ? h('span', { class: 'muted small' }, `Cancelled/returned ${r.archive_days.cancel} din baad, delivered ${r.archive_days.delivered} din baad yahan aate hain. Kuch delete nahi hota.`) : null);
+    clear(tabBar).append(tabs((st.arch === '1' ? ARCH_TABS : TABS).map(([k, l]) => [k, l, st.arch === '1' ? (k ? (r.archived_counts[k] || '') : r.archived || '') : (k === '' ? '' : (k === 'action' ? '' : r.counts[k] || ''))]), st.status, k => { st.status = k; st.page = 1; sel.clear(); load(); }));
     clear(box); sel.clear();
     const bulk = h('div', { class: 'row hide', style: { margin: '0 0 10px' } }), cnt = h('b');
     const upd = () => { bulk.classList.toggle('hide', !sel.size); cnt.textContent = `${sel.size} selected`; };

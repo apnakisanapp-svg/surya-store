@@ -1,7 +1,7 @@
 // End-to-end checks against running servers. Usage: PUB=http://localhost:3111 ADM=http://127.0.0.1:4111 ADMIN_EMAIL=.. ADMIN_PASSWORD=.. node test/run.js
 const PUB = process.env.PUB || 'http://localhost:3111', ADM = process.env.ADM || 'http://127.0.0.1:4111';
 let fail = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); if (!c) fail++; };
-const pj = async (p, o = {}) => { const r = await fetch(PUB + '/api' + p, { method: o.method || 'GET', headers: { 'content-type': 'application/json', 'x-sy-csrf': '1' }, body: o.body ? JSON.stringify(o.body) : undefined }); let d; try { d = await r.json(); } catch { } return [r.status, d]; };
+const pj = async (p, o = {}) => { const r = await fetch(PUB + '/api' + p, { method: o.method || 'GET', headers: { 'content-type': 'application/json', 'x-sy-csrf': '1', ...(o.headers || {}) }, body: o.body ? JSON.stringify(o.body) : undefined }); let d; try { d = await r.json(); } catch { } return [r.status, d]; };
 let cookie = '';
 const aj = async (p, o = {}) => { const r = await fetch(ADM + '/api' + p, { method: o.method || 'GET', headers: { 'content-type': 'application/json', 'x-sy-csrf': '1', cookie }, body: o.body ? JSON.stringify(o.body) : undefined }); const sc = r.headers.get('set-cookie'); if (sc) cookie = sc.split(';')[0]; let d; try { d = await r.json(); } catch { } return [r.status, d]; };
 const addr = { name: 'Test User', phone: '9876543210', line1: '12 Test Street', pincode: '110001', city: 'Delhi', state: 'Delhi' };
@@ -184,5 +184,54 @@ const order = (pid, qty, method = 'upi') => pj('/orders', { method: 'POST', body
   }
   const lst = await A('/orders?status=');
   ok(lst.items.length && lst.items.every(x => 'image_url' in x && 'first_name' in x && 'item_count' in x), 'orders list carries photo and product name for the cards');
+
+  // ---- Release 10: visitor insights + orders archive ----
+  const UA = 'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36';
+  const tp = async (url, body, h = {}) => { const r = await fetch(PUB + '/api' + url, { method: 'POST', headers: { 'content-type': 'application/json', 'x-sy-csrf': '1', 'user-agent': UA, ...h }, body: JSON.stringify(body) }); return [r.status, await r.json().catch(() => ({}))]; };
+  const vid = 'tv' + Math.random().toString(36).slice(2, 12), vk = 'tk' + Math.random().toString(36).slice(2, 12);
+  const camp = await A('/visitors/campaigns', { method: 'POST', body: { name: 'Test reel', platform: 'instagram', target: '/p/' + p.slug } });
+  ok(camp.ok && /^ig-test-reel/.test(camp.code) && /[?&]src=ig-test-reel/.test(camp.link), 'insights: a reel link gets its own tag (src=ig-test-reel)');
+  const sl2 = camp.short && camp.short.match(/\/s\/([A-Za-z0-9]+)$/); const rd2 = sl2 ? await fetch(PUB + '/s/' + sl2[1], { redirect: 'manual' }) : null;
+  ok(rd2 && rd2.status === 302 && /src=ig-test-reel/.test(rd2.headers.get('location') || ''), 'insights: the short link keeps the tag');
+  const bot10 = await fetch(PUB + '/api/t/pv', { method: 'POST', headers: { 'content-type': 'application/json', 'x-sy-csrf': '1', 'user-agent': 'Googlebot/2.1' }, body: JSON.stringify({ vid: 'botvid12345', vk: 'botvk123456', pk: 'botpk1234', path: '/' }) });
+  ok(bot10.status === 200, 'insights: bot visit is accepted but ignored');
+  const pv1 = await tp('/t/pv', { vid, vk, pk: 'pk1' + vk, path: '/', ref: 'https://l.instagram.com/', camp: camp.code, w: 390 });
+  ok(pv1[0] === 200 && pv1[1].src === 'instagram' && pv1[1].campaign === camp.code, `insights: a visit from the tagged link is read as Instagram (${pv1[1].src})`);
+  const pv2 = await tp('/t/pv', { vid, vk, pk: 'pk2' + vk, path: '/p/' + p.slug, w: 390 });
+  ok(pv2[0] === 200, 'insights: second page of the same visit is recorded');
+  const lv10 = await tp('/t/leave', { pk: 'pk2' + vk, dur: 42000, scroll: 80 }, { 'x-sy-csrf': '' });
+  ok(lv10[0] === 200, 'insights: leaving a page (beacon, no header) is accepted');
+  await tp('/events', { type: 'atc', product_id: p.id, sid: 'x' }, { 'x-sy-vk': vk });
+  const oo = await order(p.id, 1, 'cod'); // order without the visit header first
+  const ov10 = await A('/visitors/overview?days=7');
+  ok(ov10.cur.visits >= 1 && ov10.cur.page_views >= 2 && ov10.cur.atc >= 1, `insights: overview counts the visit, pages and cart (${ov10.cur.visits}/${ov10.cur.page_views}/${ov10.cur.atc})`);
+  ok(!ov10.series.length || ov10.series.every(x => /^\d{4}-\d\d-\d\d$/.test(x.d)), 'insights: daily series uses India dates');
+  const srcs10 = await A('/visitors/sources?days=7'); ok(srcs10.rows.some(x => x.src === 'instagram' && x.visits >= 1), 'insights: sources lists Instagram');
+  const cs10 = await A('/visitors/campaigns?days=7'); const mine = cs10.rows.find(x => x.code === camp.code); ok(mine && mine.visits >= 1 && mine.saw_product >= 1 && mine.atc >= 1, 'insights: the reel shows visits, product views and cart');
+  const o5 = await pj('/orders', { method: 'POST', headers: { 'x-sy-vk': vk }, body: { items: [{ product_id: p.id, qty: 1 }], method: 'cod', consents: { terms: true, safety: true }, address: { ...addr, phone: phone() }, attr: { src: 'instagram', campaign: camp.code } } });
+  const cs11 = await A('/visitors/campaigns?days=7'); const mine2 = cs11.rows.find(x => x.code === camp.code);
+  ok(o5[0] === 200 && mine2 && mine2.orders >= 1, `insights: an order placed after the reel visit is credited to that reel (${o5[0]} / ${mine2 && mine2.orders})`);
+  const pr10 = await A('/visitors/products?days=7'); ok(Array.isArray(pr10.rows) && pr10.rows.some(x => x.id === p.id), 'insights: product report lists the product');
+  await A('/visitors/campaigns/' + camp.id, { method: 'DELETE' });
+  const act10 = await A('/orders?archive=0&per=100'), arc10 = await A('/orders?archive=1&per=100');
+  ok(act10.items.length > 0 && arc10.items.length === 0 && typeof arc10.archived === 'number' && arc10.archive_days.cancel === 7 && arc10.archive_days.delivered === 30, 'archive: fresh orders stay Active; defaults are 7 / 30 days');
+
+  // ---- Release 11: pages, journeys, carts, searches, people, monthly, CSV, policy ----
+  const vk2 = 'tk2' + Math.random().toString(36).slice(2, 12), vid2 = 'tv2' + Math.random().toString(36).slice(2, 12);
+  await tp('/t/pv', { vid: vid2, vk: vk2, pk: 'pa' + vk2, path: '/p/' + p.slug, ref: 'https://www.youtube.com/', w: 1280 });
+  await tp('/events', { type: 'atc', product_id: p.id, sid: 'y' }, { 'x-sy-vk': vk2 });
+  await pj('/products?q=zzqxnothing');
+  const pg11 = await A('/visitors/pages?days=7'); ok(pg11.kinds.length && pg11.pages.some(x => x.kind === 'product' && x.label && x.label !== x.path), 'insights: pages report names the product pages');
+  const jl = await A('/visitors/journeys?days=7&filter=all'); ok(jl.items.length >= 2 && jl.items.every(x => x.who), `insights: journeys list (${jl.items.length})`);
+  const jc = await A('/visitors/journeys?days=7&filter=carted'); ok(jc.items.some(x => x.atc && !x.ordered), 'insights: "cart chhoda" filter finds the visit that did not order');
+  const jd = await A('/visitors/journeys/' + jc.items[0].id); ok(jd.steps.some(s2 => s2.type === 'page') && jd.steps.some(s2 => s2.type === 'atc' && /Added to cart/.test(s2.label)), 'insights: journey shows pages and the cart step in time order');
+  const ab = await A('/visitors/abandoned?days=7'); ok(ab.total >= 1 && ab.rows.some(x => x.product_id === p.id), 'insights: carts left behind lists the product');
+  const sr = await A('/visitors/searches?days=7'); ok(sr.rows.some(x => x.term === 'zzqxnothing') && sr.nothing.some(x => x.term === 'zzqxnothing'), 'insights: searches lists a search that found nothing');
+  const pe = await A('/visitors/people?days=7'); ok(pe.guests.length >= 1 && /^Visitor #\d{4}$/.test(pe.guests[0].who), 'insights: guests are anonymous ("Visitor #1234")');
+  const mo = await A('/visitors/monthly'); ok(mo.rows.length >= 1 && /^\d{4}-\d\d$/.test(mo.rows[0].month), 'insights: monthly report');
+  for (const t of ['visits', 'products', 'monthly']) { const rr = await fetch(ADM + '/api/visitors/export/csv?type=' + t + '&days=7', { headers: { cookie } }); const tx = await rr.text(); ok(rr.status === 200 && /text\/csv/.test(rr.headers.get('content-type') || '') && tx.length > 20, `insights: ${t} CSV downloads`); }
+  const pol = await A('/visitors/policy'); if (pol.cookies === false || pol.privacy === false) await aj('/visitors/policy', { method: 'POST' });
+  const pol2 = await A('/visitors/policy'); ok(pol2.cookies === true && pol2.privacy === true, 'policy: Cookie and Privacy policies mention visit counting');
+  const cpol = await pj('/policies/cookies'); ok(/Visit counting/.test(JSON.stringify(cpol[1])), 'policy: customers can read the visit counting section');
   console.log(fail ? `\n${fail} FAILED` : '\nAll passed'); process.exit(fail ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });
