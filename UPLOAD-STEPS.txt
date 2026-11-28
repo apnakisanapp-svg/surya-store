@@ -1,25 +1,22 @@
-RELEASE 11 - Visitors & reels (poora) + cookie banner aur policy
-(Isme Release 10 ki sab files bhi hain. Release 10 deploy nahi kiya ho to bhi sirf ye zip upload karna kaafi hai.)
+RELEASE 12 - Pre-order label fix + favicon refresh (sirf 6 files)
 
-Naya:
-- Visitors & reels me naye tabs: Pages, Journeys (ek visitor ki poori kahani), Cart chhode, Search, Log (login aur bina login), Mahina (CSV ke saath)
-- Cookie banner me visit counting ki line
-- Cookie Policy aur Privacy Policy me "Visit counting" hissa (apne aap jud jata hai agar policy tumne badli nahi thi, warna Visitors page par "Policy me jodo" button)
-- Jo Reject dabate hain unhe kabhi nahi ginte
-- Search me jab kuch nahi milta to ab sahi record hota hai
+1) Is zip ko ek NAYE KHALI folder me extract karo. Andar 3 folder dikhenge: src, web, test.
+2) https://github.com/apnakisanapp-svg/surya-store/upload/main kholo.
+3) Teeno FOLDERS (src, web, test) drag karke daalo. Page par ye paths dikhne chahiye:
+   src/shared/catalog.js, src/public/server.js, web/js/pages1.js,
+   web/index.html, web/favicon.svg, test/run.js
+4) Commit changes dabao.
+5) AWS terminal (ubuntu@...) me:
+   cd ~/surya-store && git pull
+   sudo systemctl restart surya
+   sudo systemctl is-active surya      (active aana chahiye)
+6) Site aur admin par Ctrl+F5.
 
-UPLOAD STEPS (ek-ek karke)
-1. Is zip ko ek NAYE KHALI folder me extract karo. Dikhna chahiye: folders admin-web, src, test, web aur file UPLOAD-STEPS.txt
-2. Kholo: https://github.com/apnakisanapp-svg/surya-store/upload/main
-3. Chaaron FOLDERS (admin-web, src, test, web) drag karo. Folder ke andar ki files alag se mat drag karna.
-   Check: page par naam aise dikhne chahiye: src/shared/visitpolicy.js, web/js/track.js, admin-web/js/visitors.js
-4. Commit changes.
-5. AWS terminal (ubuntu@...), ek line ek baar me:
-     cd ~/surya-store && git pull
-     sudo systemctl restart surya
-     sudo systemctl is-active surya        (active likha aana chahiye)
-   (npm install ki zaroorat nahi)
-6. Site aur admin dono par Ctrl+F5.
-7. Check: Admin > Visitors & reels me 10 tabs dikhein; site par cookie banner me nayi line dikhe.
-8. Apna phone ginti se bahar rakhne ke liye site ke link ke aakhir me ?notrack=1 lagakar ek baar kholo.
-9. Policy: Admin > Policies me Cookie Policy aur Privacy Policy dekh lo, aur ek baar vakil ya CA ko dikhwa lena.
+KYA BADLA
+- Pre-order: jab stock hai to "In stock" dikhega. "Pre-order" tabhi jab stock 0 ho aur tick laga ho.
+  Google ko bhi sahi (InStock / PreOrder) jayega.
+- Favicon: naya logo wala icon (192x192 add, favicon.svg bhi naye logo ka), links me ?v=2 taaki browser/Google dobara le.
+
+Google ke liye (tumhe karna hai):
+- Search Console > URL Inspection > https://suryastore.shop/ > Request indexing.
+- Google ka favicon badalne me 3-14 din lag sakte hain.

@@ -233,5 +233,10 @@ const order = (pid, qty, method = 'upi') => pj('/orders', { method: 'POST', body
   const pol = await A('/visitors/policy'); if (pol.cookies === false || pol.privacy === false) await aj('/visitors/policy', { method: 'POST' });
   const pol2 = await A('/visitors/policy'); ok(pol2.cookies === true && pol2.privacy === true, 'policy: Cookie and Privacy policies mention visit counting');
   const cpol = await pj('/policies/cookies'); ok(/Visit counting/.test(JSON.stringify(cpol[1])), 'policy: customers can read the visit counting section');
+  { const pid = p.id, slug = p.slug; await aj('/products/' + pid, { method: 'PUT', body: { stock: 20, preorder: true, sold_out: false } });
+    let d = (await pj('/products/' + slug))[1]; ok((d.product || d).stock_state === 'in', 'pre-order ticked + stock in hand shows In stock, not Pre-order');
+    await aj('/products/' + pid, { method: 'PUT', body: { stock: 0, preorder: true } });
+    d = (await pj('/products/' + slug))[1]; ok((d.product || d).stock_state === 'preorder', 'pre-order ticked + stock 0 shows Pre-order');
+    await aj('/products/' + pid, { method: 'PUT', body: { stock: 20, preorder: false } }); }
   console.log(fail ? `\n${fail} FAILED` : '\nAll passed'); process.exit(fail ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });

@@ -167,11 +167,11 @@ route(/^\/p\/([^/]+)$/, async (view, m) => {
 
   /* info */
   const priceEl = h('div', { class: 'price' }), stockEl = h('div'), qtyEl = h('span'), atcRow = h('div', { class: 'stack' }), pinOut = h('div', { class: 'small', style: { marginTop: '8px' } });
-  const cur = () => { const v = curV(); return { price: v ? v.price : p.price, mrp: v ? v.mrp : p.mrp, in_stock: v ? v.in_stock : p.stock_state !== 'out', left: v ? v.stock_left : p.stock_left }; };
+  const cur = () => { const v = curV(); return { price: v ? v.price : p.price, mrp: v ? v.mrp : p.mrp, in_stock: v ? v.in_stock : p.stock_state !== 'out', pre: v ? !!v.pre : p.stock_state === 'preorder', left: v ? v.stock_left : p.stock_left }; };
   function paint() {
     const c = cur(), pct = c.mrp ? Math.round((1 - c.price / c.mrp) * 100) : 0;
     const pk = c.price + '|' + c.mrp; if (priceEl.dataset.k !== pk) { priceEl.dataset.k = pk; clear(priceEl); priceEl.classList.remove('pa-init', 'pa-strike'); fillPrice(priceEl, { price: c.price, mrp: c.mrp, pct, mrpText: `${t('mrp')} ${money(c.mrp)}` }); }
-    clear(stockEl).append(c.in_stock ? (c.left && c.left <= 5 ? h('span', { class: 'small', style: { color: 'var(--warn)', fontWeight: 600 } }, t('low', { n: c.left })) : h('span', { class: 'small', style: { color: 'var(--ok)', fontWeight: 600 } }, p.preorder ? 'Pre-order' : 'In stock')) : h('span', { class: 'small', style: { color: 'var(--err)', fontWeight: 600 } }, t('oos')));
+    clear(stockEl).append(c.in_stock ? (c.left && c.left <= 5 ? h('span', { class: 'small', style: { color: 'var(--warn)', fontWeight: 600 } }, t('low', { n: c.left })) : h('span', { class: 'small', style: { color: 'var(--ok)', fontWeight: 600 } }, c.pre ? 'Pre-order' : 'In stock')) : h('span', { class: 'small', style: { color: 'var(--err)', fontWeight: 600 } }, t('oos')));
     qtyEl.textContent = S.qty;
     const colNow = (curV() || {}).colour_name || '';
     if (S.lastCol !== colNow) { S.lastCol = colNow; S.img = 0; if (S.mode === 'photo') gallery(); }

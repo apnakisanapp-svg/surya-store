@@ -58,7 +58,7 @@ function shape(p, images, variants, rating, cat, admin) {
     })),
     variants: variants.filter(v => admin || v.active).map(v => ({
       id: v.id, name: v.name, name_hi: v.name_hi, sku: v.sku, price: v.price != null ? v.price : p.price, mrp: (v.mrp != null ? v.mrp : p.mrp) > (v.price != null ? v.price : p.price) ? (v.mrp != null ? v.mrp : p.mrp) : 0,
-      color: v.color, size: v.size || null, colour_name: v.colour_name || null, image_id: v.image_id, in_stock: v.stock > 0 || !!p.preorder, stock_left: v.stock > 0 && v.stock <= showBelow ? v.stock : null, active: !!v.active,
+      color: v.color, size: v.size || null, colour_name: v.colour_name || null, image_id: v.image_id, in_stock: v.stock > 0 || !!p.preorder, pre: !!p.preorder && v.stock <= 0, stock_left: v.stock > 0 && v.stock <= showBelow ? v.stock : null, active: !!v.active,
       ...(admin ? { stock: v.stock, cost: v.cost, sort: v.sort } : {}),
     })),
   };

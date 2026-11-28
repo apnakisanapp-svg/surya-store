@@ -149,7 +149,7 @@ function headFor(req) {
       desc = prod.seo_desc || String(prod.tagline || prod.description || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160);
       img = cfg.SITE_URL + '/share/p/' + encodeURIComponent(prod.slug) + '.jpg?v=' + require('./share').pver(prod);
       type = 'product';
-      const avail = prod.stock_state === 'out' ? 'OutOfStock' : prod.preorder ? 'PreOrder' : 'InStock';
+      const avail = prod.stock_state === 'out' ? 'OutOfStock' : prod.stock_state === 'preorder' ? 'PreOrder' : 'InStock';
       ld.push({ '@context': 'https://schema.org', '@type': 'Product', name: prod.name, description: desc, sku: prod.sku || undefined, image: prod.images.map(i => abs(i.gal)), brand: { '@type': 'Brand', name: B.name },
         offers: { '@type': 'Offer', priceCurrency: 'INR', price: prod.price, availability: 'https://schema.org/' + avail, url: canonical, itemCondition: 'https://schema.org/NewCondition' },
         ...(prod.rating.count ? { aggregateRating: { '@type': 'AggregateRating', ratingValue: prod.rating.avg, reviewCount: prod.rating.count } } : {}) });
