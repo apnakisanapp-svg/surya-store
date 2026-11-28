@@ -900,3 +900,6 @@ html.dark .vg-tbl td{background:#1d2026;color:#f2f4f7;border-color:#444a54}html.
 /* chips / selected option: smooth change between two clear poses */
 .chip.on,.vopt.on{animation:selpop .28s var(--ease-spring)}
 @keyframes selpop{0%{transform:scale(.94)}100%{transform:scale(1)}}
+/* price on a card: the number gives a small pop under the finger (one thing, cheap) */
+.pc .price b{display:inline-block;transition:transform .22s var(--ease-spring)}
+.pc:active .price b{transform:scale(1.1)}

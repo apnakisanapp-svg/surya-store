@@ -42,7 +42,7 @@ function bootstrap(req) {
   return {
     v: settings.lastUpdated(), brand: publicBrand(), theme: { preset: T.preset, logo: T.logo_url, logo_dark: T.logo_dark_url, favicon: T.favicon_url, show_logo_text: T.show_logo_text },
     intro: S.intro, announcement: S.announcement, store: { maintenance: ST.maintenance, default_lang: ST.default_lang, language_toggle: ST.language_toggle, dark_toggle: ST.dark_toggle, guest_checkout: ST.guest_checkout,
-      recently_viewed: ST.recently_viewed, track_all: !!ST.track_all, wishlist: ST.wishlist, reviews: ST.reviews, pwa: ST.pwa, currency: ST.currency },
+      recently_viewed: ST.recently_viewed, track_all: !!ST.track_all, anim_mode: ST.anim_mode || 'auto', wishlist: ST.wishlist, reviews: ST.reviews, pwa: ST.pwa, currency: ST.currency },
     payments: { upi: P.upi_enabled && !!P.upi_id, cod: P.cod_enabled, cod_fee: P.cod_fee, cod_min: P.cod_min, cod_max: P.cod_max, upi_timer_min: P.upi_timer_min, upi_screenshot: P.upi_screenshot },
     shipping: { flat: SH.flat, free_above: SH.free_above, eta_min: SH.eta_min, eta_max: SH.eta_max, gift_enabled: SH.gift_enabled, gift_price: SH.gift_price, battery_notice: SH.battery_notice },
     returns: { window_days: S.returns.window_days, text: S.returns.text }, popups: S.popups, menu: S.menu, home: { trust: S.home.trust, eco: S.home.eco }, filters: S.filters, ui: S.ui, search: S.search,

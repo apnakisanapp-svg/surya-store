@@ -239,5 +239,11 @@ const order = (pid, qty, method = 'upi') => pj('/orders', { method: 'POST', body
     d = (await pj('/products/' + slug))[1]; ok((d.product || d).stock_state === 'preorder', 'pre-order ticked + stock 0 shows Pre-order');
     await aj('/products/' + pid, { method: 'PUT', body: { stock: 20, preorder: false } }); }
   { const mj = await fetch(PUB + '/js/motion.js'); const mt = await mj.text(); ok(mj.status === 200 && /atcFx/.test(mt), 'motion: motion.js is served'); const cs = await (await fetch(PUB + '/css/app.css')).text(); ok(/fxatc/.test(cs) && /heartpop/.test(cs) && /fxland/.test(cs), 'motion: add-to-cart, heart and cart-landing animations are in the stylesheet'); }
+  { const b0 = (await pj('/bootstrap'))[1]; ok((b0.store || {}).anim_mode === 'auto', 'light mode: default is Auto');
+    await aj('/settings/store', { method: 'PUT', body: { anim_mode: 'light' } }); const b1 = (await pj('/bootstrap'))[1]; ok((b1.store || {}).anim_mode === 'light', 'light mode: owner can force Light');
+    await aj('/settings/store', { method: 'PUT', body: { anim_mode: 'auto' } });
+    const lc = await fetch(PUB + '/css/lite.css'); const lt = await lc.text(); ok(lc.status === 200 && /html\.lite \.drawer\.cart-glass/.test(lt) && /backdrop-filter:none/.test(lt), 'light mode: lite.css removes the glass blur');
+    const pb = await fetch(PUB + '/js/perf-boot.js'); ok(pb.status === 200, 'light mode: perf-boot.js is served');
+    const ix = await (await fetch(PUB + '/')).text(); ok(/perf-boot\.js/.test(ix) && /lite\.css/.test(ix), 'light mode: home page loads perf-boot and lite.css'); }
   console.log(fail ? `\n${fail} FAILED` : '\nAll passed'); process.exit(fail ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });

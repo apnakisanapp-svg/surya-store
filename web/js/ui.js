@@ -27,9 +27,9 @@ export function pctBadge(cls, n, text, tag) {
   return el;
 }
 /* Price row, played once when it scrolls into view: MRP shows -> a line cuts it -> price falls from MRP to the real price -> "% off" pops. */
-export function fillPrice(root, { price, mrp, pct, mrpText }) {
+export function fillPrice(root, { price, mrp, pct, mrpText, still }) {
   const b = h('b', null, money(price));
-  if (!mrp || mrp <= price || !('IntersectionObserver' in window)) { root.append(b, mrp ? h('s', null, mrpText || money(mrp)) : null, mrp && pct ? h('em', null, `${pct}% ${t('off')}`) : null); return; }
+  if (still || !mrp || mrp <= price || !('IntersectionObserver' in window)) { root.append(b, mrp ? h('s', null, mrpText || money(mrp)) : null, mrp && pct ? h('em', null, `${pct}% ${t('off')}`) : null); return; }
   const s = h('s', null, mrpText || money(mrp)), em = h('em', null, `${pct}% ${t('off')}`);
   root.classList.add('pa-init'); b.textContent = money(mrp); root.append(b, s, em);
   const io = new IntersectionObserver(es => {
@@ -51,9 +51,9 @@ export function productCard(p, { priority = false } = {}) {
     h('div', { class: 'pc-body' },
       h('div', { class: 'pc-name' }, tr(p, 'name')),
       p.rating.count ? h('div', { class: 'row', style: { gap: '6px' } }, stars(p.rating.avg), h('span', { class: 'muted small' }, `(${p.rating.count})`)) : null,
-      (() => { const r = h('div', { class: 'price' }); fillPrice(r, { price: p.price, mrp: p.mrp, pct: p.discount_pct }); return r; })(),
+      (() => { const r = h('div', { class: 'price' }); fillPrice(r, { price: p.price, mrp: p.mrp, pct: p.discount_pct, still: true }); return r; })(),
       p.stock_state === 'low' && p.stock_left ? h('span', { class: 'small', style: { color: 'var(--warn)' } }, t('low', { n: p.stock_left })) : null));
-  if (BOOT.ui.card_hover_tilt && matchMedia('(hover:hover) and (pointer:fine)').matches && !matchMedia('(prefers-reduced-motion:reduce)').matches) {
+  if (BOOT.ui.card_hover_tilt && !document.documentElement.classList.contains('lite') && matchMedia('(hover:hover) and (pointer:fine)').matches && !matchMedia('(prefers-reduced-motion:reduce)').matches) {
     a.addEventListener('pointermove', e => { const r = a.getBoundingClientRect(), x = (e.clientX - r.left) / r.width - .5, y = (e.clientY - r.top) / r.height - .5; a.style.transform = `perspective(900px) rotateY(${x * 6}deg) rotateX(${-y * 6}deg) translateY(-3px)`; });
     a.addEventListener('pointerleave', () => { a.style.transform = ''; });
   }
@@ -295,7 +295,7 @@ export function exitIntent() {
   setTimeout(() => document.addEventListener('mouseout', fn), 15000);
 }
 export function intro() {
-  const I = BOOT.intro; if (!I || !I.enabled || sessionStorage.getItem('sy_intro') || matchMedia('(prefers-reduced-motion:reduce)').matches) return;
+  const I = BOOT.intro; if (!I || !I.enabled || document.documentElement.classList.contains('lite') || sessionStorage.getItem('sy_intro') || matchMedia('(prefers-reduced-motion:reduce)').matches) return;
   try { sessionStorage.setItem('sy_intro', '1'); } catch { /* */ }
   const el = h('div', { class: 'intro', 'aria-hidden': 'true' }, logo(true)); document.body.append(el);
   setTimeout(() => el.classList.add('out'), Math.max(600, I.duration_ms || 1400)); setTimeout(() => el.remove(), (I.duration_ms || 1400) + 900);

@@ -5,6 +5,15 @@ import './notif.js';
 import './track.js';
 import { buildChrome, cookieBanner, loadAnalytics, welcomePopup, exitIntent, intro } from './ui.js';
 
+// animations: owner's choice (Auto / Full / Light) is remembered for the next visit; a ?anim= link on this phone wins
+(function anim() {
+  try {
+    const m = (BOOT.store && BOOT.store.anim_mode) || 'auto'; localStorage.setItem('sy_anim', m);
+    if (localStorage.getItem('sy_anim_o')) return;
+    if (m === 'light') document.documentElement.classList.add('lite'); else if (m === 'full') document.documentElement.classList.remove('lite');
+  } catch { /* */ }
+})();
+
 // dark mode: owner choice, then the visitor's own choice
 (function theme() {
   let m = null; try { m = localStorage.getItem('sy_dark'); } catch { /* */ }

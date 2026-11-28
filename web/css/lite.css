@@ -1,0 +1,106 @@
+/* Light version for slow phones. <html> gets class "lite" from /js/perf-boot.js (Auto), or from Admin > Settings > Store options > Animations.
+   Same look and layout; only the heavy parts are lighter: no glass blur, no endless loops, a shorter opening, no card tilt. */
+html.lite .glass,
+html.lite .heart,
+html.lite .bbar,
+html.lite .hdr.glass,
+html.lite .hdr.scrolled,
+html.lite .am,
+html.lite .seg,
+html.lite .glass-card,
+html.lite .auth-card,
+html.lite .drawer.cart-glass,
+html.lite .cart-glass .drawer-f .btn.ghost,
+html.lite .savebar,
+html.lite .cat,
+html.lite .pc .heart,
+html.lite .gal-nav,
+html.lite .thumbs button,
+html.lite .btn.gl-add,
+html.lite .ftr ul a,
+html.lite .drawer.menu-glass,
+html.lite .scrim.on,
+html.lite .buybar,
+html.lite body.on-product .backb,
+html.lite .btn.gl-next,
+html.lite .trust>div,
+html.lite .btn.gl-back,
+html.lite .co-nav,
+html.lite .search-pan,
+html.lite .search-pan .inp,
+html.lite .sug .chip,
+html.lite .search-pan .chip,
+html.lite .fb-note,
+html.lite .fab .btn.gl-top,
+html.lite .hdr .burger,
+html.lite .hdr .logo,
+html.lite .stp,
+html.lite .ldpill,
+html.lite .ldoff,
+html.lite .ldover,
+html.lite .upcard,
+html.lite .gc-scrim,
+html.lite .gc,
+html.lite .gsel-b,
+html.lite .gsel-l,
+html.lite .inp,
+html.lite .fl-in,
+html.lite .chip,
+html.lite .welcome-back,
+html.lite .pn,
+html.lite .filters .inp,
+html.lite .srch-pill,
+html.lite .srch-bar,
+html.lite .lightbox,
+html.lite .lightbox .x,
+html.lite .lb-count,
+html.lite .lb-nav,
+html.lite .svc-card,
+html.lite .fcol,
+html.lite .vs-row{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
+/* panels that were see-through glass get a soft solid backing so text stays easy to read */
+html.lite .glass,
+html.lite .bbar,
+html.lite .hdr.glass,
+html.lite .hdr.scrolled,
+html.lite .am,
+html.lite .seg,
+html.lite .glass-card,
+html.lite .auth-card,
+html.lite .drawer.cart-glass,
+html.lite .savebar,
+html.lite .cat,
+html.lite .drawer.menu-glass,
+html.lite .buybar,
+html.lite .trust>div,
+html.lite .co-nav,
+html.lite .search-pan,
+html.lite .search-pan .inp,
+html.lite .sug .chip,
+html.lite .search-pan .chip,
+html.lite .fb-note,
+html.lite .upcard,
+html.lite .inp,
+html.lite .fl-in,
+html.lite .chip,
+html.lite .welcome-back,
+html.lite .pn,
+html.lite .filters .inp,
+html.lite .srch-bar,
+html.lite .svc-card,
+html.lite .fcol{background-color:color-mix(in srgb,var(--bg,#fff) 94%,transparent)}
+html.lite .scrim.on{background:rgba(0,0,0,.55)}
+/* no endless decorative loops (same list the site already uses for reduced-motion) */
+html.lite .glow{display:none}
+html.lite .bbar,html.lite .bb-i.on svg,html.lite .stp-i.on .stp-dot,html.lite .sl-f,html.lite .sl-b,html.lite .wa3d,html.lite .wa3d::after{animation:none}
+html.lite .stp-fill,html.lite .stp-dot{transition:none}
+html.lite *:has(>.pc:hover)>.pc:not(:hover){opacity:1}
+/* opening animation: same picture, but short and with nothing heavy (no blur, no big moving glow) */
+html.lite #splash{animation-delay:1.05s!important;animation-duration:.3s!important}
+html.lite .sp-in{animation-delay:1.05s!important;animation-duration:.3s!important}
+html.lite #splash *{filter:none!important}
+html.lite .sp-glow{animation:none!important;opacity:.55;transform:scale(1)}
+html.lite .sp-mark g{animation:none!important}
+html.lite .sp-mark .disc{animation-duration:.35s!important;animation-delay:.05s!important}
+html.lite .sp-mark .ray{animation-delay:calc(.15s + var(--i)*.02s)!important;animation-duration:.3s!important}
+html.lite .sp-word span{animation-duration:.3s,.4s!important;animation-delay:calc(.25s + var(--i)*.05s),calc(.45s + var(--i)*.05s)!important}

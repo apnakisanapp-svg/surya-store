@@ -1,22 +1,27 @@
-RELEASE 13 - Animation principles (sirf 4 files)
-(Release 12 pehle upload kar chuke ho to ye uske upar chalega.)
+RELEASE 14 - Slow-phone light mode + cards ki price animation (11 files)
+(Release 12 aur 13 ke baad. Ye zip 13 ki files bhi saath rakhta hai, isliye upar se overwrite karna theek hai.)
 
-1) Zip ko NAYE KHALI folder me extract karo. Andar 2 folder: web, test.
+1) Zip ko NAYE KHALI folder me extract karo. Andar 4 folder: web, src, admin-web, test.
 2) https://github.com/apnakisanapp-svg/surya-store/upload/main kholo.
-3) Dono FOLDERS (web, test) drag karo. Page par ye paths dikhne chahiye:
-   web/js/motion.js (naya), web/js/ui.js, web/css/app.css, test/run.js
+3) Chaaron FOLDERS drag karo. Page par ye paths dikhne chahiye:
+   web/js/perf-boot.js (naya), web/css/lite.css (naya), web/js/motion.js,
+   web/css/app.css, web/index.html, web/js/ui.js, web/js/app.js,
+   src/shared/settings.js, src/public/api.js, admin-web/js/resources.js, test/run.js
 4) Commit changes.
 5) AWS terminal (ubuntu@...) me:
    cd ~/surya-store && git pull
    sudo systemctl restart surya
    sudo systemctl is-active surya
-6) Site par Ctrl+F5 (phone me browser ka cache saaf ya site ek baar band karke kholo).
+6) Site aur admin par Ctrl+F5. Phone me site ek baar band karke kholo.
 
-KYA MILA
-- Add to cart: button pehle thoda dabta hai, phir khinchta hai, phir settle. Product ki chhoti photo arc me "Cart" ki taraf udti hai, aur cart wala hissa uchhal kar hilta hai.
-- Wishlist heart: pop + ring.
-- Count (cart/wishlist): overshoot ke saath pop.
-- Buttons/chips/tabs: dabane par squash, chhodne par spring wapas.
-- Product card: ungli rakho to halka sa upar uthta hai; mouse par baaki cards thode halke ho jate hain.
-- Popup aur toast: slow-in/slow-out, halka settle.
-- Sab sirf transform/opacity (phone par halka). Splash screen bilkul nahi badla.
+APNE PHONE PAR TEST (link ke aakhir me daalo):
+  https://suryastore.shop/?anim=light   -> light version (slow phone wala)
+  https://suryastore.shop/?anim=full    -> poora version
+  https://suryastore.shop/?anim=auto    -> wapas khud tay kare
+
+ADMIN: Settings > Store options > "Animations": Auto (recommended) / Full for everyone / Light for everyone.
+
+KYA BADLA
+- Slow phone (kam RAM/cores, data saver, 2G) khud pehchana jata hai, aur site khulte waqt 1 second ki smoothness check bhi hoti hai. Light version me: glass blur band, lagatar chalne wali animations band, opening animation chhoti (~1.4 s), card tilt band. Dikhne me wahi, bas halka.
+- Fast phone par kuch nahi badla.
+- Cards (shop/home) me price seedha dikhta hai. Product page par price animation poori waisi hi. Card par ungli rakho to card uthta hai aur price ka number pop hota hai.
