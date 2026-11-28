@@ -864,3 +864,39 @@ html.dark .vs-pill{background:rgba(255,255,255,.12);border-color:#f2f4f7}html.da
 html.dark .vc-ring{border-color:#f2f4f7;background:rgba(255,255,255,.08)}html.dark .vopt{background:rgba(255,255,255,.08);color:#f2f4f7;border-color:rgba(255,255,255,.1)}html.dark .vopt.on{background:rgba(255,255,255,.14);color:#fff;box-shadow:0 0 0 2px #f2f4f7}
 html.dark .vg-tbl td{background:#1d2026;color:#f2f4f7;border-color:#444a54}html.dark .vg-tbl th{background:#2a2e36;color:#f2f4f7;border-color:#444a54}
 @media(max-width:480px){.vopts{padding:14px;border-radius:20px}.vcard{width:78px}.vc-img{width:60px;height:60px}.vsz{flex:1 0 58px;padding:6px 6px}}
+
+/* ===== Release 12: motion principles (transform + opacity only, short, one thing at a time) ===== */
+:root{--ease-io:cubic-bezier(.65,0,.35,1);--ease-out:cubic-bezier(.16,1,.3,1);--ease-spring:cubic-bezier(.34,1.56,.64,1)}
+/* squash & stretch + follow through on every button / chip / tab icon */
+.btn,.chip,.bb-i,.ibtn{transition:transform .3s var(--ease-spring),box-shadow .2s,background-color .2s,border-color .2s,color .2s,opacity .2s}
+.btn:active,.chip:active,.ibtn:active{transform:scale(1.04,.92)}
+.bb-i:active{transform:scale(1.06,.9)}
+/* snappy card lift: slow-in / slow-out, and a firm "pop" under the finger */
+.pc{transition:transform .22s var(--ease-io),box-shadow .22s var(--ease-io)}
+.pc:active{transform:translateY(-4px) scale(1.025);box-shadow:var(--shadow)}
+/* staging: on mouse devices, the card you point at stays bright, the rest soften a little */
+@media(hover:hover) and (pointer:fine){*:has(>.pc:hover)>.pc:not(:hover){opacity:.82;transition:opacity .2s var(--ease-io)}}
+/* add to cart: wind-up, stretch, settle */
+.fx-atc{animation:fxatc .45s var(--ease-out)}
+@keyframes fxatc{0%{transform:scale(1)}18%{transform:scale(.92,.9)}48%{transform:scale(1.07,.95)}74%{transform:scale(.98,1.03)}100%{transform:scale(1)}}
+/* flying photo (follows an arc: x moves steadily, y rises then falls) */
+.fly-w{position:fixed;z-index:120;width:52px;height:52px;pointer-events:none;will-change:transform}
+.fly-n{width:52px;height:52px;border-radius:14px;background:var(--surface,#fff) center/cover no-repeat;border:2px solid #fff;box-shadow:0 8px 20px -6px rgba(10,30,60,.45);will-change:transform,opacity}
+/* cart landing: bounce, then a little wobble (secondary action) */
+.fx-land{animation:fxland .5s var(--ease-out)}
+@keyframes fxland{0%{transform:scale(1) rotate(0)}30%{transform:scale(1.28) rotate(-12deg)}60%{transform:scale(.94) rotate(7deg)}82%{transform:scale(1.05) rotate(-3deg)}100%{transform:scale(1) rotate(0)}}
+/* wishlist heart: exaggerated pop with an expanding ring */
+.heart.fx{animation:heartpop .55s var(--ease-spring),heartring .55s var(--ease-out)}
+@keyframes heartpop{0%{transform:scale(.6)}35%{transform:scale(1.4) rotate(-8deg)}65%{transform:scale(.92) rotate(4deg)}100%{transform:scale(1) rotate(0)}}
+@keyframes heartring{0%{box-shadow:0 0 0 0 rgba(229,57,53,.45)}100%{box-shadow:0 0 0 16px rgba(229,57,53,0)}}
+/* cart / wishlist count: pop with overshoot */
+.cnt.pop{animation:cntpop .42s var(--ease-spring)}
+@keyframes cntpop{0%{transform:scale(.5)}55%{transform:scale(1.4)}100%{transform:scale(1)}}
+/* pop-ups: slow-in / slow-out with a tiny settle */
+.modal>.box{animation:boxin .3s var(--ease-out)}
+@keyframes boxin{0%{transform:translateY(22px) scale(.96);opacity:0}70%{transform:translateY(-3px) scale(1.01);opacity:1}100%{transform:none}}
+.toast{animation:toastin .32s var(--ease-spring)}
+@keyframes toastin{0%{transform:translateY(18px) scale(.94);opacity:0}100%{transform:none;opacity:1}}
+/* chips / selected option: smooth change between two clear poses */
+.chip.on,.vopt.on{animation:selpop .28s var(--ease-spring)}
+@keyframes selpop{0%{transform:scale(.94)}100%{transform:scale(1)}}

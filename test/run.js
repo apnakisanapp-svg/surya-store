@@ -238,5 +238,6 @@ const order = (pid, qty, method = 'upi') => pj('/orders', { method: 'POST', body
     await aj('/products/' + pid, { method: 'PUT', body: { stock: 0, preorder: true } });
     d = (await pj('/products/' + slug))[1]; ok((d.product || d).stock_state === 'preorder', 'pre-order ticked + stock 0 shows Pre-order');
     await aj('/products/' + pid, { method: 'PUT', body: { stock: 20, preorder: false } }); }
+  { const mj = await fetch(PUB + '/js/motion.js'); const mt = await mj.text(); ok(mj.status === 200 && /atcFx/.test(mt), 'motion: motion.js is served'); const cs = await (await fetch(PUB + '/css/app.css')).text(); ok(/fxatc/.test(cs) && /heartpop/.test(cs) && /fxland/.test(cs), 'motion: add-to-cart, heart and cart-landing animations are in the stylesheet'); }
   console.log(fail ? `\n${fail} FAILED` : '\nAll passed'); process.exit(fail ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });

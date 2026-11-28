@@ -1,22 +1,22 @@
-RELEASE 12 - Pre-order label fix + favicon refresh (sirf 6 files)
+RELEASE 13 - Animation principles (sirf 4 files)
+(Release 12 pehle upload kar chuke ho to ye uske upar chalega.)
 
-1) Is zip ko ek NAYE KHALI folder me extract karo. Andar 3 folder dikhenge: src, web, test.
+1) Zip ko NAYE KHALI folder me extract karo. Andar 2 folder: web, test.
 2) https://github.com/apnakisanapp-svg/surya-store/upload/main kholo.
-3) Teeno FOLDERS (src, web, test) drag karke daalo. Page par ye paths dikhne chahiye:
-   src/shared/catalog.js, src/public/server.js, web/js/pages1.js,
-   web/index.html, web/favicon.svg, test/run.js
-4) Commit changes dabao.
+3) Dono FOLDERS (web, test) drag karo. Page par ye paths dikhne chahiye:
+   web/js/motion.js (naya), web/js/ui.js, web/css/app.css, test/run.js
+4) Commit changes.
 5) AWS terminal (ubuntu@...) me:
    cd ~/surya-store && git pull
    sudo systemctl restart surya
-   sudo systemctl is-active surya      (active aana chahiye)
-6) Site aur admin par Ctrl+F5.
+   sudo systemctl is-active surya
+6) Site par Ctrl+F5 (phone me browser ka cache saaf ya site ek baar band karke kholo).
 
-KYA BADLA
-- Pre-order: jab stock hai to "In stock" dikhega. "Pre-order" tabhi jab stock 0 ho aur tick laga ho.
-  Google ko bhi sahi (InStock / PreOrder) jayega.
-- Favicon: naya logo wala icon (192x192 add, favicon.svg bhi naye logo ka), links me ?v=2 taaki browser/Google dobara le.
-
-Google ke liye (tumhe karna hai):
-- Search Console > URL Inspection > https://suryastore.shop/ > Request indexing.
-- Google ka favicon badalne me 3-14 din lag sakte hain.
+KYA MILA
+- Add to cart: button pehle thoda dabta hai, phir khinchta hai, phir settle. Product ki chhoti photo arc me "Cart" ki taraf udti hai, aur cart wala hissa uchhal kar hilta hai.
+- Wishlist heart: pop + ring.
+- Count (cart/wishlist): overshoot ke saath pop.
+- Buttons/chips/tabs: dabane par squash, chhodne par spring wapas.
+- Product card: ungli rakho to halka sa upar uthta hai; mouse par baaki cards thode halke ho jate hain.
+- Popup aur toast: slow-in/slow-out, halka settle.
+- Sab sirf transform/opacity (phone par halka). Splash screen bilkul nahi badla.

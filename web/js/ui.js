@@ -1,4 +1,5 @@
 import { BOOT, h, $, $$, clear, icon, t, tr, lang, setLang, bus, api, money, cart, wish, me, ls, toast, drawer, modal, nav, debounce, sid, pushOverlay, releaseOverlay, confirmBox, guardOff } from './core.js';
+import { atcFx } from './motion.js';
 
 /* ---------- logo ---------- */
 let LOGO_N = 0;
@@ -258,7 +259,7 @@ export function addToCart(prod, variantId, qty, btn) {
     cart.add(prod.id, variantId, qty, { name: prod.name });
     api('/events', { method: 'POST', body: { type: 'atc', product_id: prod.id, sid } }).catch(() => {});
     toast(t('added'), { action: t('cart'), onAction: openCart });
-    if (btn) { btn.classList.add('is-busy'); setTimeout(() => btn.classList.remove('is-busy'), 350); }
+    if (btn) { atcFx(btn); }
   };
   if (prod.has_battery && BOOT.popups.battery_notice && !ls.get('sy_batt_ok')) {
     const m = modal(h('div', { class: 'stack' }, icon('warn'), h('h3', null, 'Battery product'), h('p', null, BOOT.shipping.battery_notice), h('div', { class: 'row' }, h('button', { class: 'btn', onclick: () => { ls.set('sy_batt_ok', 1); m.close(); go(); } }, 'OK, add to cart'), h('button', { class: 'btn ghost', onclick: () => m.close() }, t('close')))));
